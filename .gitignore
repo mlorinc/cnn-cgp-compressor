@@ -5,6 +5,11 @@
 
 .env
 /libtorch
+/grpc
+/data
+
+/cmd/compress/data
+/cmd/compress/trained_models
 
 # User-specific files
 *.rsuser
