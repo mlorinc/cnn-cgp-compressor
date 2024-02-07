@@ -11,9 +11,7 @@ endif()
 
 project (TorchCompresser)
 
-list(APPEND CMAKE_PREFIX_PATH "libtorch")
 # Include sub-projects.
 add_subdirectory (cgp)
 
-# find_package(libtorch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")

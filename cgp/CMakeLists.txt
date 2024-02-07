@@ -15,10 +15,13 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CGP PROPERTY CXX_STANDARD 20)
 endif()
 
-find_package(Torch REQUIRED)
+# find_package(Torch REQUIRED)
+# find_package(gRPC CONFIG REQUIRED)
+# find_package(Protobuf REQUIRED)
+# find_package(gRPC CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-target_link_libraries(CGP "${TORCH_LIBRARIES}" OpenMP::OpenMP_CXX)
+target_link_libraries(CGP "${TORCH_LIBRARIES}" OpenMP::OpenMP_CXX) # gRPC::grpc++
 
 # The following code block is suggested to be used on Windows.
 # According to https://github.com/pytorch/pytorch/issues/25457,
