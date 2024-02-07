@@ -53,15 +53,15 @@ int main(int argc, const char** args) {
 	cgp::CGP cgp_model(output, output_size, min, max);
 
 	cgp_model
-		.col_count(5)
-		.row_count(5)
+		.col_count(20)
+		.row_count(50)
 		/*.col_count(5)
 		.row_count(5)*/
-		.look_back_parameter(5)
+		.look_back_parameter(50)
 		.mutation_max(static_cast<uint16_t>(cgp_model.chromosome_size() * 0.15))
-		.function_count(11)
+		.function_count(14)
 		.function_input_arity(2)
-		.function_output_arity(2)
+		.function_output_arity(1)
 		.input_count(input_size)
 		.output_count(output_size)
 		.population_max(100)

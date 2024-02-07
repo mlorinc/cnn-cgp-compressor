@@ -196,52 +196,49 @@ void Chromosome::evaluate()
 			switch (*func) {
 			case 0:
 				block_output_pins[0] = pin_map[input_pin[0]];
-				block_output_pins[1] = pin_map[input_pin[1]];
 				break;
 			case 1:
-				block_output_pins[0] = pin_map[input_pin[1]];
-				block_output_pins[1] = pin_map[input_pin[1]];
+				block_output_pins[0] = expected_value_max - pin_map[input_pin[0]];
 				break;
 			case 2:
-				block_output_pins[0] = pin_map[input_pin[0]] + pin_map[input_pin[1]];
-				block_output_pins[1] = std::max(expected_value_min, std::min(block_output_pins[0], expected_value_max));
+				block_output_pins[0] = expected_value_max + pin_map[input_pin[0]];
 				break;
 			case 3:
-				block_output_pins[0] = pin_map[input_pin[0]] - pin_map[input_pin[1]];
-				block_output_pins[1] = std::max(expected_value_min, std::min(block_output_pins[0], expected_value_max));
+				block_output_pins[0] = pin_map[input_pin[0]] + pin_map[input_pin[1]];
 				break;
 			case 4:
-				block_output_pins[0] = pin_map[input_pin[0]] * pin_map[input_pin[1]];
-				block_output_pins[1] = std::max(expected_value_min, std::min(block_output_pins[0], expected_value_max));
+				block_output_pins[0] = pin_map[input_pin[0]] - pin_map[input_pin[1]];
 				break;
-
 			case 5:
-				block_output_pins[0] = -pin_map[input_pin[0]];
-				block_output_pins[1] = -pin_map[input_pin[1]];
+				block_output_pins[0] = pin_map[input_pin[0]] * pin_map[input_pin[1]];
 				break;
 			case 6:
-				block_output_pins[0] = std::max(expected_value_min, std::min(pin_map[input_pin[0]], expected_value_max));
-				block_output_pins[1] = std::max(expected_value_min, std::min(pin_map[input_pin[1]], expected_value_max));
+				block_output_pins[0] = -pin_map[input_pin[0]];
 				break;
-
 			case 7:
-				block_output_pins[0] = 0.001;
-				block_output_pins[1] = 0.010;
+				block_output_pins[0] = std::max(expected_value_min, std::min(pin_map[input_pin[0]], expected_value_max));
 				break;
 			case 8:
-				block_output_pins[0] = 0.5;
-				block_output_pins[1] = 0.05;
+				block_output_pins[0] = expected_value_min - pin_map[input_pin[0]];
 				break;
 			case 9:
-				block_output_pins[0] = 1.0 / pin_map[input_pin[0]];
-				block_output_pins[1] = 1.0 / pin_map[input_pin[1]];
+				block_output_pins[0] = expected_value_min + pin_map[input_pin[0]];
 				break;
 			case 10:
-				block_output_pins[0] = 1.5;
-				block_output_pins[1] = 1.05;
+				block_output_pins[0] = pin_map[input_pin[0]] * 0.25;
 				break;
-			default:;
+			case 11:
+				block_output_pins[0] = pin_map[input_pin[0]] * 1.5;
+				break;
+			case 12:
+				block_output_pins[0] = pin_map[input_pin[0]] * 1.05;
+				break;
+			case 13:
+				block_output_pins[0] = pin_map[input_pin[0]] * 0.5;
+				break;
+			default:
 				block_output_pins[0] = 0xffffffff;
+				break;
 			}
 			output_pin += cgp_configuration.function_output_arity();
 			input_pin += cgp_configuration.function_input_arity() + 1;
