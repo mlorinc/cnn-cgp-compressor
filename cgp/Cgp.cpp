@@ -22,23 +22,24 @@ void CGP::build() {
 	const uint8_t input_column_pins = input_count();
 	const uint8_t fn_arity = function_output_arity();
 	minimum_output_indicies = std::make_shared<std::tuple<int, int>[]>(col_count() + 1);
+	int l_back = look_back_parameter();
 
 	// Calculate pin available according to defined L parameter.
 	// Skip input pins (+1) and include output pins (+1)
 #pragma omp parallel for
 	for (int col = 1; col < col_count() + 2; col++) {
-		int first_col = std::max(0, col - look_back_parameter());
+		int first_col = std::max(0, col - l_back);
 		decltype(row_count()) min_pin, max_pin;
 
 		// Input pins can be used, however they quantity might be different than row_count()
 		if (first_col == 0)
 		{
 			min_pin = 0;
-			max_pin = (look_back_parameter() - 1) * row_count() * fn_arity + input_column_pins;
+			max_pin = (col - 1) * row_count() * fn_arity + input_column_pins;
 		}
 		else {
 			min_pin = std::max(0, first_col - 1) * row_count() * fn_arity + input_column_pins;
-			max_pin = min_pin + look_back_parameter() * row_count() * fn_arity;
+			max_pin = min_pin + l_back * row_count() * fn_arity;
 		}
 
 
