@@ -97,8 +97,7 @@ class CGP(object):
         process.stdin.close()
 
         capture_weights = False
-        while process.poll() is None:
-            line = process.stdout.readline()
+        for line in iter(process.stdout.readline, ""):
             print("CGP:", line, end="")
 
             if capture_weights:
