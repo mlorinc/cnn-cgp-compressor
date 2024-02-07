@@ -13,8 +13,7 @@ namespace cgp {
 	/// </summary>
 	class Chromosome {
 	private:
-		// Type definition for the gene.
-		using gene_t = uint16_t;
+		using gene_t = CGPConfiguration::gene_t;
 
 		// Reference to the CGP configuration used for chromosome setup.
 		const CGPConfiguration& cgp_configuration;
@@ -138,6 +137,12 @@ namespace cgp {
 		/// </summary>
 		/// <returns>The string representation of the Chromosome.</returns>
 		std::string to_string() const;
+
+		/// <summary>
+		/// Calculate size of the gene.
+		/// </summary>
+		/// <returns>The size of gene.</returns>
+		size_t get_serialized_chromosome_size() const;
 
 		/// <summary>
 		/// Copy assignment operator for the Chromosome class.

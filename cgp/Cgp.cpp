@@ -6,11 +6,14 @@
 
 using namespace cgp;
 
-CGP::CGP(const std::vector<double>& expected_values) : best_fitness(std::numeric_limits<double>::infinity()), expected_values(expected_values) {
-	auto min_max = std::minmax_element(expected_values.begin(), expected_values.end());
-	expected_value_min = *min_max.first;
-	expected_value_max = *min_max.second;
-	generations_without_change = 0;
+CGP::CGP(const std::shared_ptr<double[]> expected_values, const size_t expected_values_size, const double expected_min_value, const double expected_max_value) :
+	best_fitness(std::numeric_limits<double>::infinity()),
+	expected_values(expected_values),
+	expected_values_size(expected_values_size),
+	expected_value_min(expected_min_value),
+	expected_value_max(expected_max_value),
+	generations_without_change(0),
+	evolution_steps_made(0) {
 }
 
 CGP::~CGP() {}
@@ -53,24 +56,22 @@ void CGP::build() {
 
 // MSE loss function implementations;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-double mse(const double* predictions, const std::vector<double>& actual)
+double CGP::mse(const double* predictions) const
 {
-	int count = actual.size();
 	double sum = 0;
-
 #pragma omp parallel for reduction(+:sum)
-	for (int i = 0; i < count; i++)
+	for (int i = 0; i < expected_values_size; i++)
 	{
-		double diff = predictions[i] - actual[i];
+		double diff = predictions[i] - expected_values[i];
 		sum += diff * diff;
 	}
 
-	return sum / count;
+	return sum / expected_values_size;
 }
 
 double CGP::fitness(Chromosome& chrom) {
 	chrom.evaluate();
-	return mse(chrom.begin_output(), expected_values); // / actual.size();
+	return mse(chrom.begin_output());
 }
 
 void CGP::mutate() {
@@ -80,6 +81,7 @@ void CGP::mutate() {
 		chrom = best_chromosome->mutate();
 		chromosomes[i] = chrom;
 	}
+	evolution_steps_made++;
 }
 
 
@@ -142,4 +144,10 @@ decltype(CGP::best_chromosome) CGP::get_best_chromosome() const {
 
 decltype(CGP::generations_without_change) CGP::get_generations_without_change() const {
 	return generations_without_change;
+}
+
+size_t CGP::get_serialized_chromosome_size() const
+{
+	// chromosome size + input information + output information
+	return chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);
 }

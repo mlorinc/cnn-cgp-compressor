@@ -13,6 +13,8 @@ namespace cgp {
 	/// </summary>
 	class CGP : public CGPConfiguration {
 	private:
+		using gene_t = CGPConfiguration::gene_t;
+
 		// Collection of chromosomes representing individuals in the population.
 		std::vector<std::shared_ptr<Chromosome>> chromosomes;
 
@@ -34,8 +36,11 @@ namespace cgp {
 		// Counter for the total evolution steps made during the process.
 		size_t evolution_steps_made;
 
-		// Reference to the vector of expected values used for fitness evaluation.
-		const std::vector<double>& expected_values;
+		// Shared pointer to array of expected values used for fitness evaluation.
+		const std::shared_ptr<double[]> expected_values;
+
+		// Number of elements in expected_values.
+		const size_t expected_values_size;
 
 		// Minimum expected value in the dataset.
 		double expected_value_min;
@@ -46,12 +51,17 @@ namespace cgp {
 		// Calculate the fitness of a chromosome.
 		double fitness(Chromosome& chrom);
 
+		// Calculate MSE metric for made predictions
+		double mse(const double* predictions) const;
 	public:
 		/// <summary>
 		/// Constructor for CGP class.
 		/// </summary>
-		/// <param name="expected_values">Vector of expected values for fitness evaluation.</param>
-		CGP(const std::vector<double>& expected_values);
+		/// <param name="expected_values">Array of expected values for fitness evaluation.</param>
+		/// <param name="expected_values_size">Number of expected values.</param>
+		/// <param name="expected_min_value">Minimum expected value in the dataset.</param>
+		/// <param name="expected_max_value">Maximum expected value in the dataset.</param>
+		CGP(const std::shared_ptr<double[]> expected_values, const size_t expected_values_size, const double expected_min_value, const double expected_max_value);
 
 		/// <summary>
 		/// Destructor for CGP class.
@@ -91,5 +101,11 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Number of generations without change.</returns>
 		decltype(generations_without_change) get_generations_without_change() const;
+
+		/// <summary>
+		/// Calculate size of the gene.
+		/// </summary>
+		/// <returns>The size of gene.</returns>
+		size_t get_serialized_chromosome_size() const;
 	};
 }

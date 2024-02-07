@@ -304,6 +304,12 @@ std::string Chromosome::to_string() const
 	return result.str();
 }
 
+size_t cgp::Chromosome::get_serialized_chromosome_size() const
+{
+	// chromosome size + input information + output information
+	return cgp_configuration.chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);
+}
+
 std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)
 {
 	os << chromosome.to_string();
