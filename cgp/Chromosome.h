@@ -14,6 +14,7 @@ namespace cgp {
 	class Chromosome {
 	private:
 		using gene_t = CGPConfiguration::gene_t;
+		using weight_value_t = CGPConfiguration::weight_value_t;
 
 		// Reference to the CGP configuration used for chromosome setup.
 		const CGPConfiguration& cgp_configuration;
@@ -22,25 +23,25 @@ namespace cgp {
 		gene_t* output_start, * output_end;
 
 		// Pointers to the start and end positions of the output pins in the pin map.
-		double* output_pin_start, * output_pin_end;
+		weight_value_t* output_pin_start, * output_pin_end;
 
 		// Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.
 		const std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies;
 
 		// Minimum expected value in the dataset.
-		const double expected_value_min;
+		const weight_value_t expected_value_min;
 
 		// Maximum expected value in the dataset.
-		const double expected_value_max;
+		const weight_value_t expected_value_max;
 
 		// Shared pointer to the chromosome array.
 		std::shared_ptr<gene_t[]> chromosome;
 
 		// Shared pointer to the pin map array.
-		std::shared_ptr<double[]> pin_map;
+		std::shared_ptr<weight_value_t[]> pin_map;
 
 		// Shared pointer to the input array.
-		std::shared_ptr<double[]> input;
+		std::shared_ptr<weight_value_t[]> input;
 
 		// Flag indicating whether the chromosome needs evaluation.
 		bool need_evaluation = true;
@@ -67,7 +68,7 @@ namespace cgp {
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
-		Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, double expected_value_min, double expected_value_max);
+		Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_value_t expected_value_min, weight_value_t expected_value_max);
 
 		/// <summary>
 		/// Copy constructor for the Chromosome class.
@@ -113,7 +114,7 @@ namespace cgp {
 		/// Method to set the input for the chromosome.
 		/// </summary>
 		/// <param name="input">Shared pointer to the input array.</param>
-		void set_input(std::shared_ptr<double[]> input);
+		void set_input(std::shared_ptr<weight_value_t[]> input);
 
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.
@@ -124,13 +125,13 @@ namespace cgp {
 		/// Getter for the pointer to the beginning of the output array.
 		/// </summary>
 		/// <returns>Pointer to the beginning of the output array.</returns>
-		double* begin_output();
+		weight_value_t* begin_output();
 
 		/// <summary>
 		/// Getter for the pointer to the end of the output array.
 		/// </summary>
 		/// <returns>Pointer to the end of the output array.</returns>
-		double* end_output();
+		weight_value_t* end_output();
 
 		/// <summary>
 		/// Convert the Chromosome to a string representation which can be used in cgpviewer.exe.

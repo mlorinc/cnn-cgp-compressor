@@ -84,6 +84,13 @@ namespace cgp {
 		// Type definition for the gene.
 		using gene_t = uint16_t;
 
+#ifndef CNN_FP32_WEIGHTS
+		// Type definition for inferred weight.
+		using weight_value_t = int8_t;
+#else
+		// Type definition for inferred weight.
+		using weight_value_t = double;
+#endif // !CNN_FP32_WEIGHTS
 		/// <summary>
 		/// Gets the input arity of functions.
 		/// </summary>

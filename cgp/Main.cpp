@@ -2,6 +2,16 @@
 
 #include "Main.h"
 
+#ifndef CNN_FP32_WEIGHTS
+constexpr int function_count = 20;
+using weight_repr_value_t = int;
+#else
+constexpr int function_count = 14;
+using weight_repr_value_t = double;
+#endif // !CNN_FP32_WEIGHTS
+
+using weight_value_t = cgp::CGPConfiguration::weight_value_t;
+
 int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
@@ -9,7 +19,7 @@ int main(int argc, const char** args) {
 	size_t layers_to_approximate = 0;
 	size_t input_size = 0;
 	size_t output_size = 0;
-	double weight;
+	weight_repr_value_t weight;
 
 	// Read three values from the standard input
 	if (!(std::cin >> layers_to_approximate >> input_size >> output_size)) {
@@ -17,18 +27,20 @@ int main(int argc, const char** args) {
 		return 1;
 	}
 
-	std::shared_ptr<double[]> input(new double[input_size]);
-	std::shared_ptr<double[]> output(new double[output_size]);
-	double min = std::numeric_limits<double>::infinity(), max = -std::numeric_limits<double>::infinity();
+	std::shared_ptr<weight_value_t[]> input(new weight_value_t[input_size]);
+	std::shared_ptr<weight_value_t[]> output(new weight_value_t[output_size]);
+	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::infinity();
+	weight_repr_value_t max = -std::numeric_limits<weight_repr_value_t>::infinity();
 
 	std::cout << "loading values" << std::endl;
 	for (size_t i = 0; i < input_size; i++)
 	{
 		if (std::cin >> weight)
 		{
-			input[i] = weight;
+			input[i] = static_cast<weight_value_t>(weight);
 		}
 		else {
+			// todo change error message
 			std::cerr << "invalit input weight: expecting double value; got " << weight << std::endl;
 			return 1;
 		}
@@ -38,7 +50,7 @@ int main(int argc, const char** args) {
 	{
 		if (std::cin >> weight)
 		{
-			output[i] = weight;
+			output[i] = static_cast<weight_value_t>(weight);
 			min = std::min(min, weight);
 			max = std::max(max, weight);
 		}
@@ -59,7 +71,7 @@ int main(int argc, const char** args) {
 		.row_count(5)*/
 		.look_back_parameter(50)
 		.mutation_max(static_cast<uint16_t>(cgp_model.chromosome_size() * 0.15))
-		.function_count(14)
+		.function_count(function_count)
 		.function_input_arity(2)
 		.function_output_arity(1)
 		.input_count(input_size)
@@ -86,10 +98,10 @@ int main(int argc, const char** args) {
 		cgp_model.evaluate(input);
 
 		if (i % cgp_model.periodic_log_frequency() == 0) {
-			std::cout << "[" << (i + 1) << "] MSE: " << cgp_model.get_best_fitness() << std::endl;
+			std::cout << "[" << (i + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << std::endl;
 		}
 
-		if (cgp_model.get_best_fitness() == 0 || cgp_model.get_generations_without_change() > generation_stop)
+		if (cgp_model.get_best_error_fitness() == 0 || cgp_model.get_generations_without_change() > generation_stop)
 		{
 			break;
 		}
@@ -112,7 +124,7 @@ int main(int argc, const char** args) {
 
 	std::cout << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl;
 	std::cout << "weights: " << std::endl;
-	std::copy(cgp_model.get_best_chromosome()->begin_output(), cgp_model.get_best_chromosome()->end_output(), std::ostream_iterator<double>(std::cout, ", "));
+	std::copy(cgp_model.get_best_chromosome()->begin_output(), cgp_model.get_best_chromosome()->end_output(), std::ostream_iterator<weight_repr_value_t>(std::cout, ", "));
 	std::cout << std::endl << "exitting program" << std::endl;
 	return 0;
 }

@@ -5,14 +5,14 @@
 
 using namespace cgp;
 
-Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, double expected_value_min, double expected_value_max) :
+Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_value_t expected_value_min, weight_value_t expected_value_max) :
 	cgp_configuration(cgp_configuration),
 	minimum_output_indicies(minimum_output_indicies),
 	expected_value_min(expected_value_min),
 	expected_value_max(expected_value_max)
 {
 	chromosome = std::make_unique<gene_t[]>(cgp_configuration.chromosome_size());
-	pin_map = std::make_unique<double[]>(cgp_configuration.pin_map_size());
+	pin_map = std::make_unique<weight_value_t[]>(cgp_configuration.pin_map_size());
 
 
 	output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size();
@@ -119,7 +119,7 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 {
 	auto chrom = std::make_shared<Chromosome>(Chromosome(*this));
 	chrom->chromosome = std::make_unique<Chromosome::gene_t[]>(cgp_configuration.chromosome_size());
-	chrom->pin_map = std::make_unique<double[]>(cgp_configuration.pin_map_size());
+	chrom->pin_map = std::make_unique<weight_value_t[]>(cgp_configuration.pin_map_size());
 
 	std::copy(pin_map.get(), output_pin_end, chrom->pin_map.get());
 	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), chrom->chromosome.get());
@@ -161,7 +161,7 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 }
 
 
-void Chromosome::set_input(std::shared_ptr<double[]> input)
+void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 {
 	if (this->input == input)
 	{
@@ -236,6 +236,26 @@ void Chromosome::evaluate()
 			case 13:
 				block_output_pins[0] = pin_map[input_pin[0]] * 0.5;
 				break;
+#ifndef CNN_FP32_WEIGHTS
+			case 14:
+				block_output_pins[0] = pin_map[input_pin[0]] & pin_map[input_pin[1]];
+				break;
+			case 15:
+				block_output_pins[0] = pin_map[input_pin[0]] | pin_map[input_pin[1]];
+				break;
+			case 16:
+				block_output_pins[0] = pin_map[input_pin[0]] ^ pin_map[input_pin[1]];
+				break;
+			case 17:
+				block_output_pins[0] = ~(pin_map[input_pin[0]]);
+				break;
+			case 18:
+				block_output_pins[0] = pin_map[input_pin[0]] >> 1;
+				break;
+			case 19:
+				block_output_pins[0] = pin_map[input_pin[0]] << 1;
+				break;
+#endif
 			default:
 				block_output_pins[0] = 0xffffffff;
 				break;
@@ -255,13 +275,13 @@ void Chromosome::evaluate()
 	need_evaluation = false;
 }
 
-double* Chromosome::begin_output()
+Chromosome::weight_value_t* Chromosome::begin_output()
 {
 	return output_pin_start;
 }
 
 
-double* Chromosome::end_output()
+Chromosome::weight_value_t* Chromosome::end_output()
 {
 	return output_pin_end;
 }

@@ -6,14 +6,15 @@
 
 using namespace cgp;
 
-CGP::CGP(const std::shared_ptr<double[]> expected_values, const size_t expected_values_size, const double expected_min_value, const double expected_max_value) :
-	best_fitness(std::numeric_limits<double>::infinity()),
+CGP::CGP(const std::shared_ptr<weight_value_t[]> expected_values, const size_t expected_values_size, const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold) :
+	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
 	expected_values(expected_values),
 	expected_values_size(expected_values_size),
 	expected_value_min(expected_min_value),
 	expected_value_max(expected_max_value),
 	generations_without_change(0),
-	evolution_steps_made(0) {
+	evolution_steps_made(0),
+	mse_threshold(mse_threshold) {
 }
 
 CGP::~CGP() {}
@@ -57,7 +58,7 @@ void CGP::build() {
 
 // MSE loss function implementations;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-double CGP::mse(const double* predictions) const
+double CGP::mse(const weight_value_t* predictions) const
 {
 	double sum = 0;
 #pragma omp parallel for reduction(+:sum)
@@ -67,15 +68,39 @@ double CGP::mse(const double* predictions) const
 		sum += diff * diff;
 	}
 
+	// Overflow detected, discard result completely
+	if (sum < 0) {
+		return std::numeric_limits<double>::infinity();
+	}
+
 	return sum / expected_values_size;
 }
 
-double CGP::fitness(Chromosome& chrom) {
-	chrom.evaluate();
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom)
+{
+	chrom->evaluate();
+	auto mse = error_fitness(*chrom);
+
+	if (mse <= mse_threshold)
+	{
+		return std::make_tuple(mse, energy_fitness(*chrom), chrom);
+	}
+	else {
+		return std::make_tuple(mse, std::numeric_limits<weight_value_t>::infinity(), chrom);
+	}
+}
+
+double CGP::energy_fitness(Chromosome& chrom)
+{
+	return 0.0;
+}
+
+double CGP::error_fitness(Chromosome& chrom) {
 	return mse(chrom.begin_output());
 }
 
 void CGP::mutate() {
+	auto best_chromosome = get_best_chromosome();
 	for (int i = 0; i < chromosomes.size(); i++)
 	{
 		std::shared_ptr<Chromosome> chrom = chromosomes[i];
@@ -85,13 +110,26 @@ void CGP::mutate() {
 	evolution_steps_made++;
 }
 
+bool CGP::dominates(solution_t a, solution_t b) const
+{
+	double a_error_fitness = std::get<0>(a);
+	double a_energy_fitness = std::get<1>(a);
 
-void CGP::evaluate(const std::shared_ptr<double[]> input) {
+	double b_error_fitness = std::get<0>(b);
+	double b_energy_fitness = std::get<1>(b);
+
+	// Allow neutral evolution for error in case energies are the same
+	return ((mse_threshold < a_error_fitness && a_error_fitness <= b_error_fitness) ||
+		(mse_threshold >= a_error_fitness && a_energy_fitness < b_energy_fitness) ||
+		(mse_threshold >= a_error_fitness && a_energy_fitness == b_energy_fitness && a_error_fitness <= b_error_fitness));
+}
+
+void CGP::evaluate(const std::shared_ptr<weight_value_t[]> input) {
 #pragma omp parallel for
 	for (int i = 0; i < chromosomes.size(); i++) {
 		auto& chromosome = chromosomes[i];
 		chromosome->set_input(input);
-		double fit = fitness(*chromosome);
+		solution_t chromosome_result = analyse_chromosome(chromosome);
 
 		// The following section will set fitness and the chromosome
 		// to best_solutions map if the fitness is better than the best fitness
@@ -102,15 +140,14 @@ void CGP::evaluate(const std::shared_ptr<double[]> input) {
 
 		if (best_solution != best_solutions.end())
 		{
-			double best_fitness = std::get<0>(best_solution->second);
-			auto& best_chromosome = std::get<1>(best_solution->second);
-			if (fit <= best_fitness)
-			{
-				best_solution->second = std::make_tuple(fit, chromosome);
+			// Allow neutral evolution for error
+			if (dominates(chromosome_result, best_solution->second)) {
+				best_solution->second = chromosome_result;
 			}
 		}
 		else {
-			best_solutions[thread_id] = std::make_tuple(fit, chromosome);
+			// Create default
+			best_solutions[thread_id] = chromosome_result;
 		}
 	}
 
@@ -121,26 +158,32 @@ void CGP::evaluate(const std::shared_ptr<double[]> input) {
 	// including its fitness.
 	for (auto it = best_solutions.begin(), end = best_solutions.end(); it != end; it++)
 	{
-		double& thread_best_fitness = std::get<0>(it->second);
-		auto& thread_best_chromosome = std::get<1>(it->second);
-		if (thread_best_fitness <= best_fitness)
-		{
-			best_fitness = thread_best_fitness;
-			best_chromosome = thread_best_chromosome;
+		auto thread_solution = it->second;
+		double thread_best_error_fitness = std::get<0>(thread_solution);
+		double thread_best_energy_fitness = std::get<1>(thread_solution);
+		double best_error_fitness = std::get<0>(best_solution);
+		double best_energy_fitness = std::get<1>(best_solution);
 
-			if (thread_best_fitness != best_fitness) {
+		// Allow neutral evolution for error
+		if (dominates(thread_solution, best_solution)) {
+			if (thread_best_error_fitness != best_error_fitness || thread_best_energy_fitness != best_energy_fitness) {
 				generations_without_change = 0;
 			}
+			best_solution = thread_solution;
 		}
 	}
 }
 
-decltype(CGP::best_fitness) CGP::get_best_fitness() const {
-	return best_fitness;
+double CGP::get_best_error_fitness() const {
+	return std::get<0>(best_solution);
 }
 
-decltype(CGP::best_chromosome) CGP::get_best_chromosome() const {
-	return best_chromosome;
+double CGP::get_best_energy_fitness() const {
+	return std::get<1>(best_solution);
+}
+
+std::shared_ptr<Chromosome> CGP::get_best_chromosome() const {
+	return std::get<2>(best_solution);
 }
 
 decltype(CGP::generations_without_change) CGP::get_generations_without_change() const {
