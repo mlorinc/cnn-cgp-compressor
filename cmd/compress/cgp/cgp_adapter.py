@@ -60,7 +60,7 @@ def create_kernel(core: torch.Tensor, outter: torch.Tensor, kernel_shape: torch.
     return kernel
 
 class CGP(object):
-    def __init__(self, binary: str, kernel_count: int, kernel_dimension: int, core_dimension: int) -> None:
+    def __init__(self, binary: str, kernel_count: int, kernel_dimension: int, core_dimension: int, dtype=torch.int8) -> None:
         self._binary = binary
         self._core_dimension = core_dimension
         self._kernel_dimension = kernel_dimension
@@ -71,13 +71,18 @@ class CGP(object):
 
         self._input_size = kernel_count * self._core_size
         self._output_size = kernel_count * self._kernel_size - self._input_size
-        self._inputs = torch.empty(size=(self._input_size, ))
-        self._expected_values = torch.empty(size=(self._output_size, ))
+        self._inputs = torch.empty(size=(self._input_size, ), dtype=dtype)
+        self._expected_values = torch.empty(size=(self._output_size, ), dtype=dtype)
         self._input_position = (0, self._core_size)
         self._output_position = (0, self._outter_size)
         self._weights = None
+        self._trained = False
+        self._dtype = dtype
 
     def add_kernel(self, kernel: torch.Tensor):
+        if kernel.dtype == torch.qint8:
+            kernel = kernel.int()
+
         core, out = convert_kernel_to_train_dataset(kernel, self._core_dimension)
         self._inputs[self._input_position[0]:self._input_position[1]] = core
         self._expected_values[self._output_position[0]:self._output_position[1]] = out
@@ -110,13 +115,19 @@ class CGP(object):
         # Wait for the subprocess to finish
         process.wait()
         print("Return code:", process.returncode)
+        self._trained = True
 
     def get_kernels(self):
+        if not self._trained:
+            raise ValueError("the CGP has not been trained")
         kernels = []
         for i in range(self._kernel_count):
             core = self._inputs[i*self._core_size:i*self._core_size+self._core_size]
             outter = self._weights[i*self._outter_size:i*self._outter_size+self._outter_size]
             core = core.reshape((self._core_dimension, self._core_dimension))
             kernel = create_kernel(core, outter, torch.Size((self._kernel_dimension, self._kernel_dimension)))
+
+            if self._dtype == torch.int8:
+                kernel = kernel.int()
             kernels.append(kernel)
         return kernels
