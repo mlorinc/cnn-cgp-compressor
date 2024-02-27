@@ -1,11 +1,37 @@
 from typing import Optional
 import torch
-from models.quant_lenet import QuantLeNet5
+import torchvision
+from models.ptq_quantized_lenet import PTQQuantizedLeNet5
+from models.qat_quantized_lenet import QATQuantizedLeNet5
+from models.mobilenet_v2 import MobileNetV2
 from models.lenet import LeNet5
 from models.base import BaseModel
 from cgp.cgp_adapter import CGP
+from cgp.test_cgp_adapter import TestCGP
 import importlib
 import argparse
+
+def dequantize_per_channel(x: torch.Tensor, conv_layer: torch.Tensor):
+    zero_point = conv_layer.q_per_channel_zero_points()
+    scale = conv_layer.q_per_channel_scales()
+
+    dequantized = ((x - zero_point.view(-1, 1, 1)) * scale.view(-1, 1, 1)).float()
+    return torch.quantize_per_channel(
+        dequantized,
+        scale,
+        zero_point,
+        axis=0,
+        dtype=torch.qint8
+    )
+
+def dequantize_per_tensor(x: torch.Tensor, scale: torch.float32, zero_point: torch.float32):
+    dequantized = ((x - zero_point) * scale).float()
+    return torch.quantize_per_tensor(
+        dequantized,
+        scale,
+        zero_point,
+        dtype=torch.qint8
+    )
 
 def _get_model(model_name: str, model_path: Optional[str] = None) -> BaseModel:
     return importlib.import_module(f"models.{model_name}").init(model_path)
@@ -17,50 +43,34 @@ def train_model(model_name: str, model_path: str, base: str):
         model.load(base)
         print(f"Loaded from {base}")
 
-    if model_name != QuantLeNet5.name:
-        model.fit()
-        model.save(model_path)
-    else:
-        model: QuantLeNet5
-        quant_model = model.prepare()
-        quant_model.fit()
-        quantized_model = quant_model.finish(quant_model)
-        quantized_model.save(model_path)
+    model.fit()
+    model.save(model_path)
 
 def evaluate_model(model_name: str, model_path: str):
     print(f"Evaluating model: {model_name}")
     model: BaseModel = _get_model(model_name, model_path)
-
-    acc = loss = 0
-    if model_name != QuantLeNet5.name:
+    if model_name != MobileNetV2.name:
         model = model.load(model_path)
-        acc, loss = model.evaluate()
-    else:
-        print("Using quantized methods")
-        model: QuantLeNet5
-        quant_model = model.prepare()
-        quantized_model = quant_model.finish(quant_model)
-        quantized_model.load(model_path)
-        acc, loss = quantized_model.evaluate()
+    acc, loss = model.evaluate(max_batches=None)
         
-    print(f"acc: {acc:.12f}, loss {loss:.12f}")
+    print(f"acc: {acc:.12f}%, loss {loss:.12f}")
 
 def quantize_model(model_name, model_path, new_path):
     print(f"Quantizing model: {model_name} and saving as {new_path}")
     model: BaseModel = _get_model(model_name, model_path)
-    model.load(model_path)
-    model.quantize()
-    model.save(new_path, save_model=True)
+    model.load(model_path, quantized=False)
+    model.quantize(new_path)
+    model.save(new_path)
 
 def optimize_model(model_name: str, model_path: str, cgp_binary_path: str):
+    initial_acc = final_acc = 0
+    initial_loss = final_loss = 0
+
     if model_name == LeNet5.name:
+        cgp = CGP(cgp_binary_path, 16+1, 5, 3)
         model = LeNet5(model_path)
         model = model.load(model_path)
         model.eval()
-        cgp = CGP(cgp_binary_path, 16+1, 5, 3)
-
-        initial_acc = final_acc = 0
-        initial_loss = final_loss = 0
         with torch.no_grad():
             initial_acc, initial_loss = model.evaluate()
             print("before compression:")
@@ -75,7 +85,35 @@ def optimize_model(model_name: str, model_path: str, cgp_binary_path: str):
             for i in range(16):
                 model.conv2.weight[i, 0] = kernels[i+1]
             final_acc, final_loss = model.evaluate()
-        print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f} | acc: {final_acc:.12f}, loss {final_loss:.12f}")
+    elif model_name == QATQuantizedLeNet5.name:
+        # cgp = TestCGP()
+        cgp = CGP(cgp_binary_path, 6, 5, 3)
+        model = QATQuantizedLeNet5(model_path)
+        model = model.load(model_path)
+        model.eval()
+
+        with torch.no_grad():
+            initial_acc, initial_loss = model.evaluate()
+            conv1_biases = model.conv1.bias()
+            conv2_biases = model.conv2.bias()
+            conv1_fp32_weights = model.conv1.weight().detach()
+            conv2_fp32_weights = model.conv2.weight().detach()
+            conv1_qint8_weights = model.conv1.weight().detach().int_repr()
+            conv2_qint8_weights = model.conv2.weight().detach().int_repr()
+
+            print("before compression:")
+            print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f}")
+            
+            for kernel in conv1_qint8_weights[:, 0]:
+                cgp.add_kernel(kernel)
+
+            cgp.train()
+            kernels = cgp.get_kernels()
+            conv1_fp32_weights[:, 0] = dequantize_per_channel(torch.stack(kernels), conv1_fp32_weights)
+            model.conv1.set_weight_bias(conv1_fp32_weights, conv1_biases)
+            final_acc, final_loss = model.evaluate()
+    print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f} | acc: {final_acc:.12f}, loss {final_loss:.12f}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Model Training, Evaluation, Quantization, and Optimization")
