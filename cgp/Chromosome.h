@@ -52,6 +52,9 @@ namespace cgp {
 		// Flag indicating whether the chromosome needs evaluation.
 		bool need_evaluation = true;
 
+		// Flag indicating whether the genotype needs energy evaluation.
+		bool need_energy_evaluation = true;
+
 		// Cached energy consumption value
 		double estimated_energy_consumptation = std::numeric_limits<double>::infinity();
 

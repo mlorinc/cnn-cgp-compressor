@@ -3,6 +3,7 @@
 #include <numeric>
 #include <sstream>
 #include <stack>
+#include <cassert>
 
 using namespace cgp;
 
@@ -72,6 +73,7 @@ Chromosome::Chromosome(const Chromosome& that) :
 	expected_value_max(that.expected_value_max) {
 	input = that.input;
 	need_evaluation = that.need_evaluation;
+	need_energy_evaluation = that.need_energy_evaluation;
 	setup_maps(that.chromosome);
 	setup_iterators();
 	estimated_energy_consumptation = that.estimated_energy_consumptation;
@@ -215,6 +217,7 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 		}
 	}
 	chrom->need_evaluation = true;
+	chrom->need_energy_evaluation = true;
 	return chrom;
 }
 
@@ -228,6 +231,7 @@ void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 
 	this->input = input;
 	need_evaluation = true;
+	need_energy_evaluation = true;
 	for (size_t i = 0; i < cgp_configuration.input_count(); i++)
 	{
 		pin_map[i] = input[i];
@@ -237,6 +241,8 @@ void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 
 void Chromosome::evaluate()
 {
+	assert(("Chromosome::evaluate cannot be called without calling Chromosome::set_input before", input == nullptr));
+
 	if (!need_evaluation)
 	{
 		return;
@@ -330,16 +336,19 @@ void Chromosome::evaluate()
 		*pin_it = pin_map[*it];
 	}
 	need_evaluation = false;
+	need_energy_evaluation = true;
 }
 
 Chromosome::weight_value_t* Chromosome::begin_output()
 {
+	assert(("Chromosome::begin_output cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 	return output_pin_start;
 }
 
 
 Chromosome::weight_value_t* Chromosome::end_output()
 {
+	assert(("Chromosome::end_output cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 	return output_pin_end;
 }
 
@@ -386,7 +395,9 @@ size_t cgp::Chromosome::get_serialized_chromosome_size() const
 
 double cgp::Chromosome::estimate_energy_usage()
 {
-	if (!need_evaluation)
+	assert(("Chromosome::estimate_energy_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+
+	if (!need_energy_evaluation)
 	{
 		return estimated_energy_consumptation;
 	}
@@ -428,6 +439,7 @@ double cgp::Chromosome::estimate_energy_usage()
 		}
 	}
 
+	need_energy_evaluation = false;
 	return estimated_energy_consumptation;
 }
 
