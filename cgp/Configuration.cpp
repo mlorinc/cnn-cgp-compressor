@@ -18,6 +18,11 @@ namespace cgp {
         return blocks_chromosome_size() + output_count();
     }
 
+    decltype(CGPConfiguration::function_energy_costs_value) CGPConfiguration::function_energy_costs() const
+    {
+        return function_energy_costs_value;
+    }
+
     decltype(CGPConfiguration::function_output_arity_value) CGPConfiguration::function_output_arity() const {
         return function_output_arity_value;
     }
@@ -164,6 +169,12 @@ namespace cgp {
 
     CGPConfiguration& CGPConfiguration::periodic_log(decltype(periodic_log_value) value) {
         periodic_log_value = value;
+        return *this;
+    }
+
+    CGPConfiguration& CGPConfiguration::function_energy_costs(decltype(function_energy_costs_value) value)
+    {
+        function_energy_costs_value = value;
         return *this;
     }
 }

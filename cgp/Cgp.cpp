@@ -86,13 +86,13 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom)
 		return std::make_tuple(mse, energy_fitness(*chrom), chrom);
 	}
 	else {
-		return std::make_tuple(mse, std::numeric_limits<weight_value_t>::infinity(), chrom);
+		return std::make_tuple(mse, std::numeric_limits<double>::infinity(), chrom);
 	}
 }
 
 double CGP::energy_fitness(Chromosome& chrom)
 {
-	return 0.0;
+	return chrom.estimate_energy_usage();
 }
 
 double CGP::error_fitness(Chromosome& chrom) {

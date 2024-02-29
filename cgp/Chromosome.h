@@ -17,7 +17,7 @@ namespace cgp {
 		using weight_value_t = CGPConfiguration::weight_value_t;
 
 		// Reference to the CGP configuration used for chromosome setup.
-		const CGPConfiguration& cgp_configuration;
+		CGPConfiguration cgp_configuration;
 
 		// Pointers to the start and end positions of the chromosome output.
 		gene_t* output_start, * output_end;
@@ -38,13 +38,22 @@ namespace cgp {
 		std::shared_ptr<gene_t[]> chromosome;
 
 		// Shared pointer to the pin map array.
-		std::shared_ptr<weight_value_t[]> pin_map;
+		std::unique_ptr<weight_value_t[]> pin_map;
+
+		// Shared pointer to the function energy map array.
+		std::unique_ptr<double[]> energy_map;
+
+		// Shared pointer to the function energy visit map array.
+		std::unique_ptr<bool[]> energy_visit_map;
 
 		// Shared pointer to the input array.
 		std::shared_ptr<weight_value_t[]> input;
 
 		// Flag indicating whether the chromosome needs evaluation.
 		bool need_evaluation = true;
+
+		// Cached energy consumption value
+		double estimated_energy_consumptation = std::numeric_limits<double>::infinity();
 
 		// Private method to check if a given position in the chromosome represents a function.
 		bool is_function(size_t position) const;
@@ -56,7 +65,16 @@ namespace cgp {
 		bool is_output(size_t position) const;
 
 		// Private method for setting up the initial state of the chromosome.
-		void setup();
+		void setup_chromosome();
+
+		// Private method for allocating pin and energy arrays (maps). Furthermore, chromosome array is allocated.
+		void setup_maps();
+
+		// Private method for allocating pin and energy arrays (maps). Chromosome is reused.
+		void setup_maps(decltype(chromosome) chromosome);
+
+		// Private method for setting up iterator pointers.
+		void setup_iterators();
 
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
@@ -69,6 +87,13 @@ namespace cgp {
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
 		Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_value_t expected_value_min, weight_value_t expected_value_max);
+		
+		
+		/// <summary>
+		/// Constructor for the Chromosome class using string chromosome representation.
+		/// </summary>
+		/// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
+		Chromosome(const std::string &serialized_chromosome, std::shared_ptr<double[]> function_energy_costs);
 
 		/// <summary>
 		/// Copy constructor for the Chromosome class.
@@ -89,6 +114,13 @@ namespace cgp {
 		/// <param name="column">Column index of the block.</param>
 		/// <returns>Pointer to the block inputs.</returns>
 		gene_t* get_block_inputs(size_t row, size_t column) const;
+
+		/// <summary>
+		/// Getter for the pointer to the inputs of a specific block in the chromosome.
+		/// </summary>
+		/// <param name="index">Digital gate index. Indexing start from top-left position, continues down, finally moves to the next column. Repeat until the end is reached.</param>
+		/// <returns>Pointer to the block inputs.</returns>
+		gene_t* get_block_inputs(size_t index) const;
 
 		/// <summary>
 		/// Getter for the pointer to the function represented by a specific block in the chromosome.
@@ -146,11 +178,10 @@ namespace cgp {
 		size_t get_serialized_chromosome_size() const;
 
 		/// <summary>
-		/// Copy assignment operator for the Chromosome class.
+		/// Estimate energy used by phenotype digital circuit.
 		/// </summary>
-		/// <param name="that">Reference to the chromosome to be assigned.</param>
-		/// <returns>Reference to the assigned chromosome.</returns>
-		Chromosome& operator=(const Chromosome& that);
+		/// <returns>Energy estimation.</returns>
+		double estimate_energy_usage();
 	};
 
 	std::string to_string(const cgp::Chromosome& chromosome);

@@ -2,14 +2,6 @@
 
 #include "Main.h"
 
-#ifndef CNN_FP32_WEIGHTS
-constexpr int function_count = 20;
-using weight_repr_value_t = int;
-#else
-constexpr int function_count = 14;
-using weight_repr_value_t = double;
-#endif // !CNN_FP32_WEIGHTS
-
 using weight_value_t = cgp::CGPConfiguration::weight_value_t;
 
 int main(int argc, const char** args) {

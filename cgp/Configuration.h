@@ -1,5 +1,14 @@
 #pragma once
 #include <cstdint>
+#include <memory>
+
+#ifndef CNN_FP32_WEIGHTS
+constexpr int function_count = 20;
+using weight_repr_value_t = int;
+#else
+constexpr int function_count = 14;
+using weight_repr_value_t = double;
+#endif // !CNN_FP32_WEIGHTS
 
 namespace cgp {
 	/// <summary>
@@ -79,6 +88,11 @@ namespace cgp {
 		/// Default value for enabling periodic logging in the CGP algorithm.
 		/// </summary>
 		bool periodic_log_value = true;
+
+		/// <summary>
+		/// Array of energy costs for various operations.
+		/// </summary>
+		std::shared_ptr<double[]> function_energy_costs_value;
 
 	public:
 		// Type definition for the gene.
@@ -161,8 +175,6 @@ namespace cgp {
 		/// </summary>
 		decltype(periodic_log_value) periodic_log() const;
 
-		// Additional public methods for calculating derived values
-
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
 		/// </summary>
@@ -178,7 +190,10 @@ namespace cgp {
 		/// </summary>
 		size_t chromosome_size() const;
 
-		// Public setter methods for modifying configuration parameters
+		/// <summary>
+		/// Gets array of energy costs for various operations.
+		/// </summary>
+		decltype(function_energy_costs_value) function_energy_costs() const;
 
 		/// <summary>
 		/// Sets the input arity of functions.
@@ -249,5 +264,10 @@ namespace cgp {
 		/// Sets whether periodic logging is enabled in the CGP algorithm.
 		/// </summary>
 		CGPConfiguration& periodic_log(decltype(periodic_log_value));
+
+		/// <summary>
+		/// Sets array of energy costs for various operations.
+		/// </summary>
+		CGPConfiguration& function_energy_costs(decltype(function_energy_costs_value));
 	};
 }
