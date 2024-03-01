@@ -77,6 +77,7 @@ Chromosome::Chromosome(const Chromosome& that) :
 	setup_maps(that.chromosome);
 	setup_iterators();
 	estimated_energy_consumptation = that.estimated_energy_consumptation;
+	phenotype_node_count = that.phenotype_node_count;
 
 	if (!need_evaluation) [[likely]]
 	{
@@ -393,7 +394,7 @@ size_t cgp::Chromosome::get_serialized_chromosome_size() const
 	return cgp_configuration.chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);
 }
 
-double cgp::Chromosome::estimate_energy_usage()
+decltype(Chromosome::estimated_energy_consumptation) cgp::Chromosome::get_estimated_energy_usage()
 {
 	assert(("Chromosome::estimate_energy_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 
@@ -411,6 +412,7 @@ double cgp::Chromosome::estimate_energy_usage()
 	}
 
 	estimated_energy_consumptation = 0;
+	phenotype_node_count = 0;
 	while (!pins_to_visit.empty())
 	{
 		auto pin = pins_to_visit.top();
@@ -430,6 +432,7 @@ double cgp::Chromosome::estimate_energy_usage()
 		}
 
 		energy_visit_map[gate_index] = true;
+		phenotype_node_count += 1;
 		estimated_energy_consumptation += energy_map[gate_index];
 		gene_t* inputs = get_block_inputs(gate_index);
 
@@ -441,6 +444,13 @@ double cgp::Chromosome::estimate_energy_usage()
 
 	need_energy_evaluation = false;
 	return estimated_energy_consumptation;
+}
+
+decltype(Chromosome::phenotype_node_count) cgp::Chromosome::get_node_count()
+{
+	assert(("Chromosome::get_node_count cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	get_estimated_energy_usage();
+	return phenotype_node_count;
 }
 
 std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)

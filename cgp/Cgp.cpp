@@ -92,7 +92,7 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom)
 
 double CGP::energy_fitness(Chromosome& chrom)
 {
-	return chrom.estimate_energy_usage();
+	return chrom.get_estimated_energy_usage();
 }
 
 double CGP::error_fitness(Chromosome& chrom) {

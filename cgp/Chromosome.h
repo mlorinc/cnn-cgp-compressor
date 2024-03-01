@@ -55,8 +55,11 @@ namespace cgp {
 		// Flag indicating whether the genotype needs energy evaluation.
 		bool need_energy_evaluation = true;
 
-		// Cached energy consumption value
+		// Cached energy consumption value.
 		double estimated_energy_consumptation = std::numeric_limits<double>::infinity();
+
+		// Cached phenotype node count value. By node it is understood as one digital gate.
+		size_t phenotype_node_count = 0;
 
 		// Private method to check if a given position in the chromosome represents a function.
 		bool is_function(size_t position) const;
@@ -184,7 +187,13 @@ namespace cgp {
 		/// Estimate energy used by phenotype digital circuit.
 		/// </summary>
 		/// <returns>Energy estimation.</returns>
-		double estimate_energy_usage();
+		decltype(estimated_energy_consumptation) get_estimated_energy_usage();
+
+		/// <summary>
+		/// Get quantity of used digital gates used by phenotype.
+		/// </summary>
+		/// <returns>Qunatity of used digital gates.</returns>
+		decltype(phenotype_node_count) get_node_count();
 	};
 
 	std::string to_string(const cgp::Chromosome& chromosome);
