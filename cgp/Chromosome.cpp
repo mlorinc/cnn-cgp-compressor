@@ -192,7 +192,8 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 	chrom->setup_iterators();
 
 	// Number of genes to mutate
-	auto genes_to_mutate = (rand() % cgp_configuration.mutation_max()) + 1;
+	size_t max_genes_to_mutate = cgp_configuration.chromosome_size() * cgp_configuration.mutation_max();
+	auto genes_to_mutate = (rand() % max_genes_to_mutate) + 1;
 	for (auto i = 0; i < genes_to_mutate; i++) {
 		// Select a random gene
 		auto random_gene_index = rand() % cgp_configuration.chromosome_size();

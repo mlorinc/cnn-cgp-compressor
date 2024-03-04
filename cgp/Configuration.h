@@ -1,6 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
+#include <stdexcept>
 
 #ifndef CNN_FP32_WEIGHTS
 constexpr int function_count = 20;
@@ -11,6 +14,20 @@ using weight_repr_value_t = double;
 #endif // !CNN_FP32_WEIGHTS
 
 namespace cgp {
+	class CGPConfigurationInvalidArgument : public std::invalid_argument
+	{
+	public:
+		CGPConfigurationInvalidArgument(const std::string& message)
+			: std::invalid_argument(message) {}
+	};
+
+	class CGPConfigurationOutOfRange : public std::out_of_range
+	{
+	public:
+		CGPConfigurationOutOfRange(const std::string& message)
+			: std::out_of_range(message) {}
+	};
+
 	/// <summary>
 	/// Configuration struct for Cartesian Genetic Programming (CGP).
 	/// </summary>
@@ -47,7 +64,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the maximum mutation value in the CGP algorithm.
 		/// </summary>
-		uint16_t mutation_max_value = 3;
+		double mutation_max_value = 0.15;
 
 		/// <summary>
 		/// Default value for the number of rows in the CGP grid.
@@ -94,7 +111,19 @@ namespace cgp {
 		/// </summary>
 		std::shared_ptr<double[]> function_energy_costs_value;
 
+		/// <summary>
+		/// A path to a file with input data.
+		/// </summary>
+		std::string input_file_value = "-";
+
+		/// <summary>
+		/// A path to a file to create which contains output of the CGP process.
+		/// </summary>
+		std::string output_file_value = "-";
 	public:
+		CGPConfiguration() = default;
+		CGPConfiguration(const std::vector<std::string>& arguments);
+
 		// Type definition for the gene.
 		using gene_t = uint16_t;
 
@@ -105,6 +134,48 @@ namespace cgp {
 		// Type definition for inferred weight.
 		using weight_value_t = double;
 #endif // !CNN_FP32_WEIGHTS
+
+		static const std::string FUNCTION_INPUT_ARITY_LONG;
+		static const std::string FUNCTION_INPUT_ARITY_SHORT;
+
+		static const std::string FUNCTION_OUTPUT_ARITY_LONG;
+		static const std::string FUNCTION_OUTPUT_ARITY_SHORT;
+
+		static const std::string OUTPUT_COUNT_LONG;
+		static const std::string OUTPUT_COUNT_SHORT;
+
+		static const std::string INPUT_COUNT_LONG;
+		static const std::string INPUT_COUNT_SHORT;
+
+		static const std::string POPULATION_MAX_LONG;
+		static const std::string POPULATION_MAX_SHORT;
+
+		static const std::string MUTATION_MAX_LONG;
+		static const std::string MUTATION_MAX_SHORT;
+
+		static const std::string ROW_COUNT_LONG;
+		static const std::string ROW_COUNT_SHORT;
+
+		static const std::string COL_COUNT_LONG;
+		static const std::string COL_COUNT_SHORT;
+
+		static const std::string LOOK_BACK_PARAMETER_LONG;
+		static const std::string LOOK_BACK_PARAMETER_SHORT;
+
+		static const std::string GENERATION_COUNT_LONG;
+		static const std::string GENERATION_COUNT_SHORT;
+
+		static const std::string NUMBER_OF_RUNS_LONG;
+		static const std::string NUMBER_OF_RUNS_SHORT;
+
+		static const std::string FUNCTION_COUNT_LONG;
+		static const std::string FUNCTION_COUNT_SHORT;
+
+		/// <summary>
+		/// Sets configuration parameters according to given command line arguments.
+		/// </summary>
+		void set_from_arguments(const std::vector<std::string>& arguments);
+
 		/// <summary>
 		/// Gets the input arity of functions.
 		/// </summary>
@@ -174,6 +245,16 @@ namespace cgp {
 		/// Gets whether periodic logging is enabled in the CGP algorithm.
 		/// </summary>
 		decltype(periodic_log_value) periodic_log() const;
+
+		/// <summary>
+		/// Gets a file path in which input data are located.
+		/// </summary>
+		decltype(input_file_value) input_file() const;
+
+		/// <summary>
+		/// Gets a file path in which output data will be stored.
+		/// </summary>
+		decltype(output_file_value) output_file() const;
 
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
@@ -269,5 +350,15 @@ namespace cgp {
 		/// Sets array of energy costs for various operations.
 		/// </summary>
 		CGPConfiguration& function_energy_costs(decltype(function_energy_costs_value));
+
+		/// <summary>
+		/// Sets a file path in which input data are located.
+		/// </summary>
+		CGPConfiguration& input_file(decltype(input_file_value));
+
+		/// <summary>
+		/// Sets a file path in which output data will be stored.
+		/// </summary>
+		CGPConfiguration& output_file(decltype(input_file_value));
 	};
 }

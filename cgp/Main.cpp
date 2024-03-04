@@ -7,6 +7,7 @@ using weight_value_t = cgp::CGPConfiguration::weight_value_t;
 int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
+	std::vector<std::string> arguments(args + 1, args + argc);
 
 	size_t layers_to_approximate = 0;
 	size_t input_size = 0;
@@ -71,6 +72,7 @@ int main(int argc, const char** args) {
 		.population_max(100)
 		.generation_count(900000000)
 		.periodic_log_frequency(2500);
+	cgp_model.set_from_arguments(arguments);
 	cgp_model.build();
 
 	double max_mse = std::max(std::abs(min), std::abs(max));
