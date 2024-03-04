@@ -233,7 +233,6 @@ void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 
 	this->input = input;
 	need_evaluation = true;
-	need_energy_evaluation = true;
 	for (size_t i = 0; i < cgp_configuration.input_count(); i++)
 	{
 		pin_map[i] = input[i];
@@ -338,7 +337,6 @@ void Chromosome::evaluate()
 		*pin_it = pin_map[*it];
 	}
 	need_evaluation = false;
-	need_energy_evaluation = true;
 }
 
 Chromosome::weight_value_t* Chromosome::begin_output()
