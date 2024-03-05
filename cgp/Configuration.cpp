@@ -38,6 +38,24 @@ namespace cgp {
 	const std::string CGPConfiguration::FUNCTION_COUNT_LONG = "--function-count";
 	const std::string CGPConfiguration::FUNCTION_COUNT_SHORT = "-fc";
 
+	const std::string CGPConfiguration::INPUT_FILE_LONG = "--input-file";
+	const std::string CGPConfiguration::INPUT_FILE_SHORT = "-i";
+
+	const std::string CGPConfiguration::OUTPUT_FILE_LONG = "--output-file";
+	const std::string CGPConfiguration::OUTPUT_FILE_SHORT = "-o";
+
+	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_LONG = "--chromosome-output-file";
+	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_SHORT = "-co";
+
+	const std::string CGPConfiguration::CGP_METADATA_OUTPUT_FILE_LONG = "--cgp-metadata-output-file";
+	const std::string CGPConfiguration::CGP_METADATA_OUTPUT_FILE_SHORT = "-cmo";
+
+	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_LONG = "--chromosome-input-file";
+	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_SHORT = "-ci";
+
+	const std::string CGPConfiguration::CGP_METADATA_INPUT_FILE_LONG = "--cgp-metadata-input-file";
+	const std::string CGPConfiguration::CGP_METADATA_INPUT_FILE_SHORT = "-cmi";
+
 	static long long parse_integer_argument(const std::string& arg) {
 		try {
 			return std::stoll(arg);
@@ -124,11 +142,29 @@ namespace cgp {
 					function_count(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
 				}
-				else if (arguments[i].ends_with(".in")) {
-					input_file(arguments[i]);
+				else if (arguments[i] == INPUT_FILE_LONG || arguments[i] == INPUT_FILE_SHORT) {
+					input_file(arguments.at(i + 1));
+					i += 1;
 				}
-				else if (arguments[i].ends_with(".out")) {
-					output_file(arguments[i]);
+				else if (arguments[i] == OUTPUT_FILE_LONG || arguments[i] == OUTPUT_FILE_SHORT) {
+					output_file(arguments.at(i + 1));
+					i += 1;
+				}
+				else if (arguments[i] == CHROMOSOME_OUTPUT_FILE_LONG || arguments[i] == CHROMOSOME_OUTPUT_FILE_SHORT) {
+					chromosome_output_file(arguments.at(i + 1));
+					i += 1;
+				}
+				else if (arguments[i] == CGP_METADATA_OUTPUT_FILE_LONG || arguments[i] == CGP_METADATA_OUTPUT_FILE_SHORT) {
+					cgp_metadata_output_file(arguments.at(i + 1));
+					i += 1;
+				}
+				else if (arguments[i] == CHROMOSOME_INPUT_FILE_LONG || arguments[i] == CHROMOSOME_INPUT_FILE_SHORT) {
+					chromosome_input_file(arguments.at(i + 1));
+					i += 1;
+				}
+				else if (arguments[i] == CGP_METADATA_INPUT_FILE_LONG || arguments[i] == CGP_METADATA_INPUT_FILE_SHORT) {
+					cgp_metadata_input_file(arguments.at(i + 1));
+					i += 1;
 				}
 				else {
 					throw CGPConfigurationInvalidArgument("unknown argument " + arguments[i]);
@@ -236,6 +272,26 @@ namespace cgp {
 		return output_file_value;
 	}
 
+	decltype(CGPConfiguration::chromosome_output_file_value) CGPConfiguration::chromosome_output_file() const
+	{
+		return chromosome_output_file_value;
+	}
+
+	decltype(CGPConfiguration::cgp_metadata_output_file_value) CGPConfiguration::cgp_metadata_output_file() const
+	{
+		return cgp_metadata_output_file_value;
+	}
+
+	decltype(CGPConfiguration::chromosome_input_file_value) CGPConfiguration::chromosome_input_file() const
+	{
+		return chromosome_input_file_value;
+	}
+
+	decltype(CGPConfiguration::cgp_metadata_input_file_value) CGPConfiguration::cgp_metadata_input_file() const
+	{
+		return cgp_metadata_input_file_value;
+	}
+
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
 		function_input_arity_value = value;
 		return *this;
@@ -329,6 +385,30 @@ namespace cgp {
 	CGPConfiguration& CGPConfiguration::input_file(decltype(input_file_value) value)
 	{
 		input_file_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::chromosome_output_file(decltype(chromosome_output_file_value) value)
+	{
+		chromosome_output_file_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::cgp_metadata_output_file(decltype(cgp_metadata_output_file_value) value)
+	{
+		cgp_metadata_output_file_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::chromosome_input_file(decltype(chromosome_input_file_value) value)
+	{
+		chromosome_input_file_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::cgp_metadata_input_file(decltype(cgp_metadata_input_file_value) value)
+	{
+		cgp_metadata_input_file_value = value;
 		return *this;
 	}
 

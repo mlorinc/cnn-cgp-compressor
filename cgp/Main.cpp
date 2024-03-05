@@ -4,46 +4,64 @@
 
 using weight_value_t = cgp::CGPConfiguration::weight_value_t;
 
-std::shared_ptr<std::istream> get_input(cgp::CGPConfiguration& config) {
-	std::shared_ptr<std::istream> input;
-	if (config.input_file() == "-")
+std::shared_ptr<std::istream> get_input(const std::string& in, std::shared_ptr<std::istream> default_input = nullptr, std::ios_base::openmode mode = std::ios::in) {
+	std::shared_ptr<std::istream> stream;
+	if (in == "-")
 	{
-		input.reset(&std::cin, [](...) {});
+		stream.reset(&std::cin, [](...) {});
+	}
+	else if (in.empty())
+	{
+		if (default_input == nullptr)
+		{
+			throw std::invalid_argument("default input must not be null when input file is not provided");
+		}
+
+		stream = default_input;
 	}
 	else
 	{
-		auto file = new std::ifstream(config.input_file());
+		auto file = new std::ifstream(in, mode);
 
 		if (!file->is_open())
 		{
 			delete file;
-			throw std::runtime_error("could not open input file " + config.input_file());
+			throw std::ofstream::failure("could not open input file " + in);
 		}
-		input.reset(file);
+		stream.reset(file);
 	}
 
-	return input;
+	return stream;
 }
 
-std::shared_ptr<std::ostream> get_output(cgp::CGPConfiguration& config) {
-	std::shared_ptr<std::ostream> output;
-	if (config.input_file() == "-")
+std::shared_ptr<std::ostream> get_output(const std::string& out, std::shared_ptr<std::ostream> default_output = nullptr, std::ios_base::openmode mode = std::ios::out) {
+	std::shared_ptr<std::ostream> stream;
+	if (out == "-")
 	{
-		output.reset(&std::cout, [](...) {});
+		stream.reset(&std::cout, [](...) {});
+	}
+	else if (out.empty())
+	{
+		if (default_output == nullptr)
+		{
+			throw std::invalid_argument("default input must not be null when output file is not provided");
+		}
+
+		stream = default_output;
 	}
 	else
 	{
-		auto file = new std::ofstream(config.output_file());
+		auto file = new std::ofstream(out, mode);
 
 		if (!file->is_open())
 		{
 			delete file;
-			throw std::runtime_error("could not open output file " + config.input_file());
+			throw std::ofstream::failure("could not open output file " + out);
 		}
-		output.reset(file);
+		stream.reset(file);
 	}
 
-	return output;
+	return stream;
 }
 
 int main(int argc, const char** args) {
@@ -71,11 +89,12 @@ int main(int argc, const char** args) {
 		.output_count(output_size)
 		.population_max(100)
 		.generation_count(900000000)
-		.periodic_log_frequency(2500);
+		.periodic_log_frequency(2500)
+		.chromosome_output_file("evolution.chr");
 	cgp_model.set_from_arguments(arguments);
 
-	auto in = get_input(cgp_model);
-	auto out = get_output(cgp_model);
+	auto in = get_input(cgp_model.input_file());
+	auto out = get_output(cgp_model.output_file());
 
 	// Get number of pairs
 	if (!(*in >> pairs_to_approximate))
@@ -144,6 +163,7 @@ int main(int argc, const char** args) {
 
 		if (i % cgp_model.periodic_log_frequency() == 0) {
 			std::cerr << "[" << (i + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << std::endl;
+			std::cerr << "[" << (i + 1) << "] Energy: " << cgp_model.get_best_energy_fitness() << std::endl;
 		}
 
 		if (cgp_model.get_best_error_fitness() == 0 || cgp_model.get_generations_without_change() > generation_stop)
@@ -154,22 +174,25 @@ int main(int argc, const char** args) {
 	}
 
 
-	std::ofstream chromosome_file("evolution.chr", std::ios::binary);
-
-	// Check whether the file is successfully opened
-	if (chromosome_file.is_open()) {
-		chromosome_file << *cgp_model.get_best_chromosome() << std::endl;
+	try {
+		auto chromosome_out = get_output(cgp_model.chromosome_output_file(), nullptr, std::ios::binary);
 		std::cerr << *cgp_model.get_best_chromosome() << std::endl;
+		*chromosome_out << *cgp_model.get_best_chromosome() << std::endl;
 		std::cerr << "saved file" << std::endl;
 	}
-	else {
-		// Handle file opening failure
-		std::cerr << "error: unable to open file 'evolution.chr'" << std::endl;
+	catch (const std::ofstream::failure& e)
+	{
+		std::cerr << "file I/O error: " << e.what() << std::endl;
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "error: " << e.what() << std::endl;
 	}
 
-	*out << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl;
+
+	std::cerr << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl;
 	*out << "weights: " << std::endl;
 	std::copy(cgp_model.get_best_chromosome()->begin_output(), cgp_model.get_best_chromosome()->end_output(), std::ostream_iterator<weight_repr_value_t>(*out, ", "));
-	*out << std::endl << "exitting program" << std::endl;
+	std::cerr << std::endl << "exitting program" << std::endl;
 	return 0;
 }

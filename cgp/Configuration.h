@@ -120,6 +120,26 @@ namespace cgp {
 		/// A path to a file to create which contains output of the CGP process.
 		/// </summary>
 		std::string output_file_value = "-";
+
+		/// <summary>
+		/// A path where resulting chromosome array will be saved.
+		/// </summary>
+		std::string chromosome_output_file_value = "-";
+
+		/// <summary>
+		/// A path where CGP metadata will be saved.
+		/// </summary>
+		std::string cgp_metadata_output_file_value = "";
+
+		/// <summary>
+		/// A path where chromosome array is saved.
+		/// </summary>
+		std::string chromosome_input_file_value = "";
+
+		/// <summary>
+		/// A path where CGP metadata are saved.
+		/// </summary>
+		std::string cgp_metadata_input_file_value = "";
 	public:
 		CGPConfiguration() = default;
 		CGPConfiguration(const std::vector<std::string>& arguments);
@@ -170,6 +190,24 @@ namespace cgp {
 
 		static const std::string FUNCTION_COUNT_LONG;
 		static const std::string FUNCTION_COUNT_SHORT;
+
+		static const std::string INPUT_FILE_LONG;
+		static const std::string INPUT_FILE_SHORT;
+
+		static const std::string OUTPUT_FILE_LONG;
+		static const std::string OUTPUT_FILE_SHORT;
+
+		static const std::string CHROMOSOME_OUTPUT_FILE_LONG;
+		static const std::string CHROMOSOME_OUTPUT_FILE_SHORT;
+
+		static const std::string CGP_METADATA_OUTPUT_FILE_LONG;
+		static const std::string CGP_METADATA_OUTPUT_FILE_SHORT;
+
+		static const std::string CHROMOSOME_INPUT_FILE_LONG;
+		static const std::string CHROMOSOME_INPUT_FILE_SHORT;
+
+		static const std::string CGP_METADATA_INPUT_FILE_LONG;
+		static const std::string CGP_METADATA_INPUT_FILE_SHORT;
 
 		/// <summary>
 		/// Sets configuration parameters according to given command line arguments.
@@ -255,6 +293,26 @@ namespace cgp {
 		/// Gets a file path in which output data will be stored.
 		/// </summary>
 		decltype(output_file_value) output_file() const;
+
+		/// <summary>
+		/// Gets the path where resulting chromosome array will be saved.
+		/// </summary>
+		decltype(chromosome_output_file_value) chromosome_output_file() const;
+
+		/// <summary>
+		/// Gets the path where CGP metadata will be saved.
+		/// </summary>
+		decltype(cgp_metadata_output_file_value) cgp_metadata_output_file() const;
+
+		/// <summary>
+		/// Gets the path where chromosome array is saved.
+		/// </summary>
+		decltype(chromosome_input_file_value) chromosome_input_file() const;
+
+		/// <summary>
+		/// Gets the path where CGP metadata are saved.
+		/// </summary>
+		decltype(cgp_metadata_input_file_value) cgp_metadata_input_file() const;
 
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
@@ -360,5 +418,25 @@ namespace cgp {
 		/// Sets a file path in which output data will be stored.
 		/// </summary>
 		CGPConfiguration& output_file(decltype(input_file_value));
+
+		/// <summary>
+		/// Sets the path where resulting chromosome array will be saved.
+		/// </summary>
+		CGPConfiguration& chromosome_output_file(decltype(chromosome_output_file_value));
+
+		/// <summary>
+		/// Sets the path where CGP metadata will be saved.
+		/// </summary>
+		CGPConfiguration& cgp_metadata_output_file(decltype(cgp_metadata_output_file_value));
+
+		/// <summary>
+		/// Sets the path where chromosome array is saved.
+		/// </summary>
+		CGPConfiguration& chromosome_input_file(decltype(chromosome_input_file_value));
+
+		/// <summary>
+		/// Sets the path where CGP metadata are saved.
+		/// </summary>
+		CGPConfiguration& cgp_metadata_input_file(decltype(cgp_metadata_input_file_value));
 	};
 }

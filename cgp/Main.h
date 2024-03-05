@@ -4,6 +4,7 @@
 #pragma once
 
 #include <fstream>
+#include <ios>
 #include <iostream>
 #include <limits>
 #include <string>
