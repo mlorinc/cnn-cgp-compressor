@@ -52,7 +52,7 @@ namespace cgp {
 		// Calculate the energy fitness of a chromosome.
 		double energy_fitness(Chromosome& chrom);
 
-		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>> &input, const std::vector<std::shared_ptr<weight_value_t[]>> &expected_output);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
 		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output);
 
 		// Calculate MSE metric for made predictions
@@ -103,9 +103,9 @@ namespace cgp {
 		/// <summary>
 		/// Evaluate the fitness of the population based on the given inputs and expected outputs.
 		/// </summary>
-		/// <param name="input">Shared pointer to an array of input values.</param>
-		/// <param name="expected_output">Shared pointer to an array of expected output values.</param>
-		void evaluate(const std::vector<std::shared_ptr<weight_value_t[]>> &input, const std::vector<std::shared_ptr<weight_value_t[]>> &expected_output);
+		/// <param name="input">Vector reference to shared array pointer of input values.</param>
+		/// <param name="expected_output">Vector reference to shared array pointer of expected output values.</param>
+		void evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
 
 		/// <summary>
 		/// Get the current best error fitness value.
@@ -124,6 +124,34 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Best chromosome.</returns>
 		std::shared_ptr<Chromosome> get_best_chromosome() const;
+
+		/// <summary>
+		/// Set evoluton to the specific point.
+		/// </summary>
+		/// <param name="chromosome">Starting chromosome for evolution.</param>
+		/// <param name="input">Shared array pointer of input values.</param>
+		/// <param name="expected_output">Shared array pointer of expected output values.</param>
+		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
+		void restore(
+			std::shared_ptr<Chromosome> chromosome,
+			const std::shared_ptr<weight_value_t[]> input,
+			const std::shared_ptr<weight_value_t[]> expected_output,
+			const size_t mutations_made = 0
+		);
+
+		/// <summary>
+		/// Set evoluton to the specific point.
+		/// </summary>
+		/// <param name="chromosome">Starting chromosome for evolution.</param>
+		/// <param name="input">Vector reference to shared array pointer of input values.</param>
+		/// <param name="expected_output">Vector reference to shared array pointer of expected output values.</param>
+		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
+		void restore(
+			std::shared_ptr<Chromosome> chromosome,
+			const std::vector<std::shared_ptr<weight_value_t[]>>& input,
+			const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output,
+			const size_t mutations_made = 0
+		);
 
 		/// <summary>
 		/// Get number of generations without improvement in the best fitness.

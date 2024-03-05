@@ -172,7 +172,7 @@ bool CGP::dominates(solution_t a, solution_t b) const
 
 void CGP::evaluate(const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output)
 {
-	return evaluate({ input }, { expected_output });
+	return evaluate(std::vector{ input }, std::vector{ expected_output });
 }
 
 void CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output) {
@@ -244,4 +244,28 @@ size_t CGP::get_serialized_chromosome_size() const
 {
 	// chromosome size + input information + output information
 	return chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);
+}
+
+void CGP::restore(
+	std::shared_ptr<Chromosome> chromosome,
+	const std::shared_ptr<weight_value_t[]> input,
+	const std::shared_ptr<weight_value_t[]> expected_output,
+	const size_t mutations_made
+)
+{
+	generations_without_change = 0;
+	evolution_steps_made = mutations_made;
+	best_solution = analyse_chromosome(chromosome, input, expected_output);
+}
+
+
+void CGP::restore(std::shared_ptr<Chromosome> chromosome,
+	const std::vector<std::shared_ptr<weight_value_t[]>>& input,
+	const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output,
+	const size_t mutations_made
+)
+{
+	generations_without_change = 0;
+	evolution_steps_made = mutations_made;
+	best_solution = analyse_chromosome(chromosome, input, expected_output);
 }
