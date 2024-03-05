@@ -6,12 +6,19 @@
 
 using namespace cgp;
 
-CGP::CGP(const std::shared_ptr<weight_value_t[]> expected_values, const size_t expected_values_size, const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold) :
+CGP::CGP(const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold) :
 	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
-	expected_values(expected_values),
-	expected_values_size(expected_values_size),
 	expected_value_min(expected_min_value),
 	expected_value_max(expected_max_value),
+	generations_without_change(0),
+	evolution_steps_made(0),
+	mse_threshold(mse_threshold) {
+}
+
+CGP::CGP(const double mse_threshold) :
+	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
+	expected_value_min(std::numeric_limits<weight_value_t>::min()),
+	expected_value_max(std::numeric_limits<weight_value_t>::max()),
 	generations_without_change(0),
 	evolution_steps_made(0),
 	mse_threshold(mse_threshold) {
@@ -20,8 +27,8 @@ CGP::CGP(const std::shared_ptr<weight_value_t[]> expected_values, const size_t e
 CGP::~CGP() {}
 
 void CGP::build() {
-	const uint8_t input_column_pins = input_count();
-	const uint8_t fn_arity = function_output_arity();
+	const auto input_column_pins = input_count();
+	const auto fn_arity = function_output_arity();
 	minimum_output_indicies = std::make_shared<std::tuple<int, int>[]>(col_count() + 1);
 	int l_back = look_back_parameter();
 
@@ -56,15 +63,15 @@ void CGP::build() {
 	}
 }
 
-// MSE loss function implementations;
+// MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-double CGP::mse(const weight_value_t* predictions) const
+double CGP::mse_without_division(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const
 {
 	double sum = 0;
 #pragma omp parallel for reduction(+:sum)
-	for (int i = 0; i < expected_values_size; i++)
+	for (int i = 0; i < output_count(); i++)
 	{
-		double diff = predictions[i] - expected_values[i];
+		double diff = predictions[i] - expected_output[i];
 		sum += diff * diff;
 	}
 
@@ -73,13 +80,46 @@ double CGP::mse(const weight_value_t* predictions) const
 		return std::numeric_limits<double>::infinity();
 	}
 
-	return sum / expected_values_size;
+	return sum;
 }
 
-CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom)
+// MSE loss function implementation;
+// for reference see https://en.wikipedia.org/wiki/Mean_squared_error
+double CGP::mse(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const
 {
+	return mse_without_division(predictions, expected_output) / output_count();
+}
+
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output)
+{
+	auto end = input.end();
+	decltype(mse(nullptr, nullptr)) mse_accumulator = 0;
+	for (auto input_it = input.begin(), output_it = expected_output.begin(); input_it != end; input_it++, output_it++)
+	{
+		chrom->set_input(*input_it);
+		chrom->evaluate();
+		mse_accumulator += error_fitness_without_aggregation(*chrom, *output_it);
+		if (mse_accumulator < 0) [[unlikely]]
+			{
+				mse_accumulator = std::numeric_limits<double>::infinity();
+				break;
+			}
+	}
+	mse_accumulator /= output_count() * input.size();
+	if (mse_accumulator <= mse_threshold)
+	{
+		return std::make_tuple(mse_accumulator, energy_fitness(*chrom), chrom);
+	}
+	else {
+		return std::make_tuple(mse_accumulator, std::numeric_limits<double>::infinity(), chrom);
+	}
+}
+
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output)
+{
+	chrom->set_input(input);
 	chrom->evaluate();
-	auto mse = error_fitness(*chrom);
+	auto mse = error_fitness(*chrom, expected_output);
 
 	if (mse <= mse_threshold)
 	{
@@ -95,8 +135,12 @@ double CGP::energy_fitness(Chromosome& chrom)
 	return chrom.get_estimated_energy_usage();
 }
 
-double CGP::error_fitness(Chromosome& chrom) {
-	return mse(chrom.begin_output());
+double CGP::error_fitness(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output) {
+	return mse(chrom.begin_output(), expected_output);
+}
+
+double CGP::error_fitness_without_aggregation(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output) {
+	return mse_without_division(chrom.begin_output(), expected_output);
 }
 
 void CGP::mutate() {
@@ -124,12 +168,18 @@ bool CGP::dominates(solution_t a, solution_t b) const
 		(mse_threshold >= a_error_fitness && a_energy_fitness == b_energy_fitness && a_error_fitness <= b_error_fitness));
 }
 
-void CGP::evaluate(const std::shared_ptr<weight_value_t[]> input) {
+
+
+void CGP::evaluate(const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output)
+{
+	return evaluate({ input }, { expected_output });
+}
+
+void CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output) {
 #pragma omp parallel for
 	for (int i = 0; i < chromosomes.size(); i++) {
 		auto& chromosome = chromosomes[i];
-		chromosome->set_input(input);
-		solution_t chromosome_result = analyse_chromosome(chromosome);
+		solution_t chromosome_result = analyse_chromosome(chromosome, input, expected_output);
 
 		// The following section will set fitness and the chromosome
 		// to best_solutions map if the fitness is better than the best fitness

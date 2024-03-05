@@ -37,26 +37,29 @@ namespace cgp {
 		// Counter for the total evolution steps made during the process.
 		size_t evolution_steps_made;
 
-		// Shared pointer to array of expected values used for fitness evaluation.
-		const std::shared_ptr<weight_value_t[]> expected_values;
-
-		// Number of elements in expected_values.
-		const size_t expected_values_size;
-
 		// Minimum expected value in the dataset.
 		weight_value_t expected_value_min;
 
 		// Maximum expected value in the dataset.
 		weight_value_t expected_value_max;
 
-		// Calculate the fitness of a chromosome.
-		double error_fitness(Chromosome& chrom);
+		// Calculate the accuracy(error) fitness of a chromosome.
+		double error_fitness(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output);
+
+		// Calculate the accuracy(error) fitness of a chromosome without aggregation.
+		double error_fitness_without_aggregation(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output);
+
+		// Calculate the energy fitness of a chromosome.
 		double energy_fitness(Chromosome& chrom);
 
-		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>> &input, const std::vector<std::shared_ptr<weight_value_t[]>> &expected_output);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output);
 
 		// Calculate MSE metric for made predictions
-		double mse(const weight_value_t* predictions) const;
+		double mse(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const;
+
+		// Calculate MSE metric for made predictions
+		double mse_without_division(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const;
 
 		// Determine whether candidate solution A is better than B.
 		bool dominates(solution_t a, solution_t b) const;
@@ -64,12 +67,16 @@ namespace cgp {
 		/// <summary>
 		/// Constructor for CGP class.
 		/// </summary>
-		/// <param name="expected_values">Array of expected values for fitness evaluation.</param>
-		/// <param name="expected_values_size">Number of expected values.</param>
 		/// <param name="expected_min_value">Minimum expected value in the dataset.</param>
 		/// <param name="expected_max_value">Maximum expected value in the dataset.</param>
 		/// <param name="mse_threshold">Mean Squared Error threshold after optimisation is focused on minimising energy.</param>
-		CGP(const std::shared_ptr<weight_value_t[]> expected_values, const size_t expected_values_size, const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold = 0);
+		CGP(const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold = 0);
+
+		/// <summary>
+		/// Constructor for CGP class.
+		/// </summary>
+		/// <param name="mse_threshold">Mean Squared Error threshold after optimisation is focused on minimising energy.</param>
+		CGP(const double mse_threshold = 0);
 
 		/// <summary>
 		/// Destructor for CGP class.
@@ -87,10 +94,18 @@ namespace cgp {
 		void mutate();
 
 		/// <summary>
-		/// Evaluate the fitness of the population based on the given input.
+		/// Evaluate the fitness of the population based on the given input and expected output.
 		/// </summary>
 		/// <param name="input">Shared pointer to an array of input values.</param>
-		void evaluate(const std::shared_ptr<weight_value_t[]> input);
+		/// <param name="expected_output">Shared pointer to an array of expected output values.</param>
+		void evaluate(const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output);
+
+		/// <summary>
+		/// Evaluate the fitness of the population based on the given inputs and expected outputs.
+		/// </summary>
+		/// <param name="input">Shared pointer to an array of input values.</param>
+		/// <param name="expected_output">Shared pointer to an array of expected output values.</param>
+		void evaluate(const std::vector<std::shared_ptr<weight_value_t[]>> &input, const std::vector<std::shared_ptr<weight_value_t[]>> &expected_output);
 
 		/// <summary>
 		/// Get the current best error fitness value.
