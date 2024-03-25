@@ -84,7 +84,12 @@ namespace cgp {
 		}
 	}
 
-	CGPConfiguration::CGPConfiguration(const std::vector<std::string>& arguments) : CGPConfiguration()
+	CGPConfiguration::CGPConfiguration()
+	{
+		max_genes_to_mutate_value = chromosome_size() * mutation_max();
+	}
+
+	CGPConfiguration::CGPConfiguration(const std::vector<std::string>& arguments)
 	{
 		set_from_arguments(arguments);
 	}
@@ -175,6 +180,7 @@ namespace cgp {
 				throw CGPConfigurationOutOfRange("missing argument for " + arguments[i]);
 			}
 		}
+		max_genes_to_mutate_value = chromosome_size() * mutation_max();
 	}
 
 	decltype(CGPConfiguration::function_input_arity_value) CGPConfiguration::function_input_arity() const {
@@ -222,6 +228,11 @@ namespace cgp {
 		return mutation_max_value;
 	}
 
+
+	decltype(CGPConfiguration::max_genes_to_mutate_value) CGPConfiguration::max_genes_to_mutate() const
+	{
+		return max_genes_to_mutate_value;
+	}
 
 	decltype(CGPConfiguration::row_count_value) CGPConfiguration::row_count() const {
 		return row_count_value;
@@ -324,6 +335,7 @@ namespace cgp {
 
 	CGPConfiguration& CGPConfiguration::mutation_max(decltype(mutation_max_value) value) {
 		mutation_max_value = value;
+		max_genes_to_mutate_value = chromosome_size() * value;
 		return *this;
 	}
 

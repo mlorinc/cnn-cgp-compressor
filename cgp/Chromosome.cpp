@@ -81,7 +81,7 @@ Chromosome::Chromosome(const Chromosome& that) :
 
 	if (!need_evaluation) [[likely]]
 	{
-		std::copy(output_pin_start, output_pin_end, that.output_pin_start);
+		std::copy(that.output_pin_start, that.output_pin_end, output_pin_start);
 	}
 }
 
@@ -192,8 +192,7 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 	chrom->setup_iterators();
 
 	// Number of genes to mutate
-	size_t max_genes_to_mutate = cgp_configuration.chromosome_size() * cgp_configuration.mutation_max();
-	auto genes_to_mutate = (rand() % max_genes_to_mutate) + 1;
+	auto genes_to_mutate = (rand() % cgp_configuration.max_genes_to_mutate()) + 1;
 	for (auto i = 0; i < genes_to_mutate; i++) {
 		// Select a random gene
 		auto random_gene_index = rand() % cgp_configuration.chromosome_size();
@@ -201,7 +200,8 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 
 		if (is_input(random_gene_index))
 		{
-			int column_index = (int)(i / cgp_configuration.row_count());
+			int gate_index = random_gene_index / (cgp_configuration.function_input_arity() + 1);
+			int column_index = (int)(gate_index / cgp_configuration.row_count());
 			const auto& column_values = minimum_output_indicies[column_index];
 			auto min = std::get<0>(column_values);
 			auto max = std::get<1>(column_values);
@@ -242,7 +242,7 @@ void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 
 void Chromosome::evaluate()
 {
-	assert(("Chromosome::evaluate cannot be called without calling Chromosome::set_input before", input == nullptr));
+	assert(("Chromosome::evaluate cannot be called without calling Chromosome::set_input before", input != nullptr));
 
 	if (!need_evaluation)
 	{
@@ -319,6 +319,12 @@ void Chromosome::evaluate()
 			break;
 		case 19:
 			block_output_pins[0] = pin_map[input_pin[0]] << 1;
+			break;
+		case 20:
+			block_output_pins[0] = pin_map[input_pin[0]] + 1;
+			break;
+		case 21:
+			block_output_pins[0] = pin_map[input_pin[0]] - 1;
 			break;
 #endif
 		default:

@@ -69,6 +69,7 @@ int main(int argc, const char** args) {
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
+	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(function_count);
 	size_t pairs_to_approximate = 0;
 	size_t input_size = 0;
 	size_t output_size = 0;
@@ -76,21 +77,28 @@ int main(int argc, const char** args) {
 	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::max();
 	weight_repr_value_t max = std::numeric_limits<weight_repr_value_t>::min();
 
-	cgp::CGP cgp_model;
+	for (size_t i = 0; i < function_count; i++)
+	{
+		energy_costs[i] = 1;
+	}
+
+	cgp::CGP cgp_model(5);
 	cgp_model
-		.col_count(20)
-		.row_count(50)
-		.look_back_parameter(20)
+		.function_energy_costs(energy_costs)
+		.col_count(50)
+		.row_count(30)
+		.look_back_parameter(50)
 		.mutation_max(0.15)
 		.function_count(function_count)
 		.function_input_arity(2)
 		.function_output_arity(1)
 		.input_count(input_size)
 		.output_count(output_size)
-		.population_max(100)
-		.generation_count(900000000)
+		.population_max(4)
+		.generation_count(90000000)
 		.periodic_log_frequency(2500)
-		.chromosome_output_file("evolution.chr");
+		.chromosome_output_file("evolution.chr")
+		.input_file("C:\\Users\\Majo\\source\\repos\\TorchCompresser\\train.data");
 	cgp_model.set_from_arguments(arguments);
 
 	auto in = get_input(cgp_model.input_file());
@@ -103,16 +111,18 @@ int main(int argc, const char** args) {
 		return 1;
 	}
 
+	// Read two values from the standard input
+	if (!(*in >> input_size >> output_size))
+	{
+		std::cerr << "invalid input size and output size" << std::endl;
+		return 2;
+	}
+
+	cgp_model.input_count(input_size);
+	cgp_model.output_count(output_size);
 
 	for (size_t i = 0; i < pairs_to_approximate; i++)
 	{
-		// Read two values from the standard input
-		if (!(*in >> input_size >> output_size))
-		{
-			std::cerr << "invalid input size and output size" << std::endl;
-			return 2;
-		}
-
 		std::shared_ptr<weight_value_t[]> input(new weight_value_t[input_size]);
 		std::shared_ptr<weight_value_t[]> output(new weight_value_t[output_size]);
 
@@ -156,21 +166,41 @@ int main(int argc, const char** args) {
 	std::cerr << "output count: " << cgp_model.output_count() << std::endl;
 	std::cerr << "min value: " << min << std::endl;
 	std::cerr << "max value: " << max << std::endl;
-	auto generation_stop = 50 * cgp_model.periodic_log_frequency();
-	for (size_t i = 0; i < cgp_model.generation_count(); i++)
-	{
-		cgp_model.evaluate(inputs, outputs);
+	auto generation_stop = 1e6;
 
-		if (i % cgp_model.periodic_log_frequency() == 0) {
-			std::cerr << "[" << (i + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << std::endl;
-			std::cerr << "[" << (i + 1) << "] Energy: " << cgp_model.get_best_energy_fitness() << std::endl;
-		}
-
-		if (cgp_model.get_best_error_fitness() == 0 || cgp_model.get_generations_without_change() > generation_stop)
+	if (inputs.size() > 1) {
+		for (size_t i = 0; i < cgp_model.generation_count(); i++)
 		{
-			break;
+			cgp_model.evaluate(inputs, outputs);
+
+			if (i % cgp_model.periodic_log_frequency() == 0) {
+				std::cerr << "[" << (i + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << ", Energy: " << cgp_model.get_best_energy_fitness() << std::endl;
+			}
+
+			if (cgp_model.get_best_error_fitness() == 0 || cgp_model.get_generations_without_change() > generation_stop)
+			{
+				break;
+			}
+			cgp_model.mutate();
 		}
-		cgp_model.mutate();
+	}
+	else {
+		auto input = inputs[0];
+		auto output = outputs[0];
+		for (size_t i = 0; i < cgp_model.generation_count(); i++)
+		{
+			cgp_model.evaluate(input, output);
+
+			if (i % cgp_model.periodic_log_frequency() == 0) {
+				std::cerr << "[" << (i + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << ", Energy: " << cgp_model.get_best_energy_fitness() << std::endl;
+			}
+
+			if (cgp_model.get_best_error_fitness() == 0 || cgp_model.get_generations_without_change() > generation_stop)
+			{
+				break;
+			}
+			cgp_model.mutate();
+		}
 	}
 
 

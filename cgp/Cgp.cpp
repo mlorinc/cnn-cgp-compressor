@@ -46,8 +46,8 @@ void CGP::build() {
 			max_pin = (col - 1) * row_count() * fn_arity + input_column_pins;
 		}
 		else {
-			min_pin = std::max(0, first_col - 1) * row_count() * fn_arity + input_column_pins;
-			max_pin = min_pin + l_back * row_count() * fn_arity;
+			min_pin = (first_col - 1) * row_count() * fn_arity + input_column_pins;
+			max_pin = min_pin + (col - first_col) * row_count() * fn_arity;
 		}
 
 
@@ -161,7 +161,7 @@ bool CGP::dominates(solution_t a, solution_t b) const
 
 	double b_error_fitness = std::get<0>(b);
 	double b_energy_fitness = std::get<1>(b);
-
+	
 	// Allow neutral evolution for error in case energies are the same
 	return ((mse_threshold < a_error_fitness && a_error_fitness <= b_error_fitness) ||
 		(mse_threshold >= a_error_fitness && a_energy_fitness < b_energy_fitness) ||

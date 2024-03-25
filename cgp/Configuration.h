@@ -6,7 +6,7 @@
 #include <stdexcept>
 
 #ifndef CNN_FP32_WEIGHTS
-constexpr int function_count = 20;
+constexpr int function_count = 22;
 using weight_repr_value_t = int;
 #else
 constexpr int function_count = 14;
@@ -65,6 +65,11 @@ namespace cgp {
 		/// Default value for the maximum mutation value in the CGP algorithm.
 		/// </summary>
 		double mutation_max_value = 0.15;
+
+		/// <summary>
+		/// Variable limiting maximum number of genes that can be mutated.
+		/// </summary>
+		size_t max_genes_to_mutate_value;
 
 		/// <summary>
 		/// Default value for the number of rows in the CGP grid.
@@ -141,7 +146,7 @@ namespace cgp {
 		/// </summary>
 		std::string cgp_metadata_input_file_value = "";
 	public:
-		CGPConfiguration() = default;
+		CGPConfiguration();
 		CGPConfiguration(const std::vector<std::string>& arguments);
 
 		// Type definition for the gene.
@@ -243,6 +248,11 @@ namespace cgp {
 		/// Gets the maximum mutation value in the CGP algorithm.
 		/// </summary>
 		decltype(mutation_max_value) mutation_max() const;
+
+		/// <summary>
+		/// Gets maximum number of genes that can be mutated.
+		/// </summary>
+		decltype(max_genes_to_mutate_value) max_genes_to_mutate() const;
 
 		/// <summary>
 		/// Gets the number of rows in the CGP grid.
