@@ -86,12 +86,12 @@ def optimize_model(model_name: str, model_path: str, cgp_binary_path: str):
                 model.conv2.weight[i, 0] = kernels[i+1]
             final_acc, final_loss = model.evaluate()
     elif model_name == QATQuantizedLeNet5.name:
-        # cgp = TestCGP()
-        cgp = CGP(cgp_binary_path, 6, 5, 3)
         model = QATQuantizedLeNet5(model_path)
         model = model.load(model_path)
         model.eval()
 
+        # cgp = TestCGP()
+        cgp = CGP(cgp_binary_path, 1, model.conv1.weight().shape[0] * 3**2, model.conv1.weight().shape[0] * 16)
         with torch.no_grad():
             initial_acc, initial_loss = model.evaluate()
             conv1_biases = model.conv1.bias()
@@ -105,8 +105,9 @@ def optimize_model(model_name: str, model_path: str, cgp_binary_path: str):
             print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f}")
             
             for kernel in conv1_qint8_weights[:, 0]:
-                cgp.add_kernel(kernel)
+                cgp.add_kernel(kernel, 3)
 
+            cgp.create_train_file("train.data")
             cgp.train()
             kernels = cgp.get_kernels()
             conv1_fp32_weights[:, 0] = dequantize_per_channel(torch.stack(kernels), conv1_fp32_weights)
