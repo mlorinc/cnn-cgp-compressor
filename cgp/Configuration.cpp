@@ -1,5 +1,6 @@
 #include "Configuration.h"
 #include <cstdlib>
+#include <sstream>
 
 namespace cgp {
 	const std::string CGPConfiguration::FUNCTION_INPUT_ARITY_LONG = "--function-input-arity";
@@ -15,25 +16,25 @@ namespace cgp {
 	const std::string CGPConfiguration::INPUT_COUNT_SHORT = "-ic";
 
 	const std::string CGPConfiguration::CGPConfiguration::POPULATION_MAX_LONG = "--population-max";
-	const std::string CGPConfiguration::CGPConfiguration::POPULATION_MAX_SHORT = "-pm";
+	const std::string CGPConfiguration::CGPConfiguration::POPULATION_MAX_SHORT = "-p";
 
 	const std::string CGPConfiguration::MUTATION_MAX_LONG = "--mutation-max";
-	const std::string CGPConfiguration::MUTATION_MAX_SHORT = "-mm";
+	const std::string CGPConfiguration::MUTATION_MAX_SHORT = "-m";
 
 	const std::string CGPConfiguration::ROW_COUNT_LONG = "--row-count";
-	const std::string CGPConfiguration::ROW_COUNT_SHORT = "-rc";
+	const std::string CGPConfiguration::ROW_COUNT_SHORT = "-r";
 
 	const std::string CGPConfiguration::COL_COUNT_LONG = "--col-count";
-	const std::string CGPConfiguration::COL_COUNT_SHORT = "-cc";
+	const std::string CGPConfiguration::COL_COUNT_SHORT = "-c";
 
 	const std::string CGPConfiguration::LOOK_BACK_PARAMETER_LONG = "--look-back-parameter";
-	const std::string CGPConfiguration::LOOK_BACK_PARAMETER_SHORT = "-lbp";
+	const std::string CGPConfiguration::LOOK_BACK_PARAMETER_SHORT = "-l";
 
 	const std::string CGPConfiguration::GENERATION_COUNT_LONG = "--generation-count";
-	const std::string CGPConfiguration::GENERATION_COUNT_SHORT = "-gc";
+	const std::string CGPConfiguration::GENERATION_COUNT_SHORT = "-g";
 
 	const std::string CGPConfiguration::NUMBER_OF_RUNS_LONG = "--number-of-runs";
-	const std::string CGPConfiguration::NUMBER_OF_RUNS_SHORT = "-nr";
+	const std::string CGPConfiguration::NUMBER_OF_RUNS_SHORT = "-n";
 
 	const std::string CGPConfiguration::FUNCTION_COUNT_LONG = "--function-count";
 	const std::string CGPConfiguration::FUNCTION_COUNT_SHORT = "-fc";
@@ -45,18 +46,18 @@ namespace cgp {
 	const std::string CGPConfiguration::OUTPUT_FILE_SHORT = "-o";
 
 	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_LONG = "--chromosome-output-file";
-	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_SHORT = "-co";
+	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_SHORT = "-cho";
 
-	const std::string CGPConfiguration::CGP_METADATA_OUTPUT_FILE_LONG = "--cgp-metadata-output-file";
-	const std::string CGPConfiguration::CGP_METADATA_OUTPUT_FILE_SHORT = "-cmo";
+	const std::string CGPConfiguration::CGP_STATISTICS_FILE_LONG = "--cgp-statistics-file";
+	const std::string CGPConfiguration::CGP_STATISTICS_FILE_SHORT = "-s";
 
 	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_LONG = "--chromosome-input-file";
-	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_SHORT = "-ci";
+	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_SHORT = "-chi";
 
-	const std::string CGPConfiguration::CGP_METADATA_INPUT_FILE_LONG = "--cgp-metadata-input-file";
-	const std::string CGPConfiguration::CGP_METADATA_INPUT_FILE_SHORT = "-cmi";
+	const std::string CGPConfiguration::MSE_THRESHOLD_LONG = "--mse-threshold";
+	const std::string CGPConfiguration::MSE_THRESHOLD_SHORT = "-mse";
 
-	static long long parse_integer_argument(const std::string& arg) {
+	long long parse_integer_argument(const std::string& arg) {
 		try {
 			return std::stoll(arg);
 		}
@@ -70,7 +71,7 @@ namespace cgp {
 		}
 	}
 
-	static long double parse_decimal_argument(const std::string& arg) {
+	long double parse_decimal_argument(const std::string& arg) {
 		try {
 			return std::stold(arg);
 		}
@@ -159,16 +160,16 @@ namespace cgp {
 					chromosome_output_file(arguments.at(i + 1));
 					i += 1;
 				}
-				else if (arguments[i] == CGP_METADATA_OUTPUT_FILE_LONG || arguments[i] == CGP_METADATA_OUTPUT_FILE_SHORT) {
-					cgp_metadata_output_file(arguments.at(i + 1));
+				else if (arguments[i] == CGP_STATISTICS_FILE_LONG || arguments[i] == CGP_STATISTICS_FILE_SHORT) {
+					cgp_statistics_file(arguments.at(i + 1));
 					i += 1;
 				}
 				else if (arguments[i] == CHROMOSOME_INPUT_FILE_LONG || arguments[i] == CHROMOSOME_INPUT_FILE_SHORT) {
 					chromosome_input_file(arguments.at(i + 1));
 					i += 1;
 				}
-				else if (arguments[i] == CGP_METADATA_INPUT_FILE_LONG || arguments[i] == CGP_METADATA_INPUT_FILE_SHORT) {
-					cgp_metadata_input_file(arguments.at(i + 1));
+				else if (arguments[i] == MSE_THRESHOLD_LONG || arguments[i] == MSE_THRESHOLD_SHORT) {
+					mse_threshold(parse_decimal_argument(arguments.at(i + 1)));
 					i += 1;
 				}
 				else {
@@ -288,9 +289,9 @@ namespace cgp {
 		return chromosome_output_file_value;
 	}
 
-	decltype(CGPConfiguration::cgp_metadata_output_file_value) CGPConfiguration::cgp_metadata_output_file() const
+	decltype(CGPConfiguration::cgp_statistics_file_value) CGPConfiguration::cgp_statistics_file() const
 	{
-		return cgp_metadata_output_file_value;
+		return cgp_statistics_file_value;
 	}
 
 	decltype(CGPConfiguration::chromosome_input_file_value) CGPConfiguration::chromosome_input_file() const
@@ -298,9 +299,9 @@ namespace cgp {
 		return chromosome_input_file_value;
 	}
 
-	decltype(CGPConfiguration::cgp_metadata_input_file_value) CGPConfiguration::cgp_metadata_input_file() const
+	decltype(CGPConfiguration::mse_threshold_value) CGPConfiguration::mse_threshold() const
 	{
-		return cgp_metadata_input_file_value;
+		return mse_threshold_value;
 	}
 
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
@@ -406,9 +407,9 @@ namespace cgp {
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::cgp_metadata_output_file(decltype(cgp_metadata_output_file_value) value)
+	CGPConfiguration& CGPConfiguration::cgp_statistics_file(decltype(cgp_statistics_file_value) value)
 	{
-		cgp_metadata_output_file_value = value;
+		cgp_statistics_file_value = value;
 		return *this;
 	}
 
@@ -418,15 +419,86 @@ namespace cgp {
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::cgp_metadata_input_file(decltype(cgp_metadata_input_file_value) value)
-	{
-		cgp_metadata_input_file_value = value;
-		return *this;
-	}
-
 	CGPConfiguration& CGPConfiguration::output_file(decltype(output_file_value) value)
 	{
 		output_file_value = value;
 		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::mse_threshold(decltype(mse_threshold_value) value)
+	{
+		mse_threshold_value = value;
+		return *this;
+	}
+
+	void CGPConfiguration::dump(std::ostream &out) const
+	{
+		// Serialize each variable to the file
+		out << "function_input_arity: " << static_cast<int>(function_input_arity()) << std::endl;
+		out << "function_output_arity: " << static_cast<int>(function_output_arity()) << std::endl;
+		out << "output_count: " << output_count() << std::endl;
+		out << "input_count: " << input_count() << std::endl;
+		out << "population_max: " << population_max() << std::endl;
+		out << "mutation_max: " << mutation_max() << std::endl;
+		out << "row_count: " << row_count() << std::endl;
+		out << "col_count: " << col_count() << std::endl;
+		out << "look_back_parameter: " << look_back_parameter() << std::endl;
+		out << "generation_count: " << generation_count() << std::endl;
+		out << "number_of_runs: " << number_of_runs() << std::endl;
+		out << "function_count: " << static_cast<int>(function_count()) << std::endl;
+		out << "periodic_log_frequency: " << periodic_log_frequency() << std::endl;
+		out << "periodic_log: " << periodic_log() << std::endl;
+		out << "input_file: " << input_file() << std::endl;
+		out << "output_file: " << output_file() << std::endl;
+		out << "chromosome_output_file: " << chromosome_output_file() << std::endl;
+		out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
+		out << "chromosome_input_file: " << chromosome_input_file() << std::endl;
+		out << "mse_threshold: " << mse_threshold() << std::endl;
+	}
+
+	void CGPConfiguration::load(std::istream &in)
+	{
+		std::string line;
+
+		// Read each line from the file and parse it to extract variable name and value
+		while (std::getline(in, line)) {
+			std::string key = line;
+			std::string value = line;
+
+			// Remove leading/trailing whitespaces from key and value
+			key.erase(0, key.find_first_not_of(" \t\r\n"));
+			key.erase(key.find_first_of(":"));
+			value.erase(0, value.find_first_of(":") + 1);
+			value.erase(0, value.find_first_not_of(" \t\r\n"));
+			value.erase(value.find_last_not_of(" \t\r\n") + 1);
+
+			// Set the variable based on the key and value
+			if (key == "function_input_arity") function_input_arity(std::stoi(value));
+			else if (key == "function_output_arity") function_output_arity(std::stoi(value));
+			else if (key == "output_count") output_count(std::stoull(value));
+			else if (key == "input_count") input_count(std::stoull(value));
+			else if (key == "population_max") population_max(std::stoi(value));
+			else if (key == "mutation_max") mutation_max(std::stod(value));
+			else if (key == "row_count") row_count(std::stoi(value));
+			else if (key == "col_count") col_count(std::stoi(value));
+			else if (key == "look_back_parameter") look_back_parameter(std::stoi(value));
+			else if (key == "generation_count") generation_count(std::stoull(value));
+			else if (key == "number_of_runs") number_of_runs(std::stoull(value));
+			else if (key == "function_count") function_count(std::stoi(value));
+			else if (key == "periodic_log_frequency") periodic_log_frequency(std::stoull(value));
+			else if (key == "periodic_log") periodic_log(value == "true");
+			else if (key == "input_file") input_file(value);
+			else if (key == "output_file") output_file(value);
+			else if (key == "chromosome_output_file") chromosome_output_file(value);
+			else if (key == "cgp_statistics_file") cgp_statistics_file(value);
+			else if (key == "chromosome_input_file") chromosome_input_file(value);
+			else if (key == "mse_threshold") mse_threshold(std::stod(value));
+			else if (key != "")
+			{
+				// todo: cover exception properly
+				//throw std::invalid_argument("invalid key \"" + key + "\".");
+			}
+		}
+		max_genes_to_mutate_value = chromosome_size() * mutation_max();
 	}
 }

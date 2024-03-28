@@ -14,6 +14,9 @@ using weight_repr_value_t = double;
 #endif // !CNN_FP32_WEIGHTS
 
 namespace cgp {
+	long long parse_integer_argument(const std::string& arg);
+	long double parse_decimal_argument(const std::string& arg);
+
 	class CGPConfigurationInvalidArgument : public std::invalid_argument
 	{
 	public:
@@ -132,9 +135,9 @@ namespace cgp {
 		std::string chromosome_output_file_value = "-";
 
 		/// <summary>
-		/// A path where CGP metadata will be saved.
+		/// A path where CGP statistics will be saved.
 		/// </summary>
-		std::string cgp_metadata_output_file_value = "";
+		std::string cgp_statistics_file_value = "+";
 
 		/// <summary>
 		/// A path where chromosome array is saved.
@@ -142,9 +145,9 @@ namespace cgp {
 		std::string chromosome_input_file_value = "";
 
 		/// <summary>
-		/// A path where CGP metadata are saved.
+		/// Mean Squared Error threshold after optimisation is focused on minimising energy.
 		/// </summary>
-		std::string cgp_metadata_input_file_value = "";
+		double mse_threshold_value = 5;
 	public:
 		CGPConfiguration();
 		CGPConfiguration(const std::vector<std::string>& arguments);
@@ -155,6 +158,8 @@ namespace cgp {
 #ifndef CNN_FP32_WEIGHTS
 		// Type definition for inferred weight.
 		using weight_value_t = int8_t;
+		// Type definition for inferred weight.
+		using weight_actual_value_t = int8_t;
 #else
 		// Type definition for inferred weight.
 		using weight_value_t = double;
@@ -205,14 +210,14 @@ namespace cgp {
 		static const std::string CHROMOSOME_OUTPUT_FILE_LONG;
 		static const std::string CHROMOSOME_OUTPUT_FILE_SHORT;
 
-		static const std::string CGP_METADATA_OUTPUT_FILE_LONG;
-		static const std::string CGP_METADATA_OUTPUT_FILE_SHORT;
-
 		static const std::string CHROMOSOME_INPUT_FILE_LONG;
 		static const std::string CHROMOSOME_INPUT_FILE_SHORT;
 
-		static const std::string CGP_METADATA_INPUT_FILE_LONG;
-		static const std::string CGP_METADATA_INPUT_FILE_SHORT;
+		static const std::string CGP_STATISTICS_FILE_LONG;
+		static const std::string CGP_STATISTICS_FILE_SHORT;
+
+		static const std::string MSE_THRESHOLD_LONG;
+		static const std::string MSE_THRESHOLD_SHORT;
 
 		/// <summary>
 		/// Sets configuration parameters according to given command line arguments.
@@ -222,32 +227,32 @@ namespace cgp {
 		/// <summary>
 		/// Gets the input arity of functions.
 		/// </summary>
-		decltype(function_input_arity_value) function_input_arity() const;
+		inline decltype(function_input_arity_value) function_input_arity() const;
 
 		/// <summary>
 		/// Gets the output arity of functions.
 		/// </summary>
-		decltype(function_output_arity_value) function_output_arity() const;
+		inline decltype(function_output_arity_value) function_output_arity() const;
 
 		/// <summary>
 		/// Gets the number of output pins in the CGP configuration.
 		/// </summary>
-		decltype(output_count_val) output_count() const;
+		inline decltype(output_count_val) output_count() const;
 
 		/// <summary>
 		/// Gets the number of input pins in the CGP configuration.
 		/// </summary>
-		decltype(input_count_val) input_count() const;
+		inline decltype(input_count_val) input_count() const;
 
 		/// <summary>
 		/// Gets the maximum population size in the CGP algorithm.
 		/// </summary>
-		decltype(population_max_value) population_max() const;
+		inline decltype(population_max_value) population_max() const;
 
 		/// <summary>
 		/// Gets the maximum mutation value in the CGP algorithm.
 		/// </summary>
-		decltype(mutation_max_value) mutation_max() const;
+		inline decltype(mutation_max_value) mutation_max() const;
 
 		/// <summary>
 		/// Gets maximum number of genes that can be mutated.
@@ -257,72 +262,67 @@ namespace cgp {
 		/// <summary>
 		/// Gets the number of rows in the CGP grid.
 		/// </summary>
-		decltype(row_count_value) row_count() const;
+		inline decltype(row_count_value) row_count() const;
 
 		/// <summary>
 		/// Gets the number of columns in the CGP grid.
 		/// </summary>
-		decltype(col_count_value) col_count() const;
+		inline decltype(col_count_value) col_count() const;
 
 		/// <summary>
 		/// Gets the look-back parameter in the CGP algorithm.
 		/// </summary>
-		decltype(look_back_parameter_value) look_back_parameter() const;
+		inline decltype(look_back_parameter_value) look_back_parameter() const;
 
 		/// <summary>
 		/// Gets the maximum number of generations in the CGP algorithm.
 		/// </summary>
-		decltype(generation_count_value) generation_count() const;
+		inline decltype(generation_count_value) generation_count() const;
 
 		/// <summary>
 		/// Gets the number of runs in the CGP algorithm.
 		/// </summary>
-		decltype(number_of_runs_value) number_of_runs() const;
+		inline decltype(number_of_runs_value) number_of_runs() const;
 
 		/// <summary>
 		/// Gets the number of functions in the CGP algorithm.
 		/// </summary>
-		decltype(function_count_value) function_count() const;
+		inline decltype(function_count_value) function_count() const;
 
 		/// <summary>
 		/// Gets the log frequency in the CGP algorithm.
 		/// </summary>
-		decltype(periodic_log_frequency_value) periodic_log_frequency() const;
+		inline decltype(periodic_log_frequency_value) periodic_log_frequency() const;
 
 		/// <summary>
 		/// Gets whether periodic logging is enabled in the CGP algorithm.
 		/// </summary>
-		decltype(periodic_log_value) periodic_log() const;
+		inline decltype(periodic_log_value) periodic_log() const;
 
 		/// <summary>
 		/// Gets a file path in which input data are located.
 		/// </summary>
-		decltype(input_file_value) input_file() const;
+		inline decltype(input_file_value) input_file() const;
 
 		/// <summary>
 		/// Gets a file path in which output data will be stored.
 		/// </summary>
-		decltype(output_file_value) output_file() const;
+		inline decltype(output_file_value) output_file() const;
 
 		/// <summary>
 		/// Gets the path where resulting chromosome array will be saved.
 		/// </summary>
-		decltype(chromosome_output_file_value) chromosome_output_file() const;
+		inline decltype(chromosome_output_file_value) chromosome_output_file() const;
 
 		/// <summary>
-		/// Gets the path where CGP metadata will be saved.
+		/// Gets the path where CGP statistics will be saved.
 		/// </summary>
-		decltype(cgp_metadata_output_file_value) cgp_metadata_output_file() const;
+		inline decltype(cgp_statistics_file_value) cgp_statistics_file() const;
 
 		/// <summary>
 		/// Gets the path where chromosome array is saved.
 		/// </summary>
-		decltype(chromosome_input_file_value) chromosome_input_file() const;
-
-		/// <summary>
-		/// Gets the path where CGP metadata are saved.
-		/// </summary>
-		decltype(cgp_metadata_input_file_value) cgp_metadata_input_file() const;
+		inline decltype(chromosome_input_file_value) chromosome_input_file() const;
 
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
@@ -332,17 +332,22 @@ namespace cgp {
 		/// <summary>
 		/// Calculates the size of the chromosome blocks.
 		/// </summary>
-		size_t blocks_chromosome_size() const;
+		inline size_t blocks_chromosome_size() const;
 
 		/// <summary>
 		/// Calculates the total size of the chromosome.
 		/// </summary>
-		size_t chromosome_size() const;
+		inline size_t chromosome_size() const;
 
 		/// <summary>
 		/// Gets array of energy costs for various operations.
 		/// </summary>
 		decltype(function_energy_costs_value) function_energy_costs() const;
+
+		/// <summary>
+		/// Get Mean Squared Error threshold after optimisation is focused on minimising energy.
+		/// </summary>
+		inline decltype(mse_threshold_value) mse_threshold() const;
 
 		/// <summary>
 		/// Sets the input arity of functions.
@@ -437,7 +442,7 @@ namespace cgp {
 		/// <summary>
 		/// Sets the path where CGP metadata will be saved.
 		/// </summary>
-		CGPConfiguration& cgp_metadata_output_file(decltype(cgp_metadata_output_file_value));
+		CGPConfiguration& cgp_statistics_file(decltype(cgp_statistics_file_value));
 
 		/// <summary>
 		/// Sets the path where chromosome array is saved.
@@ -445,8 +450,18 @@ namespace cgp {
 		CGPConfiguration& chromosome_input_file(decltype(chromosome_input_file_value));
 
 		/// <summary>
-		/// Sets the path where CGP metadata are saved.
+		/// Set Mean Squared Error threshold after optimisation is focused on minimising energy.
 		/// </summary>
-		CGPConfiguration& cgp_metadata_input_file(decltype(cgp_metadata_input_file_value));
+		CGPConfiguration& mse_threshold(decltype(mse_threshold_value));
+
+		/// <summary>
+		/// Save configuration to file.
+		/// </summary>
+		virtual void dump(std::ostream &out) const;
+
+		/// <summary>
+		/// Load configuration from file.
+		/// </summary>
+		virtual void load(std::istream& in);
 	};
 }

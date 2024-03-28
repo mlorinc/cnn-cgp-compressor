@@ -15,9 +15,10 @@ namespace cgp {
 	private:
 		using gene_t = CGPConfiguration::gene_t;
 		using weight_value_t = CGPConfiguration::weight_value_t;
+		using weight_actual_value_t = CGPConfiguration::weight_actual_value_t;
 
 		// Reference to the CGP configuration used for chromosome setup.
-		CGPConfiguration cgp_configuration;
+		CGPConfiguration &cgp_configuration;
 
 		// Pointers to the start and end positions of the chromosome output.
 		gene_t* output_start, * output_end;
@@ -92,14 +93,24 @@ namespace cgp {
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
-		Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_value_t expected_value_min, weight_value_t expected_value_max);
+		Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max);
 		
 		
 		/// <summary>
 		/// Constructor for the Chromosome class using string chromosome representation.
 		/// </summary>
+		/// <param name="cgp_configuration">Reference to the CGP configuration.</param>
+		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
+		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
+		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
 		/// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
-		Chromosome(const std::string &serialized_chromosome, std::shared_ptr<double[]> function_energy_costs);
+		Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string &serialized_chromosome);
+
+		///// <summary>
+		///// Constructor for the Chromosome class using string chromosome representation.
+		///// </summary>
+		///// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
+		//Chromosome(const std::string& serialized_chromosome);
 
 		/// <summary>
 		/// Copy constructor for the Chromosome class.
@@ -146,7 +157,7 @@ namespace cgp {
 		/// Method to perform mutation on the chromosome.
 		/// </summary>
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
-		std::shared_ptr<Chromosome> mutate();
+		std::shared_ptr<Chromosome> mutate() const;
 
 		/// <summary>
 		/// Method to set the input for the chromosome.
@@ -194,6 +205,20 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Qunatity of used digital gates.</returns>
 		decltype(phenotype_node_count) get_node_count();
+
+		/// <summary>
+		/// Infer unknown weights using CGP genotype and return array of weights.
+		/// </summary>
+		/// <param name="input">Shared pointer to an array of input values.</param>
+		/// <returns>Shared pointer to an array of infered weights</returns>
+		std::shared_ptr<weight_value_t[]> get_weights(const std::shared_ptr<weight_value_t[]> input);
+
+		/// <summary>
+		/// Infer unknown weights using CGP genotype and return vector of weights arrays.
+		/// </summary>
+		/// <param name="input">Vector of shared pointers to an array of input values.</param>
+		/// <returns>Vector of shared pointers to an array of infered weights associated with specific inputs</returns>
+		std::vector<std::shared_ptr<weight_value_t[]>> get_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& input);
 	};
 
 	std::string to_string(const cgp::Chromosome& chromosome);

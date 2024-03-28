@@ -1,40 +1,19 @@
 from typing import Optional
+from itertools import zip_longest
 import torch
-import torchvision
-from models.ptq_quantized_lenet import PTQQuantizedLeNet5
-from models.qat_quantized_lenet import QATQuantizedLeNet5
 from models.mobilenet_v2 import MobileNetV2
-from models.lenet import LeNet5
 from models.base import BaseModel
 from cgp.cgp_adapter import CGP
-from cgp.test_cgp_adapter import TestCGP
+from experiments.experiment import BaseExperiment
 import importlib
 import argparse
-
-def dequantize_per_channel(x: torch.Tensor, conv_layer: torch.Tensor):
-    zero_point = conv_layer.q_per_channel_zero_points()
-    scale = conv_layer.q_per_channel_scales()
-
-    dequantized = ((x - zero_point.view(-1, 1, 1)) * scale.view(-1, 1, 1)).float()
-    return torch.quantize_per_channel(
-        dequantized,
-        scale,
-        zero_point,
-        axis=0,
-        dtype=torch.qint8
-    )
-
-def dequantize_per_tensor(x: torch.Tensor, scale: torch.float32, zero_point: torch.float32):
-    dequantized = ((x - zero_point) * scale).float()
-    return torch.quantize_per_tensor(
-        dequantized,
-        scale,
-        zero_point,
-        dtype=torch.qint8
-    )
+import pandas as pd
 
 def _get_model(model_name: str, model_path: Optional[str] = None) -> BaseModel:
     return importlib.import_module(f"models.{model_name}").init(model_path)
+
+def _get_experiment(experiment_name: str, model: BaseModel, cgp: CGP, dtype=torch.int8, results_folder: str = "cmd/compress/experiment_results") -> BaseExperiment:
+    return importlib.import_module(f"experiments.{experiment_name}.experiment").init(results_folder, model, cgp, dtype=dtype)
 
 def train_model(model_name: str, model_path: str, base: str):
     print(f"Training model: {model_name}")
@@ -62,59 +41,51 @@ def quantize_model(model_name, model_path, new_path):
     model.quantize(new_path)
     model.save(new_path)
 
-def optimize_model(model_name: str, model_path: str, cgp_binary_path: str):
-    initial_acc = final_acc = 0
-    initial_loss = final_loss = 0
+def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_name: str):
+    model = _get_model(model_name, model_path)
+    model = model.load(model_path)
+    model.eval()
 
-    if model_name == LeNet5.name:
-        cgp = CGP(cgp_binary_path, 16+1, 5, 3)
-        model = LeNet5(model_path)
-        model = model.load(model_path)
-        model.eval()
-        with torch.no_grad():
-            initial_acc, initial_loss = model.evaluate()
-            print("before compression:")
-            print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f}")
-            cgp.add_kernel(model.conv1.weight[0, 0])
-            for kernel in model.conv2.weight[:, 0]:
-                cgp.add_kernel(kernel)
-            cgp.train()
+    # cgp = TestCGP()
+    cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{experiment_name}/config.cgp")
+    experiment = _get_experiment(experiment_name, model, cgp)
+    experiment.execute()
 
-            kernels = cgp.get_kernels()
-            model.conv1.weight[0, 0] = kernels[0]
-            for i in range(16):
-                model.conv2.weight[i, 0] = kernels[i+1]
-            final_acc, final_loss = model.evaluate()
-    elif model_name == QATQuantizedLeNet5.name:
-        model = QATQuantizedLeNet5(model_path)
-        model = model.load(model_path)
-        model.eval()
+def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_name: str, args):
+    model = _get_model(model_name, model_path)
+    model = model.load(model_path)
+    model.eval()
+    cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{experiment_name}/config.cgp")
+    experiment = _get_experiment(experiment_name, model, cgp)
 
-        # cgp = TestCGP()
-        cgp = CGP(cgp_binary_path, 1, model.conv1.weight().shape[0] * 3**2, model.conv1.weight().shape[0] * 16)
-        with torch.no_grad():
-            initial_acc, initial_loss = model.evaluate()
-            conv1_biases = model.conv1.bias()
-            conv2_biases = model.conv2.bias()
-            conv1_fp32_weights = model.conv1.weight().detach()
-            conv2_fp32_weights = model.conv2.weight().detach()
-            conv1_qint8_weights = model.conv1.weight().detach().int_repr()
-            conv2_qint8_weights = model.conv2.weight().detach().int_repr()
+    if args.run is not None and args.file is not None:
+        raise ValueError("run and file must not be specified together")
+    if args.run is None and args.file is None:
+        args.run = range(cgp.config.get_number_of_runs())
 
-            print("before compression:")
-            print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f}")
-            
-            for kernel in conv1_qint8_weights[:, 0]:
-                cgp.add_kernel(kernel, 3)
+    initial_acc, initial_loss = model.evaluate()
+    accuracies = []
+    losses = []
+    sources = []
 
-            cgp.create_train_file("train.data")
-            cgp.train()
-            kernels = cgp.get_kernels()
-            conv1_fp32_weights[:, 0] = dequantize_per_channel(torch.stack(kernels), conv1_fp32_weights)
-            model.conv1.set_weight_bias(conv1_fp32_weights, conv1_biases)
-            final_acc, final_loss = model.evaluate()
-    print(f"acc: {initial_acc:.12f}, loss {initial_loss:.12f} | acc: {final_acc:.12f}, loss {final_loss:.12f}")
+    for run, file in zip_longest(args.run or [], args.file or []):
+        try:
+            _, _, after_acc, after_loss = experiment.evaluate_from_file(run=run, file=file, reference_eval=False)
+        except FileNotFoundError as e:
+            if run is not None:
+                _, _, after_acc, after_loss = experiment.evaluate(run=run, reference_eval=False)
+            else:
+                raise e
+        accuracies.append(after_acc)
+        losses.append(after_loss)
+        sources.append(run or file)
 
+    data = {"sources": sources, "accuracies": accuracies, "losses": losses}
+    df = pd.DataFrame(data)
+    df_model = pd.DataFrame({"acc": [initial_acc], "loss": [initial_loss]})
+    print(df)
+    df.to_csv(experiment.experiment_root_path / "evaluation_stats.csv", index=False)
+    df_model.to_csv(experiment.experiment_root_path / "model_stats.csv", index=False)
 
 def main():
     parser = argparse.ArgumentParser(description="Model Training, Evaluation, Quantization, and Optimization")
@@ -143,6 +114,16 @@ def main():
     optimize_parser.add_argument("model_name", help="Name of the model to optimize")
     optimize_parser.add_argument("model_path", help="Path to the model to optimize")
     optimize_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
+    optimize_parser.add_argument("experiment_name", help="Experiment to evaluate")
+
+    # cgp:optimize
+    evaluate_cgp_parser = subparsers.add_parser("cgp:evaluate", help="Evalaute a model")
+    evaluate_cgp_parser.add_argument("model_name", help="Name of the model to evaluate")
+    evaluate_cgp_parser.add_argument("model_path", help="Path to the model to evaluate")
+    evaluate_cgp_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
+    evaluate_cgp_parser.add_argument("experiment_name", help="Experiment to evaluate")
+    evaluate_cgp_parser.add_argument("--run", nargs='+', type=int, help="List of runs to evaluate", required=False)
+    evaluate_cgp_parser.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)    
 
     args = parser.parse_args()
 
@@ -153,7 +134,9 @@ def main():
     elif args.command == "model:quantize":
         quantize_model(args.model_name, args.model_path, args.new_path)
     elif args.command == "cgp:optimize":
-        optimize_model(args.model_name, args.model_path, args.cgp_binary_path)
+        optimize_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
+    elif args.command == "cgp:evaluate":
+        evaluate_cgp_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
     else:
         print("Invalid command. Use --help for usage information.")
 

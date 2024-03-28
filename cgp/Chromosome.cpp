@@ -7,7 +7,7 @@
 
 using namespace cgp;
 
-Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_value_t expected_value_min, weight_value_t expected_value_max) :
+Chromosome::Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max) :
 	cgp_configuration(cgp_configuration),
 	minimum_output_indicies(minimum_output_indicies),
 	expected_value_min(expected_value_min),
@@ -18,11 +18,11 @@ Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, std::shared_pt
 	setup_chromosome();
 }
 
-cgp::Chromosome::Chromosome(const std::string& serialized_chromosome, std::shared_ptr<double[]> function_energy_costs) :
-	cgp_configuration(CGPConfiguration()),
-	minimum_output_indicies(nullptr),
-	expected_value_min(std::numeric_limits<weight_value_t>::min()),
-	expected_value_max(std::numeric_limits<weight_value_t>::max())
+cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string& serialized_chromosome) :
+	cgp_configuration(cgp_config),
+	minimum_output_indicies(minimum_output_indicies),
+	expected_value_min(expected_value_min),
+	expected_value_max(expected_value_max)
 {
 	std::istringstream input(serialized_chromosome);
 
@@ -34,7 +34,6 @@ cgp::Chromosome::Chromosome(const std::string& serialized_chromosome, std::share
 		>> discard >> function_input_arity >> discard >> l_back >> discard >> discard >> discard;
 
 	cgp_configuration
-		.function_energy_costs(function_energy_costs)
 		.input_count(input_count)
 		.output_count(output_count)
 		.col_count(col_count)
@@ -47,7 +46,7 @@ cgp::Chromosome::Chromosome(const std::string& serialized_chromosome, std::share
 	size_t block_size = cgp_configuration.function_input_arity() + 1;
 	size_t value;
 	auto it = chromosome.get();
-	for (size_t i = 0; i < input_count * row_count; i++)
+	for (size_t i = 0; i < col_count * row_count; i++)
 	{
 		// ([n]i,i,...,f)
 		input >> discard >> discard >> input_count >> discard;
@@ -64,6 +63,9 @@ cgp::Chromosome::Chromosome(const std::string& serialized_chromosome, std::share
 	{
 		input >> *it++ >> discard;
 	}
+
+	auto check_chromosome = to_string();
+	assert(("Chromosome::Chromosome serialized chromosome does not correspond to built chromosome", check_chromosome == serialized_chromosome));
 }
 
 Chromosome::Chromosome(const Chromosome& that) :
@@ -183,11 +185,10 @@ std::shared_ptr<Chromosome::gene_t[]> Chromosome::get_chromosome() const
 	return chromosome;
 }
 
-
-std::shared_ptr<Chromosome> Chromosome::mutate()
+std::shared_ptr<Chromosome> Chromosome::mutate() const
 {
 	auto chrom = std::make_shared<Chromosome>(*this);
-	chrom->chromosome = std::make_unique<Chromosome::gene_t[]>(cgp_configuration.chromosome_size());
+	chrom->chromosome = std::make_shared<Chromosome::gene_t[]>(cgp_configuration.chromosome_size());
 	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), chrom->chromosome.get());
 	chrom->setup_iterators();
 
@@ -220,6 +221,8 @@ std::shared_ptr<Chromosome> Chromosome::mutate()
 	}
 	chrom->need_evaluation = true;
 	chrom->need_energy_evaluation = true;
+	chrom->input = nullptr;
+
 	return chrom;
 }
 
@@ -331,6 +334,8 @@ void Chromosome::evaluate()
 			block_output_pins[0] = 0xffffffff;
 			break;
 		}
+		// Prevent overflows hence undefined behaviour
+		//block_output_pins[0] = std::max(expected_value_min, std::min(block_output_pins[0], expected_value_max));
 		output_pin += cgp_configuration.function_output_arity();
 		input_pin += cgp_configuration.function_input_arity() + 1;
 		func += cgp_configuration.function_input_arity() + 1;
@@ -456,6 +461,25 @@ decltype(Chromosome::phenotype_node_count) cgp::Chromosome::get_node_count()
 	assert(("Chromosome::get_node_count cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 	get_estimated_energy_usage();
 	return phenotype_node_count;
+}
+
+std::shared_ptr<Chromosome::weight_value_t[]> Chromosome::get_weights(const std::shared_ptr<weight_value_t[]> input)
+{
+	set_input(input);
+	evaluate();
+	auto weights = std::make_shared<weight_value_t[]>(cgp_configuration.output_count());
+	std::copy(begin_output(), end_output(), weights.get());
+	return weights;
+}
+
+std::vector<std::shared_ptr<Chromosome::weight_value_t[]>> Chromosome::get_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& input)
+{
+	std::vector<std::shared_ptr<Chromosome::weight_value_t[]>> weight_vector(input.size());
+	for(const auto &in : input)
+	{
+		weight_vector.push_back(get_weights(in));
+	}
+	return weight_vector;
 }
 
 std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)

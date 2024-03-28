@@ -3,30 +3,113 @@
 #include <execution>
 #include <limits>
 #include <omp.h>
+#include <fstream>
+#include <sstream>
 
 using namespace cgp;
 
-CGP::CGP(const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold) :
+CGP::CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value, const double mse_threshold) :
 	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
 	expected_value_min(expected_min_value),
 	expected_value_max(expected_max_value),
 	generations_without_change(0),
-	evolution_steps_made(0),
-	mse_threshold(mse_threshold) {
+	evolution_steps_made(0)
+{
+	this->mse_threshold(mse_threshold);
 }
 
 CGP::CGP(const double mse_threshold) :
 	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
-	expected_value_min(std::numeric_limits<weight_value_t>::min()),
-	expected_value_max(std::numeric_limits<weight_value_t>::max()),
+	expected_value_min(std::numeric_limits<weight_actual_value_t>::min()),
+	expected_value_max(std::numeric_limits<weight_actual_value_t>::max()),
 	generations_without_change(0),
-	evolution_steps_made(0),
-	mse_threshold(mse_threshold) {
+	evolution_steps_made(0)
+{
+	this->mse_threshold(mse_threshold);
+}
+
+CGP::CGP(std::istream& in) : CGP()
+{
+	load(in);
 }
 
 CGP::~CGP() {}
 
-void CGP::build() {
+void CGP::reset()
+{
+	best_solution = std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr);
+	generations_without_change = 0;
+	evolution_steps_made = 0;
+	best_solutions.clear();
+	chromosomes.clear();
+}
+
+void CGP::dump(std::ostream& out) const
+{
+	CGPConfiguration::dump(out);
+	std::string chromosome = (std::get<2>(best_solution) != nullptr) ? (std::get<2>(best_solution)->to_string()) : ("non-existent");
+	out << "best_solution: " << std::get<0>(best_solution) << " " << std::get<1>(best_solution) << " " << chromosome << std::endl;
+	out << "evolution_steps_made: " << evolution_steps_made << std::endl;
+	out << "expected_value_min: " << static_cast<weight_repr_value_t>(expected_value_min) << std::endl;
+	out << "expected_value_max: " << static_cast<weight_repr_value_t>(expected_value_max) << std::endl;
+	for (auto it = other_config_attribitues.begin(), end = other_config_attribitues.end(); it != end; it++)
+	{
+		out << it->first << ": " << it->second << std::endl;
+	}
+}
+
+void CGP::load(std::istream& in)
+{
+	CGPConfiguration::load(in);
+	in.clear();
+	in.seekg(0);
+	std::string line;
+	std::string best_solution_string;
+	
+	other_config_attribitues.clear();
+	while (std::getline(in, line)) {
+		std::string key = line;
+		std::string value = line;
+
+		key.erase(0, key.find_first_not_of(" \t\r\n"));
+		key.erase(key.find_first_of(":"));
+		value.erase(0, value.find_first_of(":") + 1);
+		value.erase(0, value.find_first_not_of(" \t\r\n"));
+		value.erase(value.find_last_not_of(" \t\r\n") + 1);
+
+		if (key == "best_solution") {
+			best_solution_string = value;
+		}
+		else if (key == "evolution_steps_made") {
+			evolution_steps_made = std::stoull(value);
+		}
+		else if (key == "expected_value_min") {
+			expected_value_min = std::stoul(value);
+		}
+		else if (key == "expected_value_max") {
+			expected_value_max = std::stoul(value);
+		}
+		else if (!key.empty())
+		{
+			other_config_attribitues[key] = value;
+		}
+	}
+
+	build_indices();
+
+	if (!best_solution_string.empty())
+	{
+		std::istringstream iss(best_solution_string);
+		double mse;
+		std::string chrom, energy;
+		iss >> mse >> energy >> chrom;
+		auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, expected_value_min, expected_value_max, chrom);
+		best_solution = std::make_tuple(mse, (energy == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(energy), chromosome);
+	}
+}
+
+void CGP::build_indices()
+{
 	const auto input_column_pins = input_count();
 	const auto fn_arity = function_output_arity();
 	minimum_output_indicies = std::make_shared<std::tuple<int, int>[]>(col_count() + 1);
@@ -53,12 +136,18 @@ void CGP::build() {
 
 		minimum_output_indicies[col - 1] = std::make_tuple(min_pin, max_pin);
 	}
-
-	// Create new population
 #pragma omp barrier
+	return;
+}
+
+void CGP::generate_population()
+{
+	chromosomes.clear();
+	const auto& best_chromosome = std::get<2>(best_solution);
+	// Create new population
 	for (size_t i = 0; i < population_max(); i++)
 	{
-		auto chromosome = std::make_shared<Chromosome>(Chromosome(*this, minimum_output_indicies, expected_value_min, expected_value_max));
+		auto chromosome = (best_chromosome != nullptr) ? (best_chromosome->mutate()) : (std::make_shared<Chromosome>(Chromosome(*this, minimum_output_indicies, expected_value_min, expected_value_max)));
 		chromosomes.push_back(chromosome);
 	}
 }
@@ -106,7 +195,7 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 			}
 	}
 	mse_accumulator /= output_count() * input.size();
-	if (mse_accumulator <= mse_threshold)
+	if (mse_accumulator <= mse_threshold())
 	{
 		return std::make_tuple(mse_accumulator, energy_fitness(*chrom), chrom);
 	}
@@ -121,7 +210,7 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	chrom->evaluate();
 	auto mse = error_fitness(*chrom, expected_output);
 
-	if (mse <= mse_threshold)
+	if (mse <= mse_threshold())
 	{
 		return std::make_tuple(mse, energy_fitness(*chrom), chrom);
 	}
@@ -147,9 +236,7 @@ void CGP::mutate() {
 	auto best_chromosome = get_best_chromosome();
 	for (int i = 0; i < chromosomes.size(); i++)
 	{
-		std::shared_ptr<Chromosome> chrom = chromosomes[i];
-		chrom = best_chromosome->mutate();
-		chromosomes[i] = chrom;
+		chromosomes[i] = best_chromosome->mutate();
 	}
 	evolution_steps_made++;
 }
@@ -161,14 +248,13 @@ bool CGP::dominates(solution_t a, solution_t b) const
 
 	double b_error_fitness = std::get<0>(b);
 	double b_energy_fitness = std::get<1>(b);
-	
+
+	auto mse_t = mse_threshold();
 	// Allow neutral evolution for error in case energies are the same
-	return ((mse_threshold < a_error_fitness && a_error_fitness <= b_error_fitness) ||
-		(mse_threshold >= a_error_fitness && a_energy_fitness < b_energy_fitness) ||
-		(mse_threshold >= a_error_fitness && a_energy_fitness == b_energy_fitness && a_error_fitness <= b_error_fitness));
+	return ((mse_t < a_error_fitness && a_error_fitness <= b_error_fitness) ||
+		(mse_t >= a_error_fitness && a_energy_fitness < b_energy_fitness) ||
+		(mse_t >= a_error_fitness && a_energy_fitness == b_energy_fitness && a_error_fitness <= b_error_fitness));
 }
-
-
 
 void CGP::evaluate(const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output)
 {
@@ -208,7 +294,7 @@ void CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, 
 	// including its fitness.
 	for (auto it = best_solutions.begin(), end = best_solutions.end(); it != end; it++)
 	{
-		auto thread_solution = it->second;
+		const auto &thread_solution = it->second;
 		double thread_best_error_fitness = std::get<0>(thread_solution);
 		double thread_best_energy_fitness = std::get<1>(thread_solution);
 		double best_error_fitness = std::get<0>(best_solution);
@@ -222,6 +308,8 @@ void CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, 
 			best_solution = thread_solution;
 		}
 	}
+	// for some reason slows down openMP extremely
+	//best_solutions.clear();
 }
 
 double CGP::get_best_error_fitness() const {

@@ -25,9 +25,6 @@ namespace cgp {
 		// Array containing tuples specifying the minimum and maximum pin indices for output connections.
 		std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies;
 
-		// Mean Squared Error threshold after optimisation is focused on minimising energy.
-		double mse_threshold;
-
 		// Count of generations without improvement in the best fitness.
 		size_t generations_without_change;
 
@@ -42,6 +39,8 @@ namespace cgp {
 
 		// Maximum expected value in the dataset.
 		weight_value_t expected_value_max;
+
+		std::map<std::string, std::string> other_config_attribitues;
 
 		// Calculate the accuracy(error) fitness of a chromosome.
 		double error_fitness(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output);
@@ -70,7 +69,7 @@ namespace cgp {
 		/// <param name="expected_min_value">Minimum expected value in the dataset.</param>
 		/// <param name="expected_max_value">Maximum expected value in the dataset.</param>
 		/// <param name="mse_threshold">Mean Squared Error threshold after optimisation is focused on minimising energy.</param>
-		CGP(const weight_value_t expected_min_value, const weight_value_t expected_max_value, const double mse_threshold = 0);
+		CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value, const double mse_threshold = 0);
 
 		/// <summary>
 		/// Constructor for CGP class.
@@ -79,14 +78,25 @@ namespace cgp {
 		CGP(const double mse_threshold = 0);
 
 		/// <summary>
+		/// Constructor for CGP class using text stream to initialize variables.
+		/// </summary>
+		/// <param name="in">Input stream containing serialized form of the CGP class.</param>
+		CGP(std::istream &in);
+
+		/// <summary>
 		/// Destructor for CGP class.
 		/// </summary>
 		~CGP();
 
 		/// <summary>
+		/// Build the initial pin indices.
+		/// </summary>
+		void build_indices();
+
+		/// <summary>
 		/// Build the initial population.
 		/// </summary>
-		void build();
+		void generate_population();
 
 		/// <summary>
 		/// Mutate the current population.
@@ -154,6 +164,11 @@ namespace cgp {
 		);
 
 		/// <summary>
+		/// Reset the CGP algorithm to initial state.
+		/// </summary>
+		void reset();
+
+		/// <summary>
 		/// Get number of generations without improvement in the best fitness.
 		/// </summary>
 		/// <returns>Number of generations without change.</returns>
@@ -164,5 +179,8 @@ namespace cgp {
 		/// </summary>
 		/// <returns>The size of gene.</returns>
 		size_t get_serialized_chromosome_size() const;
+
+		void dump(std::ostream& out) const override;
+		void load(std::istream& in) override;
 	};
 }
