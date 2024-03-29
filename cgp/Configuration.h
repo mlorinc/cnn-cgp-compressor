@@ -6,10 +6,10 @@
 #include <stdexcept>
 
 #ifndef CNN_FP32_WEIGHTS
-constexpr int function_count = 22;
+constexpr int function_count = 21;
 using weight_repr_value_t = int;
 #else
-constexpr int function_count = 14;
+constexpr int function_count = 13;
 using weight_repr_value_t = double;
 #endif // !CNN_FP32_WEIGHTS
 

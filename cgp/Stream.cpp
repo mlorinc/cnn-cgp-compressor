@@ -1,7 +1,7 @@
 #include "Stream.h"
 #include <iostream>
 
-std::shared_ptr<std::istream> cgp::get_input(const std::string& in, std::shared_ptr<std::istream> default_input = nullptr, std::ios_base::openmode mode = std::ios::in) {
+std::shared_ptr<std::istream> cgp::get_input(const std::string& in, std::shared_ptr<std::istream> default_input, std::ios_base::openmode mode) {
 	std::shared_ptr<std::istream> stream;
 	if (in == "-")
 	{
@@ -31,7 +31,7 @@ std::shared_ptr<std::istream> cgp::get_input(const std::string& in, std::shared_
 	return stream;
 }
 
-std::shared_ptr<std::ostream> cgp::get_output(const std::string& out, std::shared_ptr<std::ostream> default_output = nullptr, std::ios_base::openmode mode = std::ios::out | std::ios::trunc) {
+std::shared_ptr<std::ostream> cgp::get_output(const std::string& out, std::shared_ptr<std::ostream> default_output, std::ios_base::openmode mode) {
 	std::shared_ptr<std::ostream> stream;
 	if (out == "-")
 	{

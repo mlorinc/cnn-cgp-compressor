@@ -296,37 +296,34 @@ void Chromosome::evaluate()
 			block_output_pins[0] = pin_map[input_pin[0]] * 0.25;
 			break;
 		case 11:
-			block_output_pins[0] = pin_map[input_pin[0]] * 1.5;
-			break;
-		case 12:
 			block_output_pins[0] = pin_map[input_pin[0]] * 1.05;
 			break;
-		case 13:
+		case 12:
 			block_output_pins[0] = pin_map[input_pin[0]] * 0.5;
 			break;
 #ifndef CNN_FP32_WEIGHTS
-		case 14:
+		case 13:
 			block_output_pins[0] = pin_map[input_pin[0]] & pin_map[input_pin[1]];
 			break;
-		case 15:
+		case 14:
 			block_output_pins[0] = pin_map[input_pin[0]] | pin_map[input_pin[1]];
 			break;
-		case 16:
+		case 15:
 			block_output_pins[0] = pin_map[input_pin[0]] ^ pin_map[input_pin[1]];
 			break;
-		case 17:
+		case 16:
 			block_output_pins[0] = ~(pin_map[input_pin[0]]);
 			break;
-		case 18:
+		case 17:
 			block_output_pins[0] = pin_map[input_pin[0]] >> 1;
 			break;
-		case 19:
+		case 18:
 			block_output_pins[0] = pin_map[input_pin[0]] << 1;
 			break;
-		case 20:
+		case 19:
 			block_output_pins[0] = pin_map[input_pin[0]] + 1;
 			break;
-		case 21:
+		case 20:
 			block_output_pins[0] = pin_map[input_pin[0]] - 1;
 			break;
 #endif
