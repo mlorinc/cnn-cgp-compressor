@@ -1,136 +1,10 @@
 ﻿// Cgp.cpp : Defines the entry point for the application.
 
 #include "Main.h"
+using namespace cgp;
 
-using weight_value_t = cgp::CGPConfiguration::weight_value_t;
-
-std::shared_ptr<std::istream> get_input(const std::string& in, std::shared_ptr<std::istream> default_input = nullptr, std::ios_base::openmode mode = std::ios::in) {
-	std::shared_ptr<std::istream> stream;
-	if (in == "-")
-	{
-		stream.reset(&std::cin, [](...) {});
-	}
-	else if (in.empty())
-	{
-		if (default_input == nullptr)
-		{
-			throw std::invalid_argument("default input must not be null when input file is not provided");
-		}
-
-		stream = default_input;
-	}
-	else
-	{
-		auto file = new std::ifstream(in, mode);
-
-		if (!file->is_open())
-		{
-			delete file;
-			throw std::ofstream::failure("could not open input file " + in);
-		}
-		stream.reset(file);
-	}
-
-	return stream;
-}
-
-std::shared_ptr<std::ostream> get_output(const std::string& out, std::shared_ptr<std::ostream> default_output = nullptr, std::ios_base::openmode mode = std::ios::out | std::ios::trunc) {
-	std::shared_ptr<std::ostream> stream;
-	if (out == "-")
-	{
-		stream.reset(&std::cout, [](...) {});
-	}
-	else if (out == "+")
-	{
-		stream.reset(&std::cerr, [](...) {});
-	}
-	else if (out.empty())
-	{
-		if (default_output == nullptr)
-		{
-			throw std::invalid_argument("default input must not be null when output file is not provided");
-		}
-
-		stream = default_output;
-	}
-	else
-	{
-		auto file = new std::ofstream(out, mode);
-
-		if (!file->is_open())
-		{
-			delete file;
-			throw std::ofstream::failure("could not open output file " + out);
-		}
-		stream.reset(file);
-	}
-
-	return stream;
-}
-
-void log_human(std::ostream& stream, size_t run, size_t generation, cgp::CGP& cgp_model)
+std::shared_ptr<CGP> init_cgp(const std::string& cgp_file)
 {
-	stream << "[" << (run + 1) << ", " << (generation + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << ", Energy: " << cgp_model.get_best_energy_fitness() << std::endl;
-}
-
-void log_csv(std::ostream& stream, size_t run, size_t generation, cgp::CGP& cgp_model)
-{
-	//",\"" << *cgp_model.get_best_chromosome() << "\""
-	stream << (run + 1) << "," << (generation + 1) << "," << cgp_model.get_best_error_fitness() << "," << cgp_model.get_best_energy_fitness() << ",\"" << cgp_model.get_best_chromosome()->to_string() << "\"" << std::endl;
-}
-
-void log_weights(std::ostream& stream, const std::vector<std::shared_ptr<weight_value_t[]>>& inputs, cgp::CGP& cgp_model)
-{
-	for (const auto& in : inputs) {
-		auto weights = cgp_model.get_best_chromosome()->get_weights(in);
-		std::copy(weights.get(), weights.get() + cgp_model.output_count(), std::ostream_iterator<weight_repr_value_t>(stream, " "));
-		stream << std::endl;
-	}
-}
-
-std::shared_ptr<weight_value_t[]> load_input(std::istream& in, size_t input_size)
-{
-	weight_repr_value_t weight;
-	std::shared_ptr<weight_value_t[]> input = std::make_shared<weight_value_t[]>(input_size);
-
-	for (size_t i = 0; i < input_size; i++)
-	{
-		if (in >> weight)
-		{
-			input[i] = static_cast<weight_value_t>(weight);
-		}
-		else {
-			throw std::invalid_argument("invalit input weight: expecting double value; got " + std::to_string(weight));
-		}
-	}
-	std::copy(input.get(), input.get() + input_size, std::ostream_iterator<weight_repr_value_t>(std::cout, " "));
-	std::cout << std::endl;
-	return input;
-}
-
-std::shared_ptr<weight_value_t[]> load_output(std::istream& in, size_t output_size, weight_repr_value_t& min, weight_repr_value_t& max)
-{
-	weight_repr_value_t weight;
-	std::shared_ptr<weight_value_t[]> output = std::make_shared<weight_value_t[]>(output_size);
-
-	for (size_t i = 0; i < output_size; i++)
-	{
-		if (in >> weight)
-		{
-			output[i] = static_cast<weight_value_t>(weight);
-			min = std::min(min, weight);
-			max = std::max(max, weight);
-		}
-		else {
-			throw std::invalid_argument("invalit output weight: expecting double value; got " + std::to_string(weight));
-		}
-	}
-	return output;
-}
-
-int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, const std::string &cgp_file)
-{
-	std::vector<std::shared_ptr<weight_value_t[]>> inputs;
 	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(function_count);
 
 	for (size_t i = 0; i < function_count; i++)
@@ -139,9 +13,18 @@ int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, con
 	}
 
 	std::ifstream cgp_in(cgp_file);
-	cgp::CGP cgp_model(cgp_in);
+	auto cgp_model = std::make_shared<CGP>(cgp_in);
 	cgp_in.close();
-	cgp_model.function_energy_costs(energy_costs);
+	cgp_model->function_energy_costs(energy_costs);
+	return cgp_model;
+}
+
+int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, const std::string& cgp_file, const std::string& solution = "")
+{
+	std::vector<std::shared_ptr<weight_value_t[]>> inputs;
+
+	auto cgp_model_pointer = init_cgp(cgp_file);
+	CGP& cgp_model = *cgp_model_pointer;
 	cgp_model.set_from_arguments(arguments);
 
 	auto in = get_input(cgp_model.input_file());
@@ -160,30 +43,26 @@ int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, con
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
 	}
 
+	if (!solution.empty())
+	{
+		cgp_model.restore(solution);
+	}
 	cgp_model.dump(std::cerr);
 	log_weights(*out, inputs, cgp_model);
-	
+
 	std::cerr << std::endl << "exitting program" << std::endl;
 	return 0;
 }
 
-int train(std::vector<std::string> &arguments, size_t pairs_to_approximate, const std::string& cgp_file)
+int train(std::vector<std::string>& arguments, size_t pairs_to_approximate, const std::string& cgp_file)
 {
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
 	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::max();
 	weight_repr_value_t max = std::numeric_limits<weight_repr_value_t>::min();
-	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(function_count);
 
-	for (size_t i = 0; i < function_count; i++)
-	{
-		energy_costs[i] = 1;
-	}
-
-	std::ifstream cgp_in(cgp_file);
-	cgp::CGP cgp_model(cgp_in);
-	cgp_in.close();
+	auto cgp_model_pointer = init_cgp(cgp_file);
+	CGP& cgp_model = *cgp_model_pointer;
 	cgp_model.set_from_arguments(arguments);
-	cgp_model.function_energy_costs(energy_costs);
 
 	auto in = get_input(cgp_model.input_file());
 	auto stats_out = get_output(cgp_model.cgp_statistics_file());
@@ -247,11 +126,11 @@ int train(std::vector<std::string> &arguments, size_t pairs_to_approximate, cons
 int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
-	//std::vector<std::string> arguments(args + 1, args + argc);
+	std::vector<std::string> arguments(args + 1, args + argc);
 	//std::vector<std::string> arguments{"train", "1", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiments\\single_filter\\config.cgp", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\data.cgp"};
-	std::vector<std::string> arguments{"evaluate", "1", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\data.cgp.1", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\inferred_weights.0"};
+	//std::vector<std::string> arguments{"evaluate", "1", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\data.cgp.1", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\inferred_weights.0"};
 
-	try 
+	try
 	{
 		if (arguments.size() >= 1 && arguments[0] == "evaluate")
 		{
@@ -260,7 +139,7 @@ int main(int argc, const char** args) {
 				std::cerr << "missing argument for input quantity right after " + arguments[0] + "." << std::endl;
 				return 12;
 			}
-			size_t quantity = cgp::parse_integer_argument(arguments[1]);
+			size_t quantity = parse_integer_argument(arguments[1]);
 
 			if (arguments.size() < 3)
 			{
@@ -272,6 +151,39 @@ int main(int argc, const char** args) {
 			arguments.erase(arguments.begin(), arguments.begin() + 3);
 			return evaluate(arguments, quantity, cgp_file);
 		}
+		else if (arguments.size() >= 1 && arguments[0] == "evaluate:inline")
+		{
+			if (arguments.size() < 2)
+			{
+				std::cerr << "missing argument for input quantity right after " + arguments[0] + "." << std::endl;
+				return 12;
+			}
+			size_t quantity = parse_integer_argument(arguments[1]);
+
+			if (arguments.size() < 3)
+			{
+				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
+				return 12;
+			}
+			std::string cgp_file = arguments[2];
+
+			if (arguments.size() < 4)
+			{
+				std::cerr << "missing argument for serialized chromosome solution" << std::endl;
+				return 13;
+			}
+
+			std::string solution = arguments[3];
+
+			if (solution.empty())
+			{
+				std::cerr << "solution must not be empty string" << std::endl;
+				return 14;
+			}
+
+			arguments.erase(arguments.begin(), arguments.begin() + 4);
+			return evaluate(arguments, quantity, cgp_file, solution);
+		}
 		else if (arguments.size() >= 1 && arguments[0] == "train")
 		{
 			if (arguments.size() < 2)
@@ -280,7 +192,7 @@ int main(int argc, const char** args) {
 				return 12;
 			}
 
-			size_t quantity = cgp::parse_integer_argument(arguments[1]);
+			size_t quantity = parse_integer_argument(arguments[1]);
 
 			if (arguments.size() < 3)
 			{
@@ -302,7 +214,7 @@ int main(int argc, const char** args) {
 			return 11;
 		}
 	}
-	catch (const std::exception &e)
+	catch (const std::exception& e)
 	{
 		std::cerr << e.what() << std::endl;
 		return 42;

@@ -62,6 +62,12 @@ namespace cgp {
 
 		// Determine whether candidate solution A is better than B.
 		bool dominates(solution_t a, solution_t b) const;
+
+		/// <summary>
+		/// Set the best solution from given string.
+		/// </summary>
+		/// <returns>Best chromosome.</returns>
+		void set_best_solution(const std::string &solution);
 	public:
 		/// <summary>
 		/// Constructor for CGP class.
@@ -146,7 +152,7 @@ namespace cgp {
 			std::shared_ptr<Chromosome> chromosome,
 			const std::shared_ptr<weight_value_t[]> input,
 			const std::shared_ptr<weight_value_t[]> expected_output,
-			const size_t mutations_made = 0
+			const size_t mutations_made = std::numeric_limits<size_t>::max()
 		);
 
 		/// <summary>
@@ -160,7 +166,17 @@ namespace cgp {
 			std::shared_ptr<Chromosome> chromosome,
 			const std::vector<std::shared_ptr<weight_value_t[]>>& input,
 			const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output,
-			const size_t mutations_made = 0
+			const size_t mutations_made = std::numeric_limits<size_t>::max()
+		);
+
+		/// <summary>
+		/// Set evoluton to the specific point from given serialized solution string.
+		/// </summary>
+		/// <param name="solution">Serialized solution string containing error fitness, energy fitness and serialized chromosome.</param>
+		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
+		void restore(
+			const std::string &solution,
+			const size_t mutations_made = std::numeric_limits<size_t>::max()
 		);
 
 		/// <summary>

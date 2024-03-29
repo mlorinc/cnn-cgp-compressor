@@ -76,13 +76,15 @@ class CGP(object):
         if process.returncode != 0:
             raise CGPProcessError(process.returncode)
 
-    def evaluate(self, new_configration: CGPConfiguration, config_file: str = None):
+    def evaluate(self, new_configration: CGPConfiguration = None, solution: str = None, config_file: str = None):
         args = [] if new_configration is None else new_configration.to_args()
+        solution_arg = [solution] if solution is not None else []
         process = subprocess.Popen([
             self._binary,
-            "evaluate",
+            "evaluate" if solution is None else "evaluate:inline",
             str(self.config.get_dataset_size()),
             config_file or self.config._config_file,
+            *solution_arg,
             *args
         ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         for stdout_line in iter(process.stdout.readline, ""):

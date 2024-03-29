@@ -3,12 +3,9 @@
 
 #pragma once
 
-#include <fstream>
-#include <ios>
 #include <iostream>
-#include <limits>
-#include <string>
-#include <vector>
-#include "Cgp.h"
 
 // TODO: Reference additional headers your program requires here.
+
+#include "Stream.h"
+#include "Cgp.h"

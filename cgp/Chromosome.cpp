@@ -7,7 +7,7 @@
 
 using namespace cgp;
 
-Chromosome::Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max) :
+Chromosome::Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max) :
 	cgp_configuration(cgp_configuration),
 	minimum_output_indicies(minimum_output_indicies),
 	expected_value_min(expected_value_min),
@@ -18,7 +18,7 @@ Chromosome::Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std:
 	setup_chromosome();
 }
 
-cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string& serialized_chromosome) :
+cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string& serialized_chromosome) :
 	cgp_configuration(cgp_config),
 	minimum_output_indicies(minimum_output_indicies),
 	expected_value_min(expected_value_min),

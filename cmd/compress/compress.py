@@ -70,10 +70,10 @@ def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, e
 
     for run, file in zip_longest(args.run or [], args.file or []):
         try:
-            _, _, after_acc, after_loss = experiment.evaluate_from_file(run=run, file=file, reference_eval=False)
+            after_acc, after_loss = experiment.evaluate_from_file(run=run, file=file, reference_eval=False)
         except FileNotFoundError as e:
             if run is not None:
-                _, _, after_acc, after_loss = experiment.evaluate(run=run, reference_eval=False)
+                after_acc, after_loss = experiment.evaluate(run=run, reference_eval=False)
             else:
                 raise e
         accuracies.append(after_acc)
@@ -123,7 +123,7 @@ def main():
     evaluate_cgp_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
     evaluate_cgp_parser.add_argument("experiment_name", help="Experiment to evaluate")
     evaluate_cgp_parser.add_argument("--run", nargs='+', type=int, help="List of runs to evaluate", required=False)
-    evaluate_cgp_parser.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)    
+    evaluate_cgp_parser.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
 
     args = parser.parse_args()
 

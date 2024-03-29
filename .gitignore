@@ -10,6 +10,7 @@
 
 /cmd/compress/data
 /cmd/compress/trained_models
+/cmd/compress/experiment_results
 
 # User-specific files
 *.rsuser

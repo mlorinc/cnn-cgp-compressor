@@ -93,7 +93,7 @@ namespace cgp {
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
-		Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max);
+		Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max);
 		
 		
 		/// <summary>
@@ -104,7 +104,7 @@ namespace cgp {
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
 		/// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
-		Chromosome(CGPConfiguration& cgp_configuration, std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string &serialized_chromosome);
+		Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string &serialized_chromosome);
 
 		///// <summary>
 		///// Constructor for the Chromosome class using string chromosome representation.

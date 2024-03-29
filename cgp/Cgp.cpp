@@ -94,17 +94,10 @@ void CGP::load(std::istream& in)
 			other_config_attribitues[key] = value;
 		}
 	}
-
 	build_indices();
-
 	if (!best_solution_string.empty())
 	{
-		std::istringstream iss(best_solution_string);
-		double mse;
-		std::string chrom, energy;
-		iss >> mse >> energy >> chrom;
-		auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, expected_value_min, expected_value_max, chrom);
-		best_solution = std::make_tuple(mse, (energy == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(energy), chromosome);
+		set_best_solution(best_solution_string);
 	}
 }
 
@@ -170,6 +163,16 @@ double CGP::mse_without_division(const weight_value_t* predictions, const std::s
 	}
 
 	return sum;
+}
+
+void CGP::set_best_solution(const std::string& solution)
+{
+	std::istringstream iss(solution);
+	double mse;
+	std::string chrom, energy;
+	iss >> mse >> energy >> chrom;
+	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, expected_value_min, expected_value_max, chrom);
+	best_solution = std::make_tuple(mse, (energy == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(energy), chromosome);
 }
 
 // MSE loss function implementation;
@@ -335,6 +338,16 @@ size_t CGP::get_serialized_chromosome_size() const
 }
 
 void CGP::restore(
+	const std::string& solution,
+	const size_t mutations_made = std::numeric_limits<size_t>::max()
+)
+{
+	generations_without_change = 0;
+	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
+	set_best_solution(solution);
+}
+
+void CGP::restore(
 	std::shared_ptr<Chromosome> chromosome,
 	const std::shared_ptr<weight_value_t[]> input,
 	const std::shared_ptr<weight_value_t[]> expected_output,
@@ -342,7 +355,7 @@ void CGP::restore(
 )
 {
 	generations_without_change = 0;
-	evolution_steps_made = mutations_made;
+	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
 	best_solution = analyse_chromosome(chromosome, input, expected_output);
 }
 
@@ -354,6 +367,6 @@ void CGP::restore(std::shared_ptr<Chromosome> chromosome,
 )
 {
 	generations_without_change = 0;
-	evolution_steps_made = mutations_made;
+	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
 	best_solution = analyse_chromosome(chromosome, input, expected_output);
 }
