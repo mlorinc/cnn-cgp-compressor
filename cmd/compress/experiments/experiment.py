@@ -83,10 +83,20 @@ class Experiment(object):
     def _get_cgp_output_file(self) -> str:
         pass
 
+    @abstractmethod
+    def _get_train_file(self) -> str:
+        pass
+
+    @abstractmethod
+    def _get_statistics_file(self) -> str:
+        pass
+
     def execute(self):
         self._prepare_cgp()
         config = self._cgp.config.clone()
         config.set_output_file(self._get_cgp_output_file())
+        config.set_input_file(self._get_train_file())
+        config.set_cgp_statistics_file(self._get_statistics_file())
         self._cgp.train(config)
 
     def evaluate(self, run: int = 0):
@@ -166,7 +176,6 @@ class Experiment(object):
                 weights_vector.append(weights)
         return self._inject_weights(weights_vector)
 
-
     def _set_weights_bias(self, layer, weights, biases):
         if self.dtype == torch.int8:
             layer.set_weight_bias(weights, biases)
@@ -189,6 +198,12 @@ class BaseExperiment(Experiment):
     def _get_weight_output_file(self) -> str:
         return self.weights / "inferred_weights"
     
+    def _get_train_file(self) -> str:
+        return self.experiment_root_path / "train.data"
+
+    def _get_statistics_file(self) -> str:
+        return self.experiment_root_path / "statistics.csv"
+
     def execute(self):
         self.experiment_root_path.mkdir(exist_ok=False)
         self.configs.mkdir(exist_ok=False, parents=True)

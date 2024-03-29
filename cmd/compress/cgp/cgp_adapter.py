@@ -61,11 +61,13 @@ class CGP(object):
             self.config._config_file,
            *args
         ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-        if self.config.get_input_file() == "-":
+
+        input_file = new_configration.get_input_file() if new_configration.has_input_file() else self.config.get_input_file()
+        if input_file == "-":
             self._prepare_cgp_algorithm(process.stdin)
             process.stdin.close()
         else:
-            self.create_train_file(self.config.get_input_file())
+            self.create_train_file(input_file)
 
         for stdout_line in iter(process.stdout.readline, ""):
             print("CGP:", stdout_line, end="")

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from itertools import zip_longest
 import torch
 from models.mobilenet_v2 import MobileNetV2
@@ -41,15 +41,14 @@ def quantize_model(model_name, model_path, new_path):
     model.quantize(new_path)
     model.save(new_path)
 
-def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_name: str):
-    model = _get_model(model_name, model_path)
-    model = model.load(model_path)
-    model.eval()
-
-    # cgp = TestCGP()
-    cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{experiment_name}/config.cgp")
-    experiment = _get_experiment(experiment_name, model, cgp)
-    experiment.execute()
+def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
+    for experiment_name in experiment_names:
+        model = _get_model(model_name, model_path)
+        model = model.load(model_path)
+        model.eval()
+        cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{experiment_name}/config.cgp")
+        experiment = _get_experiment(experiment_name, model, cgp)
+        experiment.execute()
 
 def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_name: str, args):
     model = _get_model(model_name, model_path)
@@ -114,7 +113,7 @@ def main():
     optimize_parser.add_argument("model_name", help="Name of the model to optimize")
     optimize_parser.add_argument("model_path", help="Path to the model to optimize")
     optimize_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
-    optimize_parser.add_argument("experiment_name", help="Experiment to evaluate")
+    optimize_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
 
     # cgp:optimize
     evaluate_cgp_parser = subparsers.add_parser("cgp:evaluate", help="Evalaute a model")
