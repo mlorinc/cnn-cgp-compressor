@@ -127,8 +127,6 @@ int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
-	//std::vector<std::string> arguments{"train", "1", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiments\\single_filter\\config.cgp", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\data.cgp"};
-	//std::vector<std::string> arguments{"evaluate", "1", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\data.cgp.1", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\experiment_results\\single_filter\\inferred_weights.0"};
 
 	try
 	{

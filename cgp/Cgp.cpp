@@ -339,7 +339,7 @@ size_t CGP::get_serialized_chromosome_size() const
 
 void CGP::restore(
 	const std::string& solution,
-	const size_t mutations_made = std::numeric_limits<size_t>::max()
+	const size_t mutations_made
 )
 {
 	generations_without_change = 0;
