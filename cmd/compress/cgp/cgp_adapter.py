@@ -19,8 +19,8 @@ class CGP(object):
         self.config = CGPConfiguration(cgp_config)
         self._input_size = self.config.get_input_count()
         self._output_size = self.config.get_output_count()
-        self._inputs = [torch.empty(size=(self._input_size, ), dtype=dtype) * self.config.get_dataset_size()]
-        self._expected_values = [torch.empty(size=(self._output_size, ), dtype=dtype) * self.config.get_dataset_size()]
+        self._inputs = [torch.zeros(size=(self._input_size, ), dtype=dtype).detach() for _ in range(self.config.get_dataset_size())]
+        self._expected_values = [torch.zeros(size=(self._output_size, ), dtype=dtype).detach() for _ in range(self.config.get_dataset_size())]
         self._input_position = 0
         self._output_position = 0
         self._item_index = 0
@@ -88,8 +88,8 @@ class CGP(object):
             config_file or self.config._config_file,
             *solution_arg,
             *args
-        ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-        for stdout_line in iter(process.stdout.readline, ""):
+        ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for stdout_line in iter(process.stderr.readline, ""):
             print("CGP:", stdout_line, end="")
 
         # Wait for the subprocess to finish

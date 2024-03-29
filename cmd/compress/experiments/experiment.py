@@ -20,7 +20,7 @@ class CGPPinPlanner(object):
     def add_mapping(self, layer_name: str, input_selectors, output_selectors):
         self._preliminary_plan.append((layer_name, input_selectors, output_selectors))
     def next_mapping(self):
-        self._plan.append(self._preliminary_plan)
+        self._plan.append(self._preliminary_plan[:])
         self._preliminary_plan.clear()
     def finish_mapping(self):
         if self._preliminary_plan:
