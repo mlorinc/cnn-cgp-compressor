@@ -5,13 +5,13 @@
 #include <vector>
 #include <stdexcept>
 
-#ifndef CNN_FP32_WEIGHTS
-constexpr int function_count = 21;
-using weight_repr_value_t = int;
-#else
-constexpr int function_count = 13;
-using weight_repr_value_t = double;
-#endif // !CNN_FP32_WEIGHTS
+//#ifndef CNN_FP32_WEIGHTS
+//constexpr int function_count = 31;
+//using weight_repr_value_t = int;
+//#else
+//constexpr int function_count = 13;
+//using weight_repr_value_t = double;
+//#endif // !CNN_FP32_WEIGHTS
 
 namespace cgp {
 	long long parse_integer_argument(const std::string& arg);
@@ -102,7 +102,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the number of functions in the CGP algorithm.
 		/// </summary>
-		uint8_t function_count_value = 4;
+		uint8_t function_count_value = 33;
 
 		/// <summary>
 		/// Default value for the log frequency in the CGP algorithm.
@@ -157,12 +157,18 @@ namespace cgp {
 
 #ifndef CNN_FP32_WEIGHTS
 		// Type definition for inferred weight.
-		using weight_value_t = int8_t;
+		using weight_value_t = int16_t;
 		// Type definition for inferred weight.
 		using weight_actual_value_t = int8_t;
+		using weight_repr_value_t = int;
+		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::max();
 #else
 		// Type definition for inferred weight.
 		using weight_value_t = double;
+		// Type definition for inferred weight.
+		using weight_actual_value_t = double;
+		using weight_repr_value_t = double;
+		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::infinity();
 #endif // !CNN_FP32_WEIGHTS
 
 		static const std::string FUNCTION_INPUT_ARITY_LONG;

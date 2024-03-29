@@ -70,10 +70,10 @@ void cgp::log_human(std::ostream& stream, size_t run, size_t generation, cgp::CG
 	stream << "[" << (run + 1) << ", " << (generation + 1) << "] MSE: " << cgp_model.get_best_error_fitness() << ", Energy: " << cgp_model.get_best_energy_fitness() << std::endl;
 }
 
-void cgp::log_csv(std::ostream& stream, size_t run, size_t generation, cgp::CGP& cgp_model)
+void cgp::log_csv(std::ostream& stream, size_t run, size_t generation, cgp::CGP& cgp_model, const std::string &timestmap)
 {
 	//",\"" << *cgp_model.get_best_chromosome() << "\""
-	stream << (run + 1) << "," << (generation + 1) << "," << cgp_model.get_best_error_fitness() << "," << cgp_model.get_best_energy_fitness() << ",\"" << cgp_model.get_best_chromosome()->to_string() << "\"" << std::endl;
+	stream << (run + 1) << "," << (generation + 1) << ",\"" << timestmap << "\"," << cgp_model.get_best_error_fitness() << "," << cgp_model.get_best_energy_fitness() << ",\"" << cgp_model.get_best_chromosome()->to_string() << "\"" << std::endl;
 }
 
 void cgp::log_weights(std::ostream& stream, const std::vector<std::shared_ptr<weight_value_t[]>>& inputs, cgp::CGP& cgp_model)
@@ -100,8 +100,8 @@ std::shared_ptr<cgp::weight_value_t[]> cgp::load_input(std::istream& in, size_t 
 			throw std::invalid_argument("invalit input weight: expecting double value; got " + std::to_string(weight));
 		}
 	}
-	std::copy(input.get(), input.get() + input_size, std::ostream_iterator<weight_repr_value_t>(std::cout, " "));
-	std::cout << std::endl;
+	std::copy(input.get(), input.get() + input_size, std::ostream_iterator<weight_repr_value_t>(std::cerr, " "));
+	std::cerr << std::endl;
 	return input;
 }
 

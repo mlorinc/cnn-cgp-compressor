@@ -186,10 +186,11 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 {
 	auto end = input.end();
 	decltype(mse(nullptr, nullptr)) mse_accumulator = 0;
+	size_t selector = 0;
 	for (auto input_it = input.begin(), output_it = expected_output.begin(); input_it != end; input_it++, output_it++)
 	{
 		chrom->set_input(*input_it);
-		chrom->evaluate();
+		chrom->evaluate(selector++);
 		mse_accumulator += error_fitness_without_aggregation(*chrom, *output_it);
 		if (mse_accumulator < 0) [[unlikely]]
 			{
@@ -207,10 +208,10 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	}
 }
 
-CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output)
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output, size_t selector)
 {
 	chrom->set_input(input);
-	chrom->evaluate();
+	chrom->evaluate(selector);
 	auto mse = error_fitness(*chrom, expected_output);
 
 	if (mse <= mse_threshold())

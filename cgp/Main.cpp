@@ -5,18 +5,32 @@ using namespace cgp;
 
 std::shared_ptr<CGP> init_cgp(const std::string& cgp_file)
 {
-	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(function_count);
+	std::ifstream cgp_in(cgp_file);
+	auto cgp_model = std::make_shared<CGP>(cgp_in);
+	cgp_in.close();
 
-	for (size_t i = 0; i < function_count; i++)
+	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(cgp_model->function_count());
+
+	for (size_t i = 0; i < cgp_model->function_count(); i++)
 	{
 		energy_costs[i] = 1;
 	}
 
-	std::ifstream cgp_in(cgp_file);
-	auto cgp_model = std::make_shared<CGP>(cgp_in);
-	cgp_in.close();
 	cgp_model->function_energy_costs(energy_costs);
 	return cgp_model;
+}
+
+static std::string format_timestamp(std::chrono::milliseconds ms) {
+	auto secs = std::chrono::duration_cast<std::chrono::seconds>(ms);
+	ms -= std::chrono::duration_cast<std::chrono::milliseconds>(secs);
+	auto mins = std::chrono::duration_cast<std::chrono::minutes>(secs);
+	secs -= std::chrono::duration_cast<std::chrono::seconds>(mins);
+	auto hour = std::chrono::duration_cast<std::chrono::hours>(mins);
+	mins -= std::chrono::duration_cast<std::chrono::minutes>(hour);
+
+	std::stringstream ss;
+	ss << std::setw(2) << std::setfill('0') << hour.count() << ":" << mins.count() << ":" << secs.count() << "." << ms.count();
+	return ss.str();
 }
 
 int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, const std::string& cgp_file, const std::string& solution = "")
@@ -37,10 +51,13 @@ int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, con
 		return 2;
 	}
 
+	weight_repr_value_t min, max;
 	for (size_t i = 0; i < inputs_to_evaluate; i++)
 	{
 		std::cerr << "loading values" << std::endl;
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
+		// Ignore output
+		load_output(*in, cgp_model.output_count(), min, max);
 	}
 
 	if (!solution.empty())
@@ -82,22 +99,33 @@ int train(std::vector<std::string>& arguments, size_t pairs_to_approximate, cons
 	}
 
 
-	auto generation_stop = 500000;
+	auto generation_stop = 125000;
 	cgp_model.build_indices();
 	cgp_model.dump(std::cerr);
+	auto start = std::chrono::high_resolution_clock::now();
 	cgp_model.generate_population();
 	for (size_t run = 0; run < cgp_model.number_of_runs(); run++)
 	{
-		for (size_t i = 0; i < cgp_model.generation_count(); i++)
+		for (size_t i = 0, log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
 		{
 			cgp_model.evaluate(inputs, outputs);
 			if (cgp_model.get_generations_without_change() == 0)
 			{
-				log_csv(*stats_out, run, i, cgp_model);
-				//log_human(std::cerr, run, i, cgp_model);
-			}
-			if (i % cgp_model.periodic_log_frequency() == 0) {
+				auto now = std::chrono::high_resolution_clock::now();
+				auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+				log_csv(*stats_out, run, i, cgp_model, format_timestamp(duration));
 				log_human(std::cerr, run, i, cgp_model);
+				log_counter = 0;
+				start = std::chrono::high_resolution_clock::now();
+			}
+			else if (log_counter == cgp_model.periodic_log_frequency())
+			{
+				log_human(std::cerr, run, i, cgp_model);
+				log_counter = 0;
+			}
+			else
+			{
+				log_counter++;
 			}
 
 			if (cgp_model.get_best_error_fitness() <= 0 || cgp_model.get_generations_without_change() > generation_stop)

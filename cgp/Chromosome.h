@@ -168,7 +168,7 @@ namespace cgp {
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.
 		/// </summary>
-		void evaluate();
+		void evaluate(size_t selector);
 
 		/// <summary>
 		/// Getter for the pointer to the beginning of the output array.
@@ -210,8 +210,9 @@ namespace cgp {
 		/// Infer unknown weights using CGP genotype and return array of weights.
 		/// </summary>
 		/// <param name="input">Shared pointer to an array of input values.</param>
+		/// <param name="selector">Selector set to multipexor and de-multiplexor gates.</param>
 		/// <returns>Shared pointer to an array of infered weights</returns>
-		std::shared_ptr<weight_value_t[]> get_weights(const std::shared_ptr<weight_value_t[]> input);
+		std::shared_ptr<weight_value_t[]> get_weights(const std::shared_ptr<weight_value_t[]> input, size_t selector = 0);
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return vector of weights arrays.

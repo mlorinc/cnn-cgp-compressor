@@ -7,7 +7,7 @@
 
 using namespace cgp;
 
-Chromosome::Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max) :
+Chromosome::Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max) :
 	cgp_configuration(cgp_configuration),
 	minimum_output_indicies(minimum_output_indicies),
 	expected_value_min(expected_value_min),
@@ -18,7 +18,7 @@ Chromosome::Chromosome(CGPConfiguration& cgp_configuration, const std::shared_pt
 	setup_chromosome();
 }
 
-cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string& serialized_chromosome) :
+cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string& serialized_chromosome) :
 	cgp_configuration(cgp_config),
 	minimum_output_indicies(minimum_output_indicies),
 	expected_value_min(expected_value_min),
@@ -33,14 +33,14 @@ cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, const std::shared_ptr<
 	input >> discard >> input_count >> discard >> output_count >> discard >> col_count >> discard >> row_count
 		>> discard >> function_input_arity >> discard >> l_back >> discard >> discard >> discard;
 
-	cgp_configuration
-		.input_count(input_count)
-		.output_count(output_count)
-		.col_count(col_count)
-		.row_count(row_count)
-		.function_input_arity(function_input_arity)
-		.function_output_arity(1)
-		.look_back_parameter(l_back);
+	//cgp_configuration
+	//	.input_count(input_count)
+	//	.output_count(output_count)
+	//	.col_count(col_count)
+	//	.row_count(row_count)
+	//	.function_input_arity(function_input_arity)
+	//	.function_output_arity(1)
+	//	.look_back_parameter(l_back);
 	setup_maps();
 	setup_iterators();
 	size_t block_size = cgp_configuration.function_input_arity() + 1;
@@ -82,9 +82,9 @@ Chromosome::Chromosome(const Chromosome& that) :
 	phenotype_node_count = that.phenotype_node_count;
 
 	if (!need_evaluation) [[likely]]
-	{
-		std::copy(that.output_pin_start, that.output_pin_end, output_pin_start);
-	}
+		{
+			std::copy(that.output_pin_start, that.output_pin_end, output_pin_start);
+		}
 }
 
 bool Chromosome::is_function(size_t position) const
@@ -242,8 +242,12 @@ void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 	}
 }
 
+inline static void set_value(CGPConfiguration::weight_value_t& target, const CGPConfiguration::weight_value_t& value)
+{
+	target = (value != CGPConfiguration::invalid_value) ? (value) : (CGPConfiguration::invalid_value);
+}
 
-void Chromosome::evaluate()
+void Chromosome::evaluate(size_t selector)
 {
 	assert(("Chromosome::evaluate cannot be called without calling Chromosome::set_input before", input != nullptr));
 
@@ -256,83 +260,155 @@ void Chromosome::evaluate()
 	auto input_pin = chromosome.get();
 	auto func = chromosome.get() + cgp_configuration.function_input_arity();
 	auto reference_energy_map = cgp_configuration.function_energy_costs();
+	size_t used_pin = 0;
 	for (size_t i = 0; i < cgp_configuration.col_count() * cgp_configuration.row_count(); i++)
 	{
 		auto block_output_pins = output_pin;
 		energy_map[i] = reference_energy_map[*func];
 		energy_visit_map[i] = false;
+
 		switch (*func) {
 		case 0:
-			block_output_pins[0] = pin_map[input_pin[0]];
+			set_value(block_output_pins[0], pin_map[input_pin[0]]);
 			break;
 		case 1:
-			block_output_pins[0] = expected_value_max - pin_map[input_pin[0]];
+			set_value(block_output_pins[0], expected_value_max - pin_map[input_pin[0]]);
 			break;
 		case 2:
-			block_output_pins[0] = expected_value_max + pin_map[input_pin[0]];
+			set_value(block_output_pins[0], expected_value_max + pin_map[input_pin[0]]);
 			break;
 		case 3:
-			block_output_pins[0] = pin_map[input_pin[0]] + pin_map[input_pin[1]];
+			set_value(block_output_pins[0], pin_map[input_pin[0]] + pin_map[input_pin[1]]);
 			break;
 		case 4:
-			block_output_pins[0] = pin_map[input_pin[0]] - pin_map[input_pin[1]];
+			set_value(block_output_pins[0], pin_map[input_pin[0]] - pin_map[input_pin[1]]);
 			break;
 		case 5:
-			block_output_pins[0] = pin_map[input_pin[0]] * pin_map[input_pin[1]];
+			set_value(block_output_pins[0], pin_map[input_pin[0]] * pin_map[input_pin[1]]);
 			break;
 		case 6:
-			block_output_pins[0] = -pin_map[input_pin[0]];
+			set_value(block_output_pins[0], -pin_map[input_pin[0]]);
 			break;
 		case 7:
-			block_output_pins[0] = std::max(expected_value_min, std::min(pin_map[input_pin[0]], expected_value_max));
+			set_value(block_output_pins[0], std::max(expected_value_min, std::min(pin_map[input_pin[0]], expected_value_max)));
 			break;
 		case 8:
-			block_output_pins[0] = expected_value_min - pin_map[input_pin[0]];
+			set_value(block_output_pins[0], expected_value_min - pin_map[input_pin[0]]);
 			break;
 		case 9:
-			block_output_pins[0] = expected_value_min + pin_map[input_pin[0]];
+			set_value(block_output_pins[0], expected_value_min + pin_map[input_pin[0]]);
 			break;
+#ifdef CNN_FP32_WEIGHTS
 		case 10:
-			block_output_pins[0] = pin_map[input_pin[0]] * 0.25;
+			set_value(block_output_pins[0], pin_map[input_pin[0]] * 0.25);
 			break;
+#else
+		case 10:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 2);
+			break;
+#endif
+#ifdef CNN_FP32_WEIGHTS
 		case 11:
-			block_output_pins[0] = pin_map[input_pin[0]] * 1.05;
+			set_value(block_output_pins[0], pin_map[input_pin[0]] * 0.5);
 			break;
-		case 12:
-			block_output_pins[0] = pin_map[input_pin[0]] * 0.5;
+#else
+		case 11:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 1);
 			break;
+#endif
 #ifndef CNN_FP32_WEIGHTS
+		case 12:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] & pin_map[input_pin[1]]);
+			break;
 		case 13:
-			block_output_pins[0] = pin_map[input_pin[0]] & pin_map[input_pin[1]];
+			set_value(block_output_pins[0], pin_map[input_pin[0]] | pin_map[input_pin[1]]);
 			break;
 		case 14:
-			block_output_pins[0] = pin_map[input_pin[0]] | pin_map[input_pin[1]];
+			set_value(block_output_pins[0], pin_map[input_pin[0]] ^ pin_map[input_pin[1]]);
 			break;
 		case 15:
-			block_output_pins[0] = pin_map[input_pin[0]] ^ pin_map[input_pin[1]];
+			set_value(block_output_pins[0], ~(pin_map[input_pin[0]]));
 			break;
 		case 16:
-			block_output_pins[0] = ~(pin_map[input_pin[0]]);
+			set_value(block_output_pins[0], pin_map[input_pin[0]] << 1);
 			break;
 		case 17:
-			block_output_pins[0] = pin_map[input_pin[0]] >> 1;
+			set_value(block_output_pins[0], pin_map[input_pin[0]] + 1);
 			break;
 		case 18:
-			block_output_pins[0] = pin_map[input_pin[0]] << 1;
+			set_value(block_output_pins[0], pin_map[input_pin[0]] - 1);
 			break;
 		case 19:
-			block_output_pins[0] = pin_map[input_pin[0]] + 1;
+			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 3);
 			break;
 		case 20:
-			block_output_pins[0] = pin_map[input_pin[0]] - 1;
+			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 4);
+			break;
+		case 21:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 5);
+			break;
+		case 22:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] << 2);
+			break;
+		case 23:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] << 3);
+			break;
+		case 24:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] << 4);
+			break;
+		case 25:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] << 5);
+			break;
+		case 26:
+			set_value(block_output_pins[0], 1);
+			break;
+		case 27:
+			set_value(block_output_pins[0], -1);
+			break;
+		case 28:
+			set_value(block_output_pins[0], 0);
+			break;
+		case 29:
+			set_value(block_output_pins[0], expected_value_min);
+			break;
+		case 30:
+			set_value(block_output_pins[0], expected_value_max);
+			break;
+		// multiplexor
+		case 31:
+			set_value(block_output_pins[0], pin_map[input_pin[selector]]);
+			break;
+		// de-multiplexor
+		case 32:
+			set_value(block_output_pins[selector], pin_map[input_pin[0]]);
+			used_pin = selector;
+			break;
+#else
+		case 12:
+			set_value(block_output_pins[0], pin_map[input_pin[0]] * 1.05);
+			break;
+		// multiplexor
+		case 13:
+			set_value(block_output_pins[0], pin_map[input_pin[selector]]);
+			break;
+		// de-multiplexor
+		case 14:
+			set_value(block_output_pins[selector], pin_map[input_pin[0]]);
+			used_pin = selector;
 			break;
 #endif
 		default:
 			block_output_pins[0] = 0xffffffff;
 			break;
 		}
+
+		for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
+		{
+			block_output_pins[i] = (i == used_pin) ? (block_output_pins[i]) : (CGPConfiguration::invalid_value);
+		}
+
 		// Prevent overflows hence undefined behaviour
-		//block_output_pins[0] = std::max(expected_value_min, std::min(block_output_pins[0], expected_value_max));
+		set_value(block_output_pins[used_pin], std::max(expected_value_min, std::min(block_output_pins[used_pin], expected_value_max)));
 		output_pin += cgp_configuration.function_output_arity();
 		input_pin += cgp_configuration.function_input_arity() + 1;
 		func += cgp_configuration.function_input_arity() + 1;
@@ -460,10 +536,10 @@ decltype(Chromosome::phenotype_node_count) cgp::Chromosome::get_node_count()
 	return phenotype_node_count;
 }
 
-std::shared_ptr<Chromosome::weight_value_t[]> Chromosome::get_weights(const std::shared_ptr<weight_value_t[]> input)
+std::shared_ptr<Chromosome::weight_value_t[]> Chromosome::get_weights(const std::shared_ptr<weight_value_t[]> input, size_t selector)
 {
 	set_input(input);
-	evaluate();
+	evaluate(selector);
 	auto weights = std::make_shared<weight_value_t[]>(cgp_configuration.output_count());
 	std::copy(begin_output(), end_output(), weights.get());
 	return weights;
@@ -472,9 +548,10 @@ std::shared_ptr<Chromosome::weight_value_t[]> Chromosome::get_weights(const std:
 std::vector<std::shared_ptr<Chromosome::weight_value_t[]>> Chromosome::get_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& input)
 {
 	std::vector<std::shared_ptr<Chromosome::weight_value_t[]>> weight_vector(input.size());
-	for(const auto &in : input)
+	size_t selector = 0;
+	for (const auto& in : input)
 	{
-		weight_vector.push_back(get_weights(in));
+		weight_vector.push_back(get_weights(in, selector++));
 	}
 	return weight_vector;
 }

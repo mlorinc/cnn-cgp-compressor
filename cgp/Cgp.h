@@ -52,7 +52,7 @@ namespace cgp {
 		double energy_fitness(Chromosome& chrom);
 
 		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
-		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output, size_t selector = 0);
 
 		// Calculate MSE metric for made predictions
 		double mse(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const;
