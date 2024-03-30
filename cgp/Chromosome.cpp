@@ -247,6 +247,25 @@ inline static void set_value(CGPConfiguration::weight_value_t& target, const CGP
 	target = (value != CGPConfiguration::invalid_value) ? (value) : (CGPConfiguration::invalid_value);
 }
 
+inline static bool is_mux(int func)
+{
+#ifdef CNN_FP32_WEIGHTS
+	return func == 13;
+#else
+	return func == 31;
+#endif
+}
+
+inline static bool is_demux(int func)
+{
+#ifdef CNN_FP32_WEIGHTS
+	return func == 14;
+#else
+	return func == 32;
+#endif
+}
+
+
 void Chromosome::evaluate(size_t selector)
 {
 	assert(("Chromosome::evaluate cannot be called without calling Chromosome::set_input before", input != nullptr));
@@ -402,13 +421,24 @@ void Chromosome::evaluate(size_t selector)
 			break;
 		}
 
-		for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
+		if (is_demux(*func)) [[unlikely]]
 		{
-			block_output_pins[i] = (i == used_pin) ? (block_output_pins[i]) : (CGPConfiguration::invalid_value);
+			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
+			{
+				block_output_pins[i] = (i == used_pin) ? (block_output_pins[i]) : (CGPConfiguration::invalid_value);
+			}
+			// Prevent overflows hence undefined behaviour
+			set_value(block_output_pins[used_pin], std::max(expected_value_min, std::min(block_output_pins[used_pin], expected_value_max)));
+		}
+		else [[likely]]
+		{
+			// speed up evolution of operator + multiplexor
+			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
+			{
+				set_value(block_output_pins[i], std::max(expected_value_min, std::min(block_output_pins[selector], expected_value_max)));
+			}
 		}
 
-		// Prevent overflows hence undefined behaviour
-		set_value(block_output_pins[used_pin], std::max(expected_value_min, std::min(block_output_pins[used_pin], expected_value_max)));
 		output_pin += cgp_configuration.function_output_arity();
 		input_pin += cgp_configuration.function_input_arity() + 1;
 		func += cgp_configuration.function_input_arity() + 1;
