@@ -88,16 +88,39 @@ void cgp::log_weights(std::ostream& stream, const std::vector<std::shared_ptr<we
 std::shared_ptr<cgp::weight_value_t[]> cgp::load_input(std::istream& in, size_t input_size)
 {
 	weight_repr_value_t weight;
+	std::string no_care;
 	std::shared_ptr<weight_value_t[]> input = std::make_shared<weight_value_t[]>(input_size);
-
+	
 	for (size_t i = 0; i < input_size; i++)
 	{
 		if (in >> weight)
 		{
 			input[i] = static_cast<weight_value_t>(weight);
+			continue;
+		}
+		else if (in.eof())
+		{
+			throw std::invalid_argument("not enough value values passed; got: " + std::to_string(i) + ", need: " + std::to_string(input_size));
+		}
+		else
+		{
+			in.clear();
+		}
+
+		if (in >> no_care)
+		{
+			if (no_care == "x")
+			{
+				// Penalize usage of unallowed value
+				input[i] = CGPConfiguration::invalid_value;
+			}
+			else
+			{
+				throw std::invalid_argument("invalit no care value: expecting \"x\"; got: \"" + no_care + "\"");
+			}
 		}
 		else {
-			throw std::invalid_argument("invalit input weight: expecting double value; got " + std::to_string(weight));
+			throw std::invalid_argument("invalit unknown input value: expecting weight value or x");
 		}
 	}
 	std::copy(input.get(), input.get() + input_size, std::ostream_iterator<weight_repr_value_t>(std::cerr, " "));
@@ -108,6 +131,7 @@ std::shared_ptr<cgp::weight_value_t[]> cgp::load_input(std::istream& in, size_t 
 std::shared_ptr<cgp::weight_value_t[]> cgp::load_output(std::istream& in, size_t output_size, weight_repr_value_t& min, weight_repr_value_t& max)
 {
 	weight_repr_value_t weight;
+	std::string no_care;
 	std::shared_ptr<weight_value_t[]> output = std::make_shared<weight_value_t[]>(output_size);
 
 	for (size_t i = 0; i < output_size; i++)
@@ -117,9 +141,31 @@ std::shared_ptr<cgp::weight_value_t[]> cgp::load_output(std::istream& in, size_t
 			output[i] = static_cast<weight_value_t>(weight);
 			min = std::min(min, weight);
 			max = std::max(max, weight);
+			continue;
+		}
+		else if (in.eof())
+		{
+			throw std::invalid_argument("not enough value values passed; got: " + std::to_string(i) + ", need: " + std::to_string(output_size));
+		}
+		else
+		{
+			in.clear();
+		}
+
+		if (in >> no_care)
+		{
+			if (no_care == "x")
+			{
+				// Ignore value when evaluating fitness
+				output[i] = CGPConfiguration::no_care_value;
+			}
+			else
+			{
+				throw std::invalid_argument("invalit no care value: expecting \"x\"; got: \"" + no_care + "\"");
+			}
 		}
 		else {
-			throw std::invalid_argument("invalit output weight: expecting double value; got " + std::to_string(weight));
+			throw std::invalid_argument("invalit unknown output value: expecting weight value or x");
 		}
 	}
 	return output;

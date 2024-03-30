@@ -21,6 +21,8 @@ class CGP(object):
         self._output_size = self.config.get_output_count()
         self._inputs = [torch.zeros(size=(self._input_size, ), dtype=dtype).detach() for _ in range(self.config.get_dataset_size())]
         self._expected_values = [torch.zeros(size=(self._output_size, ), dtype=dtype).detach() for _ in range(self.config.get_dataset_size())]
+        self._input_wildcards = [0] * self.config.get_dataset_size()
+        self._output_wildcards = [0] * self.config.get_dataset_size()
         self._input_position = 0
         self._output_position = 0
         self._item_index = 0
@@ -37,16 +39,29 @@ class CGP(object):
         self._output_position += x.shape[0]
 
     def next_train_item(self):
+        self._input_wildcards[self._item_index] = self._input_position
+        self._output_wildcards[self._item_index] = self._output_position
         self._item_index += 1
         self._input_position = 0
         self._output_position = 0
 
     def _prepare_cgp_algorithm(self, stream: TextIO):
-        for inputs, outputs in zip(self._inputs, self._expected_values):
-            # Send train data to the stdin of the subprocess
-            stream.write(" ".join(inputs.numpy().astype(str)) + "\n")
-            # Send target data to the stdin of the subprocess
-            stream.write(" ".join(outputs.numpy().astype(str)) + "\n")
+        for inputs, outputs, input_wildcard, output_wildcard in zip(self._inputs, self._expected_values, self._input_wildcards, self._output_wildcards):
+            no_care_input_values = self.config.get_input_count() - input_wildcard
+            no_care_output_values = self.config.get_output_count() - output_wildcard
+            
+            inputs = inputs.numpy()
+            outputs = outputs.numpy()
+
+            stream.write(" ".join(inputs[:input_wildcard].astype(str)))
+            if no_care_input_values != 0:
+                stream.write(" " + " ".join(["x"] * no_care_input_values))
+            stream.write("\n")
+
+            stream.write(" ".join(outputs[:output_wildcard].astype(str)))
+            if no_care_output_values != 0:
+                stream.write(" " + " ".join(["x"] * no_care_output_values))
+            stream.write("\n")
 
     def create_train_file(self, file: str):
         with open(file, "w") as f:
@@ -54,6 +69,11 @@ class CGP(object):
 
     def train(self, new_configration: CGPConfiguration):
         args = [] if new_configration is None else new_configration.to_args()
+
+        input_file = new_configration.get_input_file() if new_configration.has_input_file() else self.config.get_input_file()
+        if input_file != "-":
+            self.create_train_file(input_file)
+
         process = subprocess.Popen([
             self._binary,
             "train",
@@ -62,12 +82,9 @@ class CGP(object):
            *args
         ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
 
-        input_file = new_configration.get_input_file() if new_configration.has_input_file() else self.config.get_input_file()
         if input_file == "-":
             self._prepare_cgp_algorithm(process.stdin)
             process.stdin.close()
-        else:
-            self.create_train_file(input_file)
 
         for stdout_line in iter(process.stdout.readline, ""):
             print("CGP:", stdout_line, end="")

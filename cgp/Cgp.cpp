@@ -8,24 +8,22 @@
 
 using namespace cgp;
 
-CGP::CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value, const double mse_threshold) :
+CGP::CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value) :
 	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
 	expected_value_min(expected_min_value),
 	expected_value_max(expected_max_value),
 	generations_without_change(0),
 	evolution_steps_made(0)
 {
-	this->mse_threshold(mse_threshold);
 }
 
-CGP::CGP(const double mse_threshold) :
+CGP::CGP() :
 	best_solution(std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), nullptr)),
 	expected_value_min(std::numeric_limits<weight_actual_value_t>::min()),
 	expected_value_max(std::numeric_limits<weight_actual_value_t>::max()),
 	generations_without_change(0),
 	evolution_steps_made(0)
 {
-	this->mse_threshold(mse_threshold);
 }
 
 CGP::CGP(std::istream& in) : CGP()
@@ -105,27 +103,28 @@ void CGP::build_indices()
 {
 	const auto input_column_pins = input_count();
 	const auto fn_arity = function_output_arity();
-	minimum_output_indicies = std::make_shared<std::tuple<int, int>[]>(col_count() + 1);
+	const auto row_count = this->row_count();
+	const auto col_count = this->col_count();
+	minimum_output_indicies = std::make_shared<std::tuple<int, int>[]>(col_count + 1);
 	int l_back = look_back_parameter();
 
 	// Calculate pin available according to defined L parameter.
 	// Skip input pins (+1) and include output pins (+1)
 #pragma omp parallel for
-	for (int col = 1; col < col_count() + 2; col++) {
+	for (int col = 1; col < col_count + 2; col++) {
 		int first_col = std::max(0, col - l_back);
-		decltype(row_count()) min_pin, max_pin;
+		decltype(this->row_count()) min_pin, max_pin;
 
 		// Input pins can be used, however they quantity might be different than row_count()
 		if (first_col == 0)
 		{
 			min_pin = 0;
-			max_pin = (col - 1) * row_count() * fn_arity + input_column_pins;
+			max_pin = (col - 1) * row_count * fn_arity + input_column_pins;
 		}
 		else {
-			min_pin = (first_col - 1) * row_count() * fn_arity + input_column_pins;
-			max_pin = min_pin + (col - first_col) * row_count() * fn_arity;
+			min_pin = (first_col - 1) * row_count * fn_arity + input_column_pins;
+			max_pin = min_pin + (col - first_col) * row_count * fn_arity;
 		}
-
 
 		minimum_output_indicies[col - 1] = std::make_tuple(min_pin, max_pin);
 	}
@@ -138,7 +137,8 @@ void CGP::generate_population()
 	chromosomes.clear();
 	const auto& best_chromosome = std::get<2>(best_solution);
 	// Create new population
-	for (size_t i = 0; i < population_max(); i++)
+#pragma omp parallel for
+	for (int i = 0; i < population_max(); i++)
 	{
 		auto chromosome = (best_chromosome != nullptr) ? (best_chromosome->mutate()) : (std::make_shared<Chromosome>(Chromosome(*this, minimum_output_indicies, expected_value_min, expected_value_max)));
 		chromosomes.push_back(chromosome);
@@ -179,7 +179,22 @@ void CGP::set_best_solution(const std::string& solution)
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
 double CGP::mse(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const
 {
-	return mse_without_division(predictions, expected_output) / output_count();
+	double sum = 0;
+	int i = 0;
+	//#pragma omp parallel for reduction(+:sum)
+	for (; i < output_count(); i++)
+	{
+		if (CGPConfiguration::no_care_value == expected_output[i]) break;
+		double diff = predictions[i] - expected_output[i];
+		sum += diff * diff;
+	}
+
+	// Overflow detected, discard result completely
+	if (sum < 0) {
+		return std::numeric_limits<double>::infinity();
+	}
+
+	return sum / i;
 }
 
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output)
@@ -191,14 +206,14 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	{
 		chrom->set_input(*input_it);
 		chrom->evaluate(selector++);
-		mse_accumulator += error_fitness_without_aggregation(*chrom, *output_it);
+		mse_accumulator += error_fitness(*chrom, *output_it);
 		if (mse_accumulator < 0) [[unlikely]]
 			{
 				mse_accumulator = std::numeric_limits<double>::infinity();
 				break;
 			}
 	}
-	mse_accumulator /= output_count() * input.size();
+	mse_accumulator /= input.size();
 	if (mse_accumulator <= mse_threshold())
 	{
 		return std::make_tuple(mse_accumulator, energy_fitness(*chrom), chrom);
@@ -238,6 +253,7 @@ double CGP::error_fitness_without_aggregation(Chromosome& chrom, const std::shar
 
 void CGP::mutate() {
 	auto best_chromosome = get_best_chromosome();
+#pragma omp parallel for
 	for (int i = 0; i < chromosomes.size(); i++)
 	{
 		chromosomes[i] = best_chromosome->mutate();

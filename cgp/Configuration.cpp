@@ -57,6 +57,9 @@ namespace cgp {
 	const std::string CGPConfiguration::MSE_THRESHOLD_LONG = "--mse-threshold";
 	const std::string CGPConfiguration::MSE_THRESHOLD_SHORT = "-mse";
 
+	const std::string CGPConfiguration::DATASET_SIZE_LONG = "--dataset-size";
+	const std::string CGPConfiguration::DATASET_SIZE_SHORT = "-d";
+
 	long long parse_integer_argument(const std::string& arg) {
 		try {
 			return std::stoll(arg);
@@ -170,6 +173,10 @@ namespace cgp {
 				}
 				else if (arguments[i] == MSE_THRESHOLD_LONG || arguments[i] == MSE_THRESHOLD_SHORT) {
 					mse_threshold(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == DATASET_SIZE_LONG || arguments[i] == DATASET_SIZE_SHORT) {
+					dataset_size(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
 				}
 				else {
@@ -304,6 +311,11 @@ namespace cgp {
 		return mse_threshold_value;
 	}
 
+	inline decltype(CGPConfiguration::dataset_size_value) CGPConfiguration::dataset_size() const
+	{
+		return dataset_size_value;
+	}
+
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
 		function_input_arity_value = value;
 		return *this;
@@ -431,6 +443,12 @@ namespace cgp {
 		return *this;
 	}
 
+	CGPConfiguration& CGPConfiguration::dataset_size(decltype(dataset_size_value) value)
+	{
+		dataset_size_value = value;
+		return *this;
+	}
+
 	void CGPConfiguration::dump(std::ostream &out) const
 	{
 		// Serialize each variable to the file
@@ -454,6 +472,7 @@ namespace cgp {
 		out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
 		out << "chromosome_input_file: " << chromosome_input_file() << std::endl;
 		out << "mse_threshold: " << mse_threshold() << std::endl;
+		out << "dataset_size: " << dataset_size() << std::endl;
 	}
 
 	void CGPConfiguration::load(std::istream &in)
@@ -493,6 +512,7 @@ namespace cgp {
 			else if (key == "cgp_statistics_file") cgp_statistics_file(value);
 			else if (key == "chromosome_input_file") chromosome_input_file(value);
 			else if (key == "mse_threshold") mse_threshold(std::stod(value));
+			else if (key == "dataset_size") dataset_size(std::stoull(value));
 			else if (key != "")
 			{
 				// todo: cover exception properly

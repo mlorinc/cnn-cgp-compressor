@@ -74,14 +74,12 @@ namespace cgp {
 		/// </summary>
 		/// <param name="expected_min_value">Minimum expected value in the dataset.</param>
 		/// <param name="expected_max_value">Maximum expected value in the dataset.</param>
-		/// <param name="mse_threshold">Mean Squared Error threshold after optimisation is focused on minimising energy.</param>
-		CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value, const double mse_threshold = 0);
+		CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value);
 
 		/// <summary>
 		/// Constructor for CGP class.
 		/// </summary>
-		/// <param name="mse_threshold">Mean Squared Error threshold after optimisation is focused on minimising energy.</param>
-		CGP(const double mse_threshold = 0);
+		CGP();
 
 		/// <summary>
 		/// Constructor for CGP class using text stream to initialize variables.

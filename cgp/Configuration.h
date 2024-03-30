@@ -148,6 +148,11 @@ namespace cgp {
 		/// Mean Squared Error threshold after optimisation is focused on minimising energy.
 		/// </summary>
 		double mse_threshold_value = 5;
+
+		/// <summary>
+		/// The CGP dataset size.
+		/// </summary>
+		size_t dataset_size_value = 1;
 	public:
 		CGPConfiguration();
 		CGPConfiguration(const std::vector<std::string>& arguments);
@@ -162,6 +167,7 @@ namespace cgp {
 		using weight_actual_value_t = int8_t;
 		using weight_repr_value_t = int;
 		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::max();
+		static const weight_value_t no_care_value = std::numeric_limits<weight_value_t>::min();
 #else
 		// Type definition for inferred weight.
 		using weight_value_t = double;
@@ -224,6 +230,9 @@ namespace cgp {
 
 		static const std::string MSE_THRESHOLD_LONG;
 		static const std::string MSE_THRESHOLD_SHORT;
+
+		static const std::string DATASET_SIZE_LONG;
+		static const std::string DATASET_SIZE_SHORT;
 
 		/// <summary>
 		/// Sets configuration parameters according to given command line arguments.
@@ -356,6 +365,11 @@ namespace cgp {
 		inline decltype(mse_threshold_value) mse_threshold() const;
 
 		/// <summary>
+		/// Get dataset size of the CGP.
+		/// </summary>
+		inline decltype(dataset_size_value) dataset_size() const;
+
+		/// <summary>
 		/// Sets the input arity of functions.
 		/// </summary>
 		CGPConfiguration& function_input_arity(decltype(function_input_arity_value));
@@ -459,6 +473,11 @@ namespace cgp {
 		/// Set Mean Squared Error threshold after optimisation is focused on minimising energy.
 		/// </summary>
 		CGPConfiguration& mse_threshold(decltype(mse_threshold_value));
+
+		/// <summary>
+		/// Set dataset size of the CGP.
+		/// </summary>
+		CGPConfiguration& dataset_size(decltype(dataset_size_value));
 
 		/// <summary>
 		/// Save configuration to file.

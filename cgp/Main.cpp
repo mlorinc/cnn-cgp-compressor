@@ -33,7 +33,7 @@ static std::string format_timestamp(std::chrono::milliseconds ms) {
 	return ss.str();
 }
 
-int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, const std::string& cgp_file, const std::string& solution = "")
+int evaluate(std::vector<std::string>& arguments, const std::string& cgp_file, const std::string& solution = "")
 {
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs;
 
@@ -52,7 +52,7 @@ int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, con
 	}
 
 	weight_repr_value_t min, max;
-	for (size_t i = 0; i < inputs_to_evaluate; i++)
+	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
 	{
 		std::cerr << "loading values" << std::endl;
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
@@ -71,7 +71,7 @@ int evaluate(std::vector<std::string>& arguments, size_t inputs_to_evaluate, con
 	return 0;
 }
 
-int train(std::vector<std::string>& arguments, size_t pairs_to_approximate, const std::string& cgp_file)
+int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 {
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
 	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::max();
@@ -91,7 +91,7 @@ int train(std::vector<std::string>& arguments, size_t pairs_to_approximate, cons
 		return 2;
 	}
 
-	for (size_t i = 0; i < pairs_to_approximate; i++)
+	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
 	{
 		std::cerr << "loading values" << std::endl;
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
@@ -102,6 +102,9 @@ int train(std::vector<std::string>& arguments, size_t pairs_to_approximate, cons
 	auto generation_stop = 125000;
 	cgp_model.build_indices();
 	cgp_model.dump(std::cerr);
+	std::cerr << "invalid_value: " << CGPConfiguration::invalid_value << std::endl
+		<< "no_care_value: " << CGPConfiguration::no_care_value << std::endl;
+
 	auto start = std::chrono::high_resolution_clock::now();
 	cgp_model.generate_population();
 	for (size_t run = 0; run < cgp_model.number_of_runs(); run++)
@@ -154,7 +157,43 @@ int train(std::vector<std::string>& arguments, size_t pairs_to_approximate, cons
 int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
-	std::vector<std::string> arguments(args + 1, args + argc);
+	//std::vector<std::string> arguments(args + 1, args + argc);
+	std::vector<std::string> arguments{
+		"train",
+		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiments/all_layers/config.cgp",
+		"--mse-threshold",
+		"0",
+		"--col-count",
+		"50",
+		"--row-count",
+		"30",
+		"--number-of-runs",
+		"35",
+		"--look-back-parameter",
+		"50",
+		"--mutation-max",
+		"0.15",
+		"--function-count",
+		"33",
+		"--function-input-arity",
+		"2",
+		"--function-output-arity",
+		"2",
+		"--input-count",
+		"864",
+		"--output-count",
+		"1536",
+		"--population-max",
+		"4",
+		"--generation-count",
+		"90000000",
+		"--output-file",
+		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/all_layers/cgp_configs/data.cgp",
+		"--input-file",
+		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/all_layers/train.data",
+		"--cgp-statistics-file",
+		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/all_layers/statistics.csv"
+	};
 
 	try
 	{
@@ -162,44 +201,30 @@ int main(int argc, const char** args) {
 		{
 			if (arguments.size() < 2)
 			{
-				std::cerr << "missing argument for input quantity right after " + arguments[0] + "." << std::endl;
-				return 12;
-			}
-			size_t quantity = parse_integer_argument(arguments[1]);
-
-			if (arguments.size() < 3)
-			{
 				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
 				return 12;
 			}
-			std::string cgp_file = arguments[2];
+			std::string cgp_file = arguments[1];
 
-			arguments.erase(arguments.begin(), arguments.begin() + 3);
-			return evaluate(arguments, quantity, cgp_file);
+			arguments.erase(arguments.begin(), arguments.begin() + 2);
+			return evaluate(arguments, cgp_file);
 		}
 		else if (arguments.size() >= 1 && arguments[0] == "evaluate:inline")
 		{
 			if (arguments.size() < 2)
 			{
-				std::cerr << "missing argument for input quantity right after " + arguments[0] + "." << std::endl;
-				return 12;
-			}
-			size_t quantity = parse_integer_argument(arguments[1]);
-
-			if (arguments.size() < 3)
-			{
 				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
 				return 12;
 			}
-			std::string cgp_file = arguments[2];
+			std::string cgp_file = arguments[1];
 
-			if (arguments.size() < 4)
+			if (arguments.size() < 3)
 			{
 				std::cerr << "missing argument for serialized chromosome solution" << std::endl;
 				return 13;
 			}
 
-			std::string solution = arguments[3];
+			std::string solution = arguments[2];
 
 			if (solution.empty())
 			{
@@ -207,28 +232,20 @@ int main(int argc, const char** args) {
 				return 14;
 			}
 
-			arguments.erase(arguments.begin(), arguments.begin() + 4);
-			return evaluate(arguments, quantity, cgp_file, solution);
+			arguments.erase(arguments.begin(), arguments.begin() + 3);
+			return evaluate(arguments, cgp_file, solution);
 		}
 		else if (arguments.size() >= 1 && arguments[0] == "train")
 		{
 			if (arguments.size() < 2)
 			{
-				std::cerr << "missing argument for input quantity right after " + arguments[0] + "." << std::endl;
-				return 12;
-			}
-
-			size_t quantity = parse_integer_argument(arguments[1]);
-
-			if (arguments.size() < 3)
-			{
 				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
 				return 12;
 			}
-			std::string cgp_file = arguments[2];
+			std::string cgp_file = arguments[1];
 
-			arguments.erase(arguments.begin(), arguments.begin() + 3);
-			return train(arguments, quantity, cgp_file);
+			arguments.erase(arguments.begin(), arguments.begin() + 2);
+			return train(arguments, cgp_file);
 		}
 		else if (arguments.size() >= 1)
 		{
