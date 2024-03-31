@@ -101,7 +101,6 @@ class CGP(object):
         process = subprocess.Popen([
             self._binary,
             "evaluate" if solution is None else "evaluate:inline",
-            str(self.config.get_dataset_size()),
             config_file or self.config._config_file,
             *solution_arg,
             *args
