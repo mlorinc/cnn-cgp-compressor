@@ -47,6 +47,24 @@ class CGPConfiguration:
             except ValueError:
                 return value_str
 
+    def get_start_generation(self):
+        return self._attributes.get("start_generation")
+
+    def get_start_run(self):
+        return self._attributes.get("start_run")
+
+    def get_energy_early_stop(self):
+        return self._attributes.get("energy_early_stop")
+
+    def get_mse_early_stop(self):
+        return self._attributes.get("mse_early_stop")
+
+    def get_patience(self):
+        return self._attributes.get("patience")
+
+    def get_starting_solution(self):
+        return self._attributes.get("starting_solution")
+
     def get_mse_threshold(self):
         return self._attributes.get("mse_threshold")
 
@@ -92,9 +110,6 @@ class CGPConfiguration:
     def get_periodic_log_frequency(self):
         return self._attributes.get("periodic_log_frequency")
 
-    def get_chromosome_output_file(self):
-        return self._attributes.get("chromosome_output_file")
-
     def get_input_file(self):
         return self._attributes.get("input_file")
 
@@ -103,6 +118,24 @@ class CGPConfiguration:
 
     def get_cgp_statistics_file(self):
         return self._attributes.get("cgp_statistics_file")
+
+    def set_start_generation(self, value):
+        self._attributes["start_generation"] = value
+
+    def set_start_run(self, value):
+        self._attributes["start_run"] = value
+
+    def set_energy_early_stop(self, value):
+        self._attributes["energy_early_stop"] = value
+
+    def set_mse_early_stop(self, value):
+        self._attributes["mse_early_stop"] = value
+
+    def set_patience(self, value):
+        self._attributes["patience"] = value
+
+    def set_starting_solution(self, value):
+        self._attributes["starting_solution"] = value
 
     def set_mse_threshold(self, value):
         self._attributes["mse_threshold"] = value
@@ -149,9 +182,6 @@ class CGPConfiguration:
     def set_periodic_log_frequency(self, value):
         self._attributes["periodic_log_frequency"] = value
 
-    def set_chromosome_output_file(self, value):
-        self._attributes["chromosome_output_file"] = value
-
     def set_input_file(self, value):
         self._attributes["input_file"] = value
 
@@ -160,6 +190,24 @@ class CGPConfiguration:
 
     def set_cgp_statistics_file(self, value):
         self._attributes["cgp_statistics_file"] = value
+
+    def delete_start_generation(self):
+        del self._attributes["start_generation"]
+
+    def delete_start_run(self):
+        del self._attributes["start_run"]
+
+    def delete_energy_early_stop(self):
+        del self._attributes["energy_early_stop"]
+
+    def delete_mse_early_stop(self):
+        del self._attributes["mse_early_stop"]
+
+    def delete_patience(self):
+        del self._attributes["patience"]
+
+    def delete_starting_solution(self):
+        del self._attributes["starting_solution"]
 
     def delete_mse_threshold(self):
         del self._attributes["mse_threshold"]
@@ -206,9 +254,6 @@ class CGPConfiguration:
     def delete_periodic_log_frequency(self):
         del self._attributes["periodic_log_frequency"]
 
-    def delete_chromosome_output_file(self):
-        del self._attributes["chromosome_output_file"]
-
     def delete_input_file(self):
         del self._attributes["input_file"]
 
@@ -221,6 +266,24 @@ class CGPConfiguration:
     def __str__(self):
         attributes = [f"{attr}: {value}" for attr, value in self._attributes.items()]
         return "\n".join(attributes)
+
+    def has_start_generation(self):
+        return "start_generation" in self._attributes
+
+    def has_start_run(self):
+        return "start_run" in self._attributes
+
+    def has_energy_early_stop(self):
+        return "energy_early_stop" in self._attributes
+
+    def has_mse_early_stop(self):
+        return "mse_early_stop" in self._attributes
+
+    def has_patience(self):
+        return "patience" in self._attributes
+
+    def has_starting_solution(self):
+        return "starting_solution" in self._attributes
 
     def has_mse_threshold(self):
         return "mse_threshold" in self._attributes
@@ -266,9 +329,6 @@ class CGPConfiguration:
 
     def has_periodic_log_frequency(self):
         return "periodic_log_frequency" in self._attributes
-
-    def has_chromosome_output_file(self):
-        return "chromosome_output_file" in self._attributes
 
     def has_input_file(self):
         return "input_file" in self._attributes
