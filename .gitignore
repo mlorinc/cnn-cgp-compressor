@@ -12,6 +12,8 @@
 /cmd/compress/trained_models
 /cmd/compress/experiment_results
 
+/cmd/gate_info/data
+
 # User-specific files
 *.rsuser
 *.suo
