@@ -82,13 +82,24 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 	cgp_model.set_from_arguments(arguments);
 
 	auto in = get_input(cgp_model.input_file());
-	auto stats_out = get_output(cgp_model.cgp_statistics_file());
+	auto stats_out = get_output(
+		cgp_model.cgp_statistics_file(),
+		nullptr, 
+		(cgp_model.start_generation() == 0 && cgp_model.start_run() == 0) ?
+		(std::ios::out) : (std::ios::out | std::ios::trunc)
+		);
 
 	// Read two values from the standard input
 	if (cgp_model.input_count() == 0 || cgp_model.output_count() == 0)
 	{
 		std::cerr << "invalid input size and output size" << std::endl;
 		return 2;
+	}
+
+	if ((cgp_model.start_generation() != 0 || cgp_model.start_run() != 0) && !cgp_model.get_best_chromosome())
+	{
+		std::cerr << "cannot resume evolution without starting chromosome" << std::endl;
+		return 3;
 	}
 
 	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
@@ -107,9 +118,10 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 
 	auto start = std::chrono::high_resolution_clock::now();
 	cgp_model.generate_population();
-	for (size_t run = 0; run < cgp_model.number_of_runs(); run++)
+
+	for (size_t run = cgp_model.start_run(); run < cgp_model.number_of_runs(); run++)
 	{
-		for (size_t i = 0, log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
+		for (size_t i = (run != cgp_model.start_run()) ? (0) : (cgp_model.start_generation()), log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
 		{
 			cgp_model.evaluate(inputs, outputs);
 			if (cgp_model.get_generations_without_change() == 0)
@@ -157,43 +169,7 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
-	//std::vector<std::string> arguments(args + 1, args + argc);
-	std::vector<std::string> arguments{
-		"train",
-		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiments/all_layers/config.cgp",
-		"--mse-threshold",
-		"0",
-		"--col-count",
-		"50",
-		"--row-count",
-		"30",
-		"--number-of-runs",
-		"35",
-		"--look-back-parameter",
-		"50",
-		"--mutation-max",
-		"0.15",
-		"--function-count",
-		"33",
-		"--function-input-arity",
-		"2",
-		"--function-output-arity",
-		"2",
-		"--input-count",
-		"864",
-		"--output-count",
-		"1536",
-		"--population-max",
-		"4",
-		"--generation-count",
-		"90000000",
-		"--output-file",
-		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/all_layers/cgp_configs/data.cgp",
-		"--input-file",
-		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/all_layers/train.data",
-		"--cgp-statistics-file",
-		"C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/all_layers/statistics.csv"
-	};
+	std::vector<std::string> arguments(args + 1, args + argc);
 
 	try
 	{

@@ -91,6 +91,10 @@ std::map<std::string, std::string> CGP::load(std::istream& in)
 	{
 		set_best_solution(best_solution_string);
 	}
+	else if (!starting_solution().empty())
+	{
+		set_best_solution(starting_solution());
+	}
 	other_config_attribitues = remaining_data;
 	return remaining_data;
 }

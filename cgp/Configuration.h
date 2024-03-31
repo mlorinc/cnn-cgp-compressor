@@ -38,8 +38,6 @@ namespace cgp {
 	struct CGPConfiguration
 	{
 	private:
-		// Private member variables representing default configuration values
-
 		/// <summary>
 		/// Default value for the input arity of functions.
 		/// </summary>
@@ -111,11 +109,6 @@ namespace cgp {
 		uint32_t periodic_log_frequency_value = static_cast<uint32_t>(generation_count_value / 2.0);
 
 		/// <summary>
-		/// Default value for enabling periodic logging in the CGP algorithm.
-		/// </summary>
-		bool periodic_log_value = true;
-
-		/// <summary>
 		/// Array of energy costs for various operations.
 		/// </summary>
 		std::shared_ptr<double[]> function_energy_costs_value;
@@ -154,6 +147,24 @@ namespace cgp {
 		/// The CGP dataset size.
 		/// </summary>
 		size_t dataset_size_value = 1;
+
+		/// <summary>
+		/// Used in case CGP evolution is resumed.
+		/// </summary>
+		size_t start_generation_value = 0;
+
+		/// <summary>
+		/// Used in case CGP evolution is resumed.
+		/// </summary>
+		size_t start_run_value = 0;
+
+		/// <summary>
+		/// Used in case CGP evolution is resumed.
+		/// </summary>
+		std::string starting_solution_value;
+
+		CGPConfiguration& start_generation(decltype(start_generation_value) value);
+		CGPConfiguration& start_run(decltype(start_run_value) value);
 	public:
 		CGPConfiguration();
 		CGPConfiguration(const std::vector<std::string>& arguments);
@@ -235,6 +246,12 @@ namespace cgp {
 		static const std::string DATASET_SIZE_LONG;
 		static const std::string DATASET_SIZE_SHORT;
 
+		static const std::string START_GENERATION_LONG;
+
+		static const std::string START_RUN_LONG;
+
+		static const std::string STARTING_SOLUTION_LONG;
+
 		/// <summary>
 		/// Sets configuration parameters according to given command line arguments.
 		/// </summary>
@@ -311,11 +328,6 @@ namespace cgp {
 		inline decltype(periodic_log_frequency_value) periodic_log_frequency() const;
 
 		/// <summary>
-		/// Gets whether periodic logging is enabled in the CGP algorithm.
-		/// </summary>
-		inline decltype(periodic_log_value) periodic_log() const;
-
-		/// <summary>
 		/// Gets a file path in which input data are located.
 		/// </summary>
 		inline decltype(input_file_value) input_file() const;
@@ -326,19 +338,9 @@ namespace cgp {
 		inline decltype(output_file_value) output_file() const;
 
 		/// <summary>
-		/// Gets the path where resulting chromosome array will be saved.
-		/// </summary>
-		inline decltype(chromosome_output_file_value) chromosome_output_file() const;
-
-		/// <summary>
 		/// Gets the path where CGP statistics will be saved.
 		/// </summary>
 		inline decltype(cgp_statistics_file_value) cgp_statistics_file() const;
-
-		/// <summary>
-		/// Gets the path where chromosome array is saved.
-		/// </summary>
-		inline decltype(chromosome_input_file_value) chromosome_input_file() const;
 
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
@@ -369,6 +371,21 @@ namespace cgp {
 		/// Get dataset size of the CGP.
 		/// </summary>
 		inline decltype(dataset_size_value) dataset_size() const;
+
+		/// <summary>
+		/// Get start generation number.
+		/// </summary>
+		decltype(start_generation_value) start_generation() const;
+
+		/// <summary>
+		/// Get start runnumber.
+		/// </summary>
+		decltype(start_run_value) start_run() const;
+
+		/// <summary>
+		/// Get chromosome in string form.
+		/// </summary>
+		decltype(starting_solution_value) starting_solution() const;
 
 		/// <summary>
 		/// Sets the input arity of functions.
@@ -436,11 +453,6 @@ namespace cgp {
 		CGPConfiguration& periodic_log_frequency(decltype(periodic_log_frequency_value));
 
 		/// <summary>
-		/// Sets whether periodic logging is enabled in the CGP algorithm.
-		/// </summary>
-		CGPConfiguration& periodic_log(decltype(periodic_log_value));
-
-		/// <summary>
 		/// Sets array of energy costs for various operations.
 		/// </summary>
 		CGPConfiguration& function_energy_costs(decltype(function_energy_costs_value));
@@ -456,19 +468,9 @@ namespace cgp {
 		CGPConfiguration& output_file(decltype(input_file_value));
 
 		/// <summary>
-		/// Sets the path where resulting chromosome array will be saved.
-		/// </summary>
-		CGPConfiguration& chromosome_output_file(decltype(chromosome_output_file_value));
-
-		/// <summary>
 		/// Sets the path where CGP metadata will be saved.
 		/// </summary>
 		CGPConfiguration& cgp_statistics_file(decltype(cgp_statistics_file_value));
-
-		/// <summary>
-		/// Sets the path where chromosome array is saved.
-		/// </summary>
-		CGPConfiguration& chromosome_input_file(decltype(chromosome_input_file_value));
 
 		/// <summary>
 		/// Set Mean Squared Error threshold after optimisation is focused on minimising energy.
@@ -479,6 +481,11 @@ namespace cgp {
 		/// Set dataset size of the CGP.
 		/// </summary>
 		CGPConfiguration& dataset_size(decltype(dataset_size_value));
+
+		/// <summary>
+		/// Sets starting chromosome.
+		/// </summary>
+		CGPConfiguration& starting_solution(decltype(starting_solution_value) value);
 
 		/// <summary>
 		/// Save configuration to file.

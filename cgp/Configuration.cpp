@@ -51,14 +51,17 @@ namespace cgp {
 	const std::string CGPConfiguration::CGP_STATISTICS_FILE_LONG = "--cgp-statistics-file";
 	const std::string CGPConfiguration::CGP_STATISTICS_FILE_SHORT = "-s";
 
-	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_LONG = "--chromosome-input-file";
-	const std::string CGPConfiguration::CHROMOSOME_INPUT_FILE_SHORT = "-chi";
-
 	const std::string CGPConfiguration::MSE_THRESHOLD_LONG = "--mse-threshold";
 	const std::string CGPConfiguration::MSE_THRESHOLD_SHORT = "-mse";
 
 	const std::string CGPConfiguration::DATASET_SIZE_LONG = "--dataset-size";
 	const std::string CGPConfiguration::DATASET_SIZE_SHORT = "-d";
+
+	const std::string CGPConfiguration::START_GENERATION_LONG = "--start-generation";
+
+	const std::string CGPConfiguration::START_RUN_LONG = "--start-run";
+
+	const std::string CGPConfiguration::STARTING_SOLUTION_LONG = "--starting_solution";
 
 	long long parse_integer_argument(const std::string& arg) {
 		try {
@@ -86,6 +89,18 @@ namespace cgp {
 			// Handle out of range argument.
 			throw CGPConfigurationOutOfRange("decimal argument out of range for " + arg);
 		}
+	}
+
+	CGPConfiguration& CGPConfiguration::start_generation(decltype(start_generation_value) value)
+	{
+		start_generation_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::start_run(decltype(start_run_value) value)
+	{
+		start_run_value = value;
+		return *this;
 	}
 
 	CGPConfiguration::CGPConfiguration()
@@ -159,16 +174,8 @@ namespace cgp {
 					output_file(arguments.at(i + 1));
 					i += 1;
 				}
-				else if (arguments[i] == CHROMOSOME_OUTPUT_FILE_LONG || arguments[i] == CHROMOSOME_OUTPUT_FILE_SHORT) {
-					chromosome_output_file(arguments.at(i + 1));
-					i += 1;
-				}
 				else if (arguments[i] == CGP_STATISTICS_FILE_LONG || arguments[i] == CGP_STATISTICS_FILE_SHORT) {
 					cgp_statistics_file(arguments.at(i + 1));
-					i += 1;
-				}
-				else if (arguments[i] == CHROMOSOME_INPUT_FILE_LONG || arguments[i] == CHROMOSOME_INPUT_FILE_SHORT) {
-					chromosome_input_file(arguments.at(i + 1));
 					i += 1;
 				}
 				else if (arguments[i] == MSE_THRESHOLD_LONG || arguments[i] == MSE_THRESHOLD_SHORT) {
@@ -177,6 +184,18 @@ namespace cgp {
 				}
 				else if (arguments[i] == DATASET_SIZE_LONG || arguments[i] == DATASET_SIZE_SHORT) {
 					dataset_size(parse_integer_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == START_GENERATION_LONG) {
+					start_generation(parse_integer_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == START_RUN_LONG) {
+					start_run(parse_integer_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == STARTING_SOLUTION_LONG) {
+					starting_solution(arguments.at(i + 1));
 					i += 1;
 				}
 				else {
@@ -276,11 +295,6 @@ namespace cgp {
 		return periodic_log_frequency_value;
 	}
 
-
-	decltype(CGPConfiguration::periodic_log_value) CGPConfiguration::periodic_log() const {
-		return periodic_log_value;
-	}
-
 	decltype(CGPConfiguration::input_file_value) CGPConfiguration::input_file() const
 	{
 		return input_file_value;
@@ -291,19 +305,9 @@ namespace cgp {
 		return output_file_value;
 	}
 
-	decltype(CGPConfiguration::chromosome_output_file_value) CGPConfiguration::chromosome_output_file() const
-	{
-		return chromosome_output_file_value;
-	}
-
 	decltype(CGPConfiguration::cgp_statistics_file_value) CGPConfiguration::cgp_statistics_file() const
 	{
 		return cgp_statistics_file_value;
-	}
-
-	decltype(CGPConfiguration::chromosome_input_file_value) CGPConfiguration::chromosome_input_file() const
-	{
-		return chromosome_input_file_value;
 	}
 
 	decltype(CGPConfiguration::mse_threshold_value) CGPConfiguration::mse_threshold() const
@@ -314,6 +318,21 @@ namespace cgp {
 	inline decltype(CGPConfiguration::dataset_size_value) CGPConfiguration::dataset_size() const
 	{
 		return dataset_size_value;
+	}
+
+	decltype(CGPConfiguration::starting_solution_value) CGPConfiguration::starting_solution() const
+	{
+		return starting_solution_value;
+	}
+
+	decltype(CGPConfiguration::start_generation_value) CGPConfiguration::start_generation() const
+	{
+		return start_generation_value;
+	}
+
+	decltype(CGPConfiguration::start_run_value) CGPConfiguration::start_run() const
+	{
+		return start_run_value;
 	}
 
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
@@ -395,12 +414,6 @@ namespace cgp {
 		return *this;
 	}
 
-
-	CGPConfiguration& CGPConfiguration::periodic_log(decltype(periodic_log_value) value) {
-		periodic_log_value = value;
-		return *this;
-	}
-
 	CGPConfiguration& CGPConfiguration::function_energy_costs(decltype(function_energy_costs_value) value)
 	{
 		function_energy_costs_value = value;
@@ -413,21 +426,9 @@ namespace cgp {
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::chromosome_output_file(decltype(chromosome_output_file_value) value)
-	{
-		chromosome_output_file_value = value;
-		return *this;
-	}
-
 	CGPConfiguration& CGPConfiguration::cgp_statistics_file(decltype(cgp_statistics_file_value) value)
 	{
 		cgp_statistics_file_value = value;
-		return *this;
-	}
-
-	CGPConfiguration& CGPConfiguration::chromosome_input_file(decltype(chromosome_input_file_value) value)
-	{
-		chromosome_input_file_value = value;
 		return *this;
 	}
 
@@ -449,6 +450,12 @@ namespace cgp {
 		return *this;
 	}
 
+	CGPConfiguration& CGPConfiguration::starting_solution(decltype(starting_solution_value) value)
+	{
+		starting_solution_value = value;
+		return *this;
+	}
+
 	void CGPConfiguration::dump(std::ostream &out) const
 	{
 		// Serialize each variable to the file
@@ -465,12 +472,10 @@ namespace cgp {
 		out << "number_of_runs: " << number_of_runs() << std::endl;
 		out << "function_count: " << static_cast<int>(function_count()) << std::endl;
 		out << "periodic_log_frequency: " << periodic_log_frequency() << std::endl;
-		out << "periodic_log: " << periodic_log() << std::endl;
 		out << "input_file: " << input_file() << std::endl;
 		out << "output_file: " << output_file() << std::endl;
-		out << "chromosome_output_file: " << chromosome_output_file() << std::endl;
 		out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
-		out << "chromosome_input_file: " << chromosome_input_file() << std::endl;
+		out << "starting_solution: " << starting_solution() << std::endl;
 		out << "mse_threshold: " << mse_threshold() << std::endl;
 		out << "dataset_size: " << dataset_size() << std::endl;
 	}
@@ -506,17 +511,19 @@ namespace cgp {
 			else if (key == "number_of_runs") number_of_runs(std::stoull(value));
 			else if (key == "function_count") function_count(std::stoi(value));
 			else if (key == "periodic_log_frequency") periodic_log_frequency(std::stoull(value));
-			else if (key == "periodic_log") periodic_log(value == "true");
 			else if (key == "input_file") input_file(value);
 			else if (key == "output_file") output_file(value);
-			else if (key == "chromosome_output_file") chromosome_output_file(value);
 			else if (key == "cgp_statistics_file") cgp_statistics_file(value);
-			else if (key == "chromosome_input_file") chromosome_input_file(value);
+			else if (key == "starting_solution") starting_solution(value);
 			else if (key == "mse_threshold") mse_threshold(std::stod(value));
 			else if (key == "dataset_size") dataset_size(std::stoull(value));
-			else if (!key.empty())
+			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{
 				remaining_data[key] = value;
+			}
+			else if (key == "start_generation" || key == "start_run")
+			{
+				throw CGPConfigurationInvalidArgument("invalid attribute: " + key);
 			}
 		}
 		max_genes_to_mutate_value = chromosome_size() * mutation_max();
