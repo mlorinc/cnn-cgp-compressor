@@ -80,7 +80,28 @@ void cgp::log_weights(std::ostream& stream, const std::vector<std::shared_ptr<we
 {
 	for (const auto& in : inputs) {
 		auto weights = cgp_model.get_best_chromosome()->get_weights(in);
-		std::copy(weights.get(), weights.get() + cgp_model.output_count(), std::ostream_iterator<weight_repr_value_t>(stream, " "));
+
+		for (size_t i = 0; i < cgp_model.output_count() - 1; i++)
+		{
+			if(weights[i] == CGPConfiguration::invalid_value)
+			{
+				stream << "nan";
+			}
+			else
+			{
+				stream << static_cast<weight_repr_value_t>(weights[i]);
+			}
+			stream << " ";
+		}
+
+		if (weights[cgp_model.output_count() - 1] == CGPConfiguration::invalid_value)
+		{
+			stream << "nan";
+		}
+		else
+		{
+			stream << static_cast<weight_repr_value_t>(weights[cgp_model.output_count() - 1]);
+		}
 		stream << std::endl;
 	}
 }
