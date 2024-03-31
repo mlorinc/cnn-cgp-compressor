@@ -163,6 +163,23 @@ namespace cgp {
 		/// </summary>
 		std::string starting_solution_value;
 
+		/// <summary>
+		/// Value indicating after how many generations CGP will come to stop.
+		/// </summary>
+		size_t patience_value = 125000;
+
+		/// <summary>
+		/// Value indicating stop condition for parameter of approximation error. Defaultly
+		/// that stop condition is delegated to energy parameter.
+		/// </summary>
+		double mse_early_stop_value = -1;
+
+		/// <summary>
+		/// Value indicating stop condition for parameter of energy usage. By default
+		/// it never stops until patience runs out.
+		/// </summary>
+		double energy_early_stop_value = 0;
+
 		CGPConfiguration& start_generation(decltype(start_generation_value) value);
 		CGPConfiguration& start_run(decltype(start_run_value) value);
 	public:
@@ -231,12 +248,6 @@ namespace cgp {
 		static const std::string OUTPUT_FILE_LONG;
 		static const std::string OUTPUT_FILE_SHORT;
 
-		static const std::string CHROMOSOME_OUTPUT_FILE_LONG;
-		static const std::string CHROMOSOME_OUTPUT_FILE_SHORT;
-
-		static const std::string CHROMOSOME_INPUT_FILE_LONG;
-		static const std::string CHROMOSOME_INPUT_FILE_SHORT;
-
 		static const std::string CGP_STATISTICS_FILE_LONG;
 		static const std::string CGP_STATISTICS_FILE_SHORT;
 
@@ -251,6 +262,12 @@ namespace cgp {
 		static const std::string START_RUN_LONG;
 
 		static const std::string STARTING_SOLUTION_LONG;
+
+		static const std::string PATIENCE_LONG;
+
+		static const std::string MSE_EARLY_STOP_LONG;
+
+		static const std::string ENERGY_EARLY_STOP_LONG;
 
 		/// <summary>
 		/// Sets configuration parameters according to given command line arguments.
@@ -388,6 +405,23 @@ namespace cgp {
 		decltype(starting_solution_value) starting_solution() const;
 
 		/// <summary>
+		/// Get value indicating after how many generations CGP will come to stop.
+		/// </summary>
+		decltype(patience_value) patience() const;
+
+		/// <summary>
+		/// Get value indicating stop condition for parameter of approximation error. Defaultly
+		/// that stop condition is delegated to energy parameter.
+		/// </summary>
+		decltype(mse_early_stop_value) mse_early_stop() const;
+
+		/// <summary>
+		/// Get value indicating stop condition for parameter of energy usage. By default
+		/// it never stops until patience runs out.
+		/// </summary>
+		decltype(energy_early_stop_value) energy_early_stop() const;
+
+		/// <summary>
 		/// Sets the input arity of functions.
 		/// </summary>
 		CGPConfiguration& function_input_arity(decltype(function_input_arity_value));
@@ -486,6 +520,23 @@ namespace cgp {
 		/// Sets starting chromosome.
 		/// </summary>
 		CGPConfiguration& starting_solution(decltype(starting_solution_value) value);
+
+		/// <summary>
+		/// Set value indicating after how many generations CGP will come to stop.
+		/// </summary>
+		CGPConfiguration& patience(decltype(patience_value) value);
+
+		/// <summary>
+		/// Set value indicating stop condition for parameter of approximation error. Defaultly
+		/// that stop condition is delegated to energy parameter.
+		/// </summary>
+		CGPConfiguration& mse_early_stop(decltype(mse_early_stop_value) value);
+
+		/// <summary>
+		/// Set value indicating stop condition for parameter of energy usage. By default
+		/// it never stops until patience runs out.
+		/// </summary>
+		CGPConfiguration& energy_early_stop(decltype(energy_early_stop_value) value);
 
 		/// <summary>
 		/// Save configuration to file.

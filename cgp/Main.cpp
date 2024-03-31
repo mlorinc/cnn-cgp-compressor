@@ -110,7 +110,6 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 	}
 
 
-	auto generation_stop = 125000;
 	cgp_model.build_indices();
 	cgp_model.dump(std::cerr);
 	std::cerr << "invalid_value: " << CGPConfiguration::invalid_value << std::endl
@@ -118,7 +117,7 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 
 	auto start = std::chrono::high_resolution_clock::now();
 	cgp_model.generate_population();
-
+	auto generation_stop = cgp_model.patience();
 	for (size_t run = cgp_model.start_run(); run < cgp_model.number_of_runs(); run++)
 	{
 		for (size_t i = (run != cgp_model.start_run()) ? (0) : (cgp_model.start_generation()), log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
@@ -143,7 +142,7 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 				log_counter++;
 			}
 
-			if (cgp_model.get_best_error_fitness() <= 0 || cgp_model.get_generations_without_change() > generation_stop)
+			if ((cgp_model.get_best_error_fitness() <= cgp_model.mse_early_stop() && cgp_model.get_best_energy_fitness() <= cgp_model.energy_early_stop()) || cgp_model.get_generations_without_change() > generation_stop)
 			{
 				log_human(std::cerr, run, i, cgp_model);
 				break;

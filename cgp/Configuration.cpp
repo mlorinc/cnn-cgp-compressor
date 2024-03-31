@@ -45,9 +45,6 @@ namespace cgp {
 	const std::string CGPConfiguration::OUTPUT_FILE_LONG = "--output-file";
 	const std::string CGPConfiguration::OUTPUT_FILE_SHORT = "-o";
 
-	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_LONG = "--chromosome-output-file";
-	const std::string CGPConfiguration::CHROMOSOME_OUTPUT_FILE_SHORT = "-cho";
-
 	const std::string CGPConfiguration::CGP_STATISTICS_FILE_LONG = "--cgp-statistics-file";
 	const std::string CGPConfiguration::CGP_STATISTICS_FILE_SHORT = "-s";
 
@@ -62,6 +59,12 @@ namespace cgp {
 	const std::string CGPConfiguration::START_RUN_LONG = "--start-run";
 
 	const std::string CGPConfiguration::STARTING_SOLUTION_LONG = "--starting_solution";
+
+	const std::string CGPConfiguration::PATIENCE_LONG = "--patience";
+
+	const std::string CGPConfiguration::MSE_EARLY_STOP_LONG = "--mse-early-stop";
+
+	const std::string CGPConfiguration::ENERGY_EARLY_STOP_LONG = "--energy-early-stop";
 
 	long long parse_integer_argument(const std::string& arg) {
 		try {
@@ -198,6 +201,18 @@ namespace cgp {
 					starting_solution(arguments.at(i + 1));
 					i += 1;
 				}
+				else if (arguments[i] == PATIENCE_LONG) {
+					patience(parse_integer_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == MSE_EARLY_STOP_LONG) {
+					mse_early_stop(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == ENERGY_EARLY_STOP_LONG) {
+					energy_early_stop(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
 				else {
 					throw CGPConfigurationInvalidArgument("unknown argument " + arguments[i]);
 				}
@@ -325,6 +340,16 @@ namespace cgp {
 		return starting_solution_value;
 	}
 
+	decltype(CGPConfiguration::patience_value) CGPConfiguration::patience() const
+	{
+		return patience_value;
+	}
+
+	decltype(CGPConfiguration::mse_early_stop_value) CGPConfiguration::mse_early_stop() const
+	{
+		return mse_early_stop_value;
+	}
+
 	decltype(CGPConfiguration::start_generation_value) CGPConfiguration::start_generation() const
 	{
 		return start_generation_value;
@@ -333,6 +358,11 @@ namespace cgp {
 	decltype(CGPConfiguration::start_run_value) CGPConfiguration::start_run() const
 	{
 		return start_run_value;
+	}
+
+	decltype(CGPConfiguration::energy_early_stop_value) CGPConfiguration::energy_early_stop() const
+	{
+		return energy_early_stop_value;
 	}
 
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
@@ -456,6 +486,24 @@ namespace cgp {
 		return *this;
 	}
 
+	CGPConfiguration& CGPConfiguration::patience(decltype(patience_value) value)
+	{
+		patience_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::mse_early_stop(decltype(mse_early_stop_value) value)
+	{
+		mse_early_stop_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::energy_early_stop(decltype(energy_early_stop_value) value)
+	{
+		energy_early_stop_value = value;
+		return *this;
+	}
+
 	void CGPConfiguration::dump(std::ostream &out) const
 	{
 		// Serialize each variable to the file
@@ -478,6 +526,9 @@ namespace cgp {
 		out << "starting_solution: " << starting_solution() << std::endl;
 		out << "mse_threshold: " << mse_threshold() << std::endl;
 		out << "dataset_size: " << dataset_size() << std::endl;
+		out << "patience: " << patience() << std::endl;
+		out << "mse_early_stop: " << mse_early_stop() << std::endl;
+		out << "energy_early_stop: " << energy_early_stop() << std::endl;
 	}
 
 	std::map<std::string, std::string> CGPConfiguration::load(std::istream &in)
@@ -517,6 +568,9 @@ namespace cgp {
 			else if (key == "starting_solution") starting_solution(value);
 			else if (key == "mse_threshold") mse_threshold(std::stod(value));
 			else if (key == "dataset_size") dataset_size(std::stoull(value));
+			else if (key == "patience") patience(std::stoull(value));
+			else if (key == "mse_early_stop") mse_early_stop(std::stold(value));
+			else if (key == "energy_early_stop") energy_early_stop(std::stold(value));
 			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{
 				remaining_data[key] = value;
