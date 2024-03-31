@@ -50,46 +50,40 @@ void CGP::dump(std::ostream& out) const
 	out << "evolution_steps_made: " << evolution_steps_made << std::endl;
 	out << "expected_value_min: " << static_cast<weight_repr_value_t>(expected_value_min) << std::endl;
 	out << "expected_value_max: " << static_cast<weight_repr_value_t>(expected_value_max) << std::endl;
-	for (auto it = other_config_attribitues.begin(), end = other_config_attribitues.end(); it != end; it++)
+	for (auto it = other_config_attribitues.cbegin(), end = other_config_attribitues.cend(); it != end; it++)
 	{
 		out << it->first << ": " << it->second << std::endl;
 	}
 }
 
-void CGP::load(std::istream& in)
+std::map<std::string, std::string> CGP::load(std::istream& in)
 {
-	CGPConfiguration::load(in);
-	in.clear();
-	in.seekg(0);
-	std::string line;
+	auto remaining_data = CGPConfiguration::load(in);
 	std::string best_solution_string;
 	
 	other_config_attribitues.clear();
-	while (std::getline(in, line)) {
-		std::string key = line;
-		std::string value = line;
-
-		key.erase(0, key.find_first_not_of(" \t\r\n"));
-		key.erase(key.find_first_of(":"));
-		value.erase(0, value.find_first_of(":") + 1);
-		value.erase(0, value.find_first_not_of(" \t\r\n"));
-		value.erase(value.find_last_not_of(" \t\r\n") + 1);
+	for (auto it = remaining_data.cbegin(), end = remaining_data.cend(); it != end;) {
+		const std::string &key = it->first;
+		const std::string &value = it->second;
 
 		if (key == "best_solution") {
 			best_solution_string = value;
+			remaining_data.erase(it++);
 		}
 		else if (key == "evolution_steps_made") {
 			evolution_steps_made = std::stoull(value);
+			remaining_data.erase(it++);
 		}
 		else if (key == "expected_value_min") {
 			expected_value_min = std::stoul(value);
+			remaining_data.erase(it++);
 		}
 		else if (key == "expected_value_max") {
 			expected_value_max = std::stoul(value);
+			remaining_data.erase(it++);
 		}
-		else if (!key.empty())
-		{
-			other_config_attribitues[key] = value;
+		else {
+			++it;
 		}
 	}
 	build_indices();
@@ -97,6 +91,8 @@ void CGP::load(std::istream& in)
 	{
 		set_best_solution(best_solution_string);
 	}
+	other_config_attribitues = remaining_data;
+	return remaining_data;
 }
 
 void CGP::build_indices()

@@ -475,9 +475,10 @@ namespace cgp {
 		out << "dataset_size: " << dataset_size() << std::endl;
 	}
 
-	void CGPConfiguration::load(std::istream &in)
+	std::map<std::string, std::string> CGPConfiguration::load(std::istream &in)
 	{
 		std::string line;
+		std::map<std::string, std::string> remaining_data;
 
 		// Read each line from the file and parse it to extract variable name and value
 		while (std::getline(in, line)) {
@@ -513,12 +514,12 @@ namespace cgp {
 			else if (key == "chromosome_input_file") chromosome_input_file(value);
 			else if (key == "mse_threshold") mse_threshold(std::stod(value));
 			else if (key == "dataset_size") dataset_size(std::stoull(value));
-			else if (key != "")
+			else if (!key.empty())
 			{
-				// todo: cover exception properly
-				//throw std::invalid_argument("invalid key \"" + key + "\".");
+				remaining_data[key] = value;
 			}
 		}
 		max_genes_to_mutate_value = chromosome_size() * mutation_max();
+		return remaining_data;
 	}
 }

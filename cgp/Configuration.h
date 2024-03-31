@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <map>
 
 //#ifndef CNN_FP32_WEIGHTS
 //constexpr int function_count = 31;
@@ -487,6 +488,6 @@ namespace cgp {
 		/// <summary>
 		/// Load configuration from file.
 		/// </summary>
-		virtual void load(std::istream& in);
+		virtual std::map<std::string, std::string> load(std::istream& in);
 	};
 }

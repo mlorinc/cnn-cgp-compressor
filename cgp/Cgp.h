@@ -195,6 +195,6 @@ namespace cgp {
 		size_t get_serialized_chromosome_size() const;
 
 		void dump(std::ostream& out) const override;
-		void load(std::istream& in) override;
+		std::map<std::string, std::string> load(std::istream& in) override;
 	};
 }
