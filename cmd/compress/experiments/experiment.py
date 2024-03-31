@@ -190,7 +190,12 @@ class Experiment(object):
         weights_vector = []
         with open(file) as f:
             for line, _ in zip(f.readlines(), range(self._cgp.config.get_dataset_size())):
-                weights = torch.Tensor([self._to_number(segment) for segment in line.split(" ") if segment.strip() != ""])
+                segments = line.split(" ")
+
+                if "nan" in segments:
+                    raise ValueError(f"CGP training failed for {file}; the file contains invalid weight")
+
+                weights = torch.Tensor([self._to_number(segment) for segment in segments if segment.strip() != ""])
                 weights_vector.append(weights)
         return self._inject_weights(weights_vector)
 
