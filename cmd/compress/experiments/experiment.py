@@ -1,7 +1,7 @@
-from functools import reduce
 import torch
-import torch.nn as nn
 import operator
+import glob
+from functools import reduce
 from abc import abstractmethod
 from cgp.cgp_adapter import CGP
 from typing import List, Tuple, Union, Iterable
@@ -91,6 +91,10 @@ class Experiment(object):
     def _get_statistics_file(self) -> str:
         pass
 
+    @abstractmethod
+    def get_number_of_experiment_results(self) -> int:
+        pass
+
     def execute(self):
         self._prepare_cgp()
         config = self._cgp.config.clone()
@@ -158,11 +162,25 @@ class Experiment(object):
             for layer_name, _, output_selectors in plan:
                 bias = self._get_bias(layer_name)
                 fp32_weights = self._get_reconstruction_weights(layer_name)
-                
+
                 for out_selector in output_selectors:
-                    w = fp32_weights[*out_selector]
-                    size = reduce(operator.mul, w.shape)
-                    fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
+                    initial_output_tensor = fp32_weights[*out_selector]
+                    size = None
+                    if isinstance(out_selector[0], slice) and out_selector[0].start is None and out_selector[0].stop is None:
+                        for filter_i, filter_tensor in enumerate(initial_output_tensor):
+                            if isinstance(out_selector[1], slice) and out_selector[1].start is None and out_selector[1].stop is None:
+                                for channel_tensor_i, channel_tensor in enumerate(filter_tensor):
+                                    w = fp32_weights[filter_i, channel_tensor_i, *out_selector[2:]]
+                                    size = reduce(operator.mul, w.shape)
+                                    fp32_weights[filter_i, channel_tensor_i, *out_selector[2:]] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
+                            else:
+                                w = fp32_weights[filter_i, out_selector[1], *out_selector[2:]]
+                                size = reduce(operator.mul, w.shape)
+                                fp32_weights[filter_i, out_selector[1], *out_selector[2:]] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
+                    else:
+                        w = initial_output_tensor
+                        size = reduce(operator.mul, w.shape)
+                        fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
                     offset += size
                 self._set_weights_bias(getattr(model, layer_name), fp32_weights, bias)
         return model
@@ -203,6 +221,9 @@ class BaseExperiment(Experiment):
 
     def _get_statistics_file(self) -> str:
         return self.experiment_root_path / "statistics.csv"
+
+    def get_number_of_experiment_results(self) -> int:
+        return len(glob.glob(f"{str(self._get_cgp_output_file())}.*"))
 
     def execute(self):
         self.experiment_root_path.mkdir(exist_ok=False)
