@@ -3,10 +3,10 @@
 #include "Main.h"
 using namespace cgp;
 
-std::shared_ptr<CGP> init_cgp(const std::string& cgp_file)
+std::shared_ptr<CGP> init_cgp(const std::string& cgp_file, const std::vector<std::string>& arguments)
 {
 	std::ifstream cgp_in(cgp_file);
-	auto cgp_model = std::make_shared<CGP>(cgp_in);
+	auto cgp_model = std::make_shared<CGP>(cgp_in, arguments);
 	cgp_in.close();
 
 	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(cgp_model->function_count());
@@ -37,9 +37,8 @@ int evaluate(std::vector<std::string>& arguments, const std::string& cgp_file, c
 {
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs;
 
-	auto cgp_model_pointer = init_cgp(cgp_file);
+	auto cgp_model_pointer = init_cgp(cgp_file, arguments);
 	CGP& cgp_model = *cgp_model_pointer;
-	cgp_model.set_from_arguments(arguments);
 
 	auto in = get_input(cgp_model.input_file());
 	auto out = get_output(cgp_model.output_file());
@@ -77,17 +76,16 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::max();
 	weight_repr_value_t max = std::numeric_limits<weight_repr_value_t>::min();
 
-	auto cgp_model_pointer = init_cgp(cgp_file);
+	auto cgp_model_pointer = init_cgp(cgp_file, arguments);
 	CGP& cgp_model = *cgp_model_pointer;
-	cgp_model.set_from_arguments(arguments);
 
 	auto in = get_input(cgp_model.input_file());
 	auto stats_out = get_output(
 		cgp_model.cgp_statistics_file(),
-		nullptr, 
+		nullptr,
 		(cgp_model.start_generation() == 0 && cgp_model.start_run() == 0) ?
-		(std::ios::out) : (std::ios::out | std::ios::trunc)
-		);
+		(std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app)
+	);
 
 	// Read two values from the standard input
 	if (cgp_model.input_count() == 0 || cgp_model.output_count() == 0)
@@ -104,8 +102,9 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 
 	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
 	{
-		std::cerr << "loading values" << std::endl;
+		std::cerr << "loading input values" << std::endl;
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
+		std::cerr << "loading output values" << std::endl;
 		outputs.push_back(load_output(*in, cgp_model.output_count(), min, max));
 	}
 
@@ -120,7 +119,9 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 	auto generation_stop = cgp_model.patience();
 	for (size_t run = cgp_model.start_run(); run < cgp_model.number_of_runs(); run++)
 	{
-		for (size_t i = (run != cgp_model.start_run()) ? (0) : (cgp_model.start_generation()), log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
+		size_t i = (run != cgp_model.start_run()) ? (0) : (cgp_model.start_generation());
+		std::cerr << "performin run " << run << " and starting from generation " << i << std::endl;
+		for (size_t log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
 		{
 			cgp_model.evaluate(inputs, outputs);
 			if (cgp_model.get_generations_without_change() == 0)
@@ -132,7 +133,7 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 				log_counter = 0;
 				start = std::chrono::high_resolution_clock::now();
 			}
-			else if (log_counter == cgp_model.periodic_log_frequency())
+			else if (log_counter >= cgp_model.periodic_log_frequency())
 			{
 				log_human(std::cerr, run, i, cgp_model);
 				log_counter = 0;
@@ -150,15 +151,16 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 			cgp_model.mutate();
 		}
 
-		std::cerr << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl;
-		std::cerr << "weights: " << std::endl;
-		std::copy(cgp_model.get_best_chromosome()->begin_output(), cgp_model.get_best_chromosome()->end_output(), std::ostream_iterator<weight_repr_value_t>(std::cerr, ", "));
-		std::cerr << std::endl;
+		std::cerr << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl
+			<< "finished evolution after " << i << " generations" << std::endl;
 
 		auto out = get_output(cgp_model.output_file() + "." + std::to_string(run));
 		cgp_model.dump(*out);
+		std::cerr << "resetting cgp" << std::endl;
 		cgp_model.reset();
+		std::cerr << "resetted cgp" << std::endl << "generating population" << std::endl;
 		cgp_model.generate_population();
+		std::cerr << "generated population" << std::endl;
 	}
 
 	std::cerr << std::endl << "exitting program" << std::endl;

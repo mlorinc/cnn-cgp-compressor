@@ -3,6 +3,9 @@
 #include <sstream>
 
 namespace cgp {
+
+	const std::string CGPConfiguration::PERIODIC_LOG_FREQUENCY_LONG = "--periodic-log-frequency";
+
 	const std::string CGPConfiguration::FUNCTION_INPUT_ARITY_LONG = "--function-input-arity";
 	const std::string CGPConfiguration::FUNCTION_INPUT_ARITY_SHORT = "-fi";
 
@@ -58,7 +61,7 @@ namespace cgp {
 
 	const std::string CGPConfiguration::START_RUN_LONG = "--start-run";
 
-	const std::string CGPConfiguration::STARTING_SOLUTION_LONG = "--starting_solution";
+	const std::string CGPConfiguration::STARTING_SOLUTION_LONG = "--starting-solution";
 
 	const std::string CGPConfiguration::PATIENCE_LONG = "--patience";
 
@@ -211,6 +214,10 @@ namespace cgp {
 				}
 				else if (arguments[i] == ENERGY_EARLY_STOP_LONG) {
 					energy_early_stop(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == PERIODIC_LOG_FREQUENCY_LONG) {
+					periodic_log_frequency(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
 				}
 				else {
@@ -504,7 +511,7 @@ namespace cgp {
 		return *this;
 	}
 
-	void CGPConfiguration::dump(std::ostream &out) const
+	void CGPConfiguration::dump(std::ostream& out) const
 	{
 		// Serialize each variable to the file
 		out << "function_input_arity: " << static_cast<int>(function_input_arity()) << std::endl;
@@ -520,10 +527,10 @@ namespace cgp {
 		out << "number_of_runs: " << number_of_runs() << std::endl;
 		out << "function_count: " << static_cast<int>(function_count()) << std::endl;
 		out << "periodic_log_frequency: " << periodic_log_frequency() << std::endl;
-		out << "input_file: " << input_file() << std::endl;
-		out << "output_file: " << output_file() << std::endl;
-		out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
-		out << "starting_solution: " << starting_solution() << std::endl;
+		if (!input_file().empty()) out << "input_file: " << input_file() << std::endl;
+		if (!output_file().empty()) out << "output_file: " << output_file() << std::endl;
+		if (!cgp_statistics_file().empty()) out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
+		if (!starting_solution().empty()) out << "starting_solution: " << starting_solution() << std::endl;
 		out << "mse_threshold: " << mse_threshold() << std::endl;
 		out << "dataset_size: " << dataset_size() << std::endl;
 		out << "patience: " << patience() << std::endl;
@@ -531,7 +538,7 @@ namespace cgp {
 		out << "energy_early_stop: " << energy_early_stop() << std::endl;
 	}
 
-	std::map<std::string, std::string> CGPConfiguration::load(std::istream &in)
+	std::map<std::string, std::string> CGPConfiguration::load(std::istream& in, const std::vector<std::string>& arguments)
 	{
 		std::string line;
 		std::map<std::string, std::string> remaining_data;

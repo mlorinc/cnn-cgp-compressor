@@ -106,7 +106,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the log frequency in the CGP algorithm.
 		/// </summary>
-		uint32_t periodic_log_frequency_value = static_cast<uint32_t>(generation_count_value / 2.0);
+		size_t periodic_log_frequency_value = 100000;
 
 		/// <summary>
 		/// Array of energy costs for various operations.
@@ -205,6 +205,8 @@ namespace cgp {
 		using weight_repr_value_t = double;
 		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::infinity();
 #endif // !CNN_FP32_WEIGHTS
+
+		static const std::string PERIODIC_LOG_FREQUENCY_LONG;
 
 		static const std::string FUNCTION_INPUT_ARITY_LONG;
 		static const std::string FUNCTION_INPUT_ARITY_SHORT;
@@ -546,6 +548,6 @@ namespace cgp {
 		/// <summary>
 		/// Load configuration from file.
 		/// </summary>
-		virtual std::map<std::string, std::string> load(std::istream& in);
+		virtual std::map<std::string, std::string> load(std::istream& in, const std::vector<std::string>& arguments = {});
 	};
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <vector>
 #include <memory>
 #include <map>
@@ -20,7 +21,7 @@ namespace cgp {
 		solution_t best_solution;
 
 		// Collection of chromosomes representing individuals in the population.
-		std::vector<std::shared_ptr<Chromosome>> chromosomes;
+		std::array<std::shared_ptr<Chromosome>, 128> chromosomes;
 
 		// Array containing tuples specifying the minimum and maximum pin indices for output connections.
 		std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies;
@@ -29,7 +30,8 @@ namespace cgp {
 		size_t generations_without_change;
 
 		// Best solutions found by each thread during parallel execution.
-		std::map<decltype(omp_get_thread_num()), solution_t> best_solutions;
+		std::unique_ptr<solution_t[]> best_solutions;
+		decltype(omp_get_max_threads()) best_solutions_size;
 
 		// Counter for the total evolution steps made during the process.
 		size_t evolution_steps_made;
@@ -85,7 +87,8 @@ namespace cgp {
 		/// Constructor for CGP class using text stream to initialize variables.
 		/// </summary>
 		/// <param name="in">Input stream containing serialized form of the CGP class.</param>
-		CGP(std::istream &in);
+		/// <param name="arguments">CGP arguments entered from CLI by the user.</param>
+		CGP(std::istream &in, const std::vector<std::string> &arguments = {});
 
 		/// <summary>
 		/// Destructor for CGP class.
@@ -195,6 +198,6 @@ namespace cgp {
 		size_t get_serialized_chromosome_size() const;
 
 		void dump(std::ostream& out) const override;
-		std::map<std::string, std::string> load(std::istream& in) override;
+		std::map<std::string, std::string> load(std::istream& in, const std::vector<std::string>& arguments = {}) override;
 	};
 }

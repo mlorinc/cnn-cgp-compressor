@@ -80,12 +80,13 @@ namespace cgp {
 		// Private method for allocating pin and energy arrays (maps). Chromosome is reused.
 		void setup_maps(decltype(chromosome) chromosome);
 
+		void setup_maps(Chromosome &&that);
+
 		// Private method for setting up iterator pointers.
 		void setup_iterators();
-
+		void setup_iterators(Chromosome&& that);
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
-
 		/// <summary>
 		/// Constructor for the Chromosome class.
 		/// </summary>
@@ -116,7 +117,13 @@ namespace cgp {
 		/// Copy constructor for the Chromosome class.
 		/// </summary>
 		/// <param name="that">Reference to the chromosome to be copied.</param>
-		Chromosome(const Chromosome& that);
+		Chromosome(const Chromosome& that) noexcept;
+
+		/// <summary>
+		/// Move constructor for the Chromosome class.
+		/// </summary>
+		/// <param name="that">Reference to the chromosome to be move.</param>
+		Chromosome(Chromosome&& that) noexcept;
 
 		/// <summary>
 		/// Getter for the pointer to the chromosome outputs.

@@ -19,12 +19,13 @@ std::shared_ptr<std::istream> cgp::get_input(const std::string& in, std::shared_
 	else
 	{
 		auto file = new std::ifstream(in, mode);
-
+		std::cerr << "attempting to open: " << in << std::endl;
 		if (!file->is_open())
 		{
 			delete file;
 			throw std::ofstream::failure("could not open input file " + in);
 		}
+		std::cerr << "opened: " << in << std::endl;
 		stream.reset(file);
 	}
 
@@ -52,6 +53,7 @@ std::shared_ptr<std::ostream> cgp::get_output(const std::string& out, std::share
 	}
 	else
 	{
+		std::cerr << "attempting to open: " << out << std::endl;
 		auto file = new std::ofstream(out, mode);
 
 		if (!file->is_open())
@@ -59,6 +61,7 @@ std::shared_ptr<std::ostream> cgp::get_output(const std::string& out, std::share
 			delete file;
 			throw std::ofstream::failure("could not open output file " + out);
 		}
+		std::cerr << "opened: " << out << std::endl;
 		stream.reset(file);
 	}
 

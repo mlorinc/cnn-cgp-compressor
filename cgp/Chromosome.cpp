@@ -33,14 +33,6 @@ cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, const std::shared_ptr<
 	input >> discard >> input_count >> discard >> output_count >> discard >> col_count >> discard >> row_count
 		>> discard >> function_input_arity >> discard >> l_back >> discard >> discard >> discard;
 
-	//cgp_configuration
-	//	.input_count(input_count)
-	//	.output_count(output_count)
-	//	.col_count(col_count)
-	//	.row_count(row_count)
-	//	.function_input_arity(function_input_arity)
-	//	.function_output_arity(1)
-	//	.look_back_parameter(l_back);
 	setup_maps();
 	setup_iterators();
 	size_t block_size = cgp_configuration.function_input_arity() + 1;
@@ -68,7 +60,7 @@ cgp::Chromosome::Chromosome(CGPConfiguration& cgp_config, const std::shared_ptr<
 	assert(("Chromosome::Chromosome serialized chromosome does not correspond to built chromosome", check_chromosome == serialized_chromosome));
 }
 
-Chromosome::Chromosome(const Chromosome& that) :
+Chromosome::Chromosome(const Chromosome& that) noexcept :
 	cgp_configuration(that.cgp_configuration),
 	minimum_output_indicies(that.minimum_output_indicies),
 	expected_value_min(that.expected_value_min),
@@ -85,6 +77,20 @@ Chromosome::Chromosome(const Chromosome& that) :
 		{
 			std::copy(that.output_pin_start, that.output_pin_end, output_pin_start);
 		}
+}
+
+Chromosome::Chromosome(Chromosome&& that) noexcept :
+	cgp_configuration(that.cgp_configuration),
+	minimum_output_indicies(that.minimum_output_indicies),
+	expected_value_min(that.expected_value_min),
+	expected_value_max(that.expected_value_max) {
+	input = std::move(that.input);
+	need_evaluation = that.need_evaluation;
+	need_energy_evaluation = that.need_energy_evaluation;
+	setup_maps(std::move(that));
+	setup_iterators(std::move(that));
+	estimated_energy_consumptation = that.estimated_energy_consumptation;
+	phenotype_node_count = that.phenotype_node_count;
 }
 
 bool Chromosome::is_function(size_t position) const
@@ -153,12 +159,28 @@ void Chromosome::setup_maps(decltype(chromosome) chromosome)
 	energy_visit_map = std::make_unique<bool[]>(cgp_configuration.row_count() * cgp_configuration.col_count());
 }
 
+void Chromosome::setup_maps(Chromosome &&that)
+{
+	chromosome = std::move(that.chromosome);
+	pin_map = std::move(that.pin_map);
+	energy_map = std::move(that.energy_map);
+	energy_visit_map = std::move(that.energy_visit_map);
+}
+
 void cgp::Chromosome::setup_iterators()
 {
 	output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size();
 	output_end = output_start + cgp_configuration.output_count();
 	output_pin_start = pin_map.get() + cgp_configuration.row_count() * cgp_configuration.col_count() * cgp_configuration.function_output_arity();
 	output_pin_end = output_pin_start + cgp_configuration.output_count();
+}
+
+void cgp::Chromosome::setup_iterators(Chromosome&& that)
+{
+	output_start = that.output_start;
+	output_end = that.output_end;
+	output_pin_start = that.output_pin_start;
+	output_pin_end = that.output_pin_end;
 }
 
 Chromosome::gene_t* Chromosome::get_outputs() const {
@@ -432,7 +454,7 @@ void Chromosome::evaluate(size_t selector)
 		}
 		else [[likely]]
 		{
-			// speed up evolution of operator + multiplexor
+			// speed up evolution of operator + multiplexor; shortciruit pins
 			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
 			{
 				set_value(block_output_pins[i], std::max(expected_value_min, std::min(block_output_pins[selector], expected_value_max)));
