@@ -2,18 +2,20 @@ import torch
 import operator
 import glob
 from functools import reduce
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from cgp.cgp_adapter import CGP
+from cgp.cgp_configuration import CGPConfiguration
 from typing import List, Tuple, Union, Iterable
 from models.base import BaseModel
-from models.lenet import LeNet5
 from pathlib import Path
+import pandas as pd
+import contextlib
 
 ExperimentRange = Union[Tuple[int, int], int]
 InputRange = Union[ExperimentRange, Iterable[Tuple[int, int]]]
 OutputRange = Union[InputRange, None]
 
-class CGPPinPlanner(object):
+class CGPPinPlanner(ABC):
     def __init__(self) -> None:
         self._plan = []
         self._preliminary_plan = []
@@ -36,10 +38,14 @@ class Experiment(object):
         self.experiment_name = experiment_name
         self._model = model
         self._cgp = cgp
-        self._planner = CGPPinPlanner() 
         self.dtype = dtype
-        self._cgp_prepared = False
         self._to_number = int if self.dtype == torch.int8 else float
+        self.reset()
+
+    def reset(self):
+        self._planner = CGPPinPlanner() 
+        self._cgp_prepared = False
+        self._cgp.reset()
 
     def next_input_combination(self):
         self._planner.next_mapping()
@@ -80,16 +86,20 @@ class Experiment(object):
         pass
 
     @abstractmethod
-    def _get_cgp_output_file(self) -> str:
-        pass
-
-    @abstractmethod
     def _get_train_file(self) -> str:
         pass
 
     @abstractmethod
     def _get_statistics_file(self) -> str:
         pass
+
+    @abstractmethod
+    def _get_stdout_file(self) -> str:
+        pass
+
+    @abstractmethod
+    def _get_stderr_file(self) -> str:
+        pass    
 
     @abstractmethod
     def get_number_of_experiment_results(self) -> int:
@@ -101,6 +111,8 @@ class Experiment(object):
         config.set_output_file(self._get_cgp_output_file())
         config.set_input_file(self._get_train_file())
         config.set_cgp_statistics_file(self._get_statistics_file())
+        config.set_stdout_file(self._get_stdout_file())
+        config.set_stderr_file(self._get_stderr_file())
         self._cgp.train(config)
 
     def evaluate(self, run: int = 0):
@@ -215,6 +227,22 @@ class BaseExperiment(Experiment):
         self.configs = self.experiment_root_path / "cgp_configs"
         self.weights = self.experiment_root_path / "weights"
     
+    def set_experiment_name(self, experiment_name: str):
+        self.experiment_root_path = self.experiment_folder_path / experiment_name
+        self.configs = self.experiment_root_path / "cgp_configs"
+        self.weights = self.experiment_root_path / "weights"
+
+    @contextlib.contextmanager
+    def new_experiment(self, experiment_name: str):
+        old_name = self.experiment_name
+        try:
+            self.reset()
+            self.set_experiment_name(experiment_name)
+            yield
+        finally:
+            self.reset()
+            self.set_experiment_name(old_name)
+
     def _get_cgp_output_file(self) -> str:
         return self.configs / "data.cgp"
     
@@ -227,14 +255,54 @@ class BaseExperiment(Experiment):
     def _get_statistics_file(self) -> str:
         return self.experiment_root_path / "statistics.csv"
 
+    def _get_stdout_file(self) -> str:
+        return self.experiment_root_path / "stdout.txt"
+    
+    def _get_stderr_file(self) -> str:
+        return self.experiment_root_path / "stderr.txt"
+
     def get_number_of_experiment_results(self) -> int:
         return len(glob.glob(f"{str(self._get_cgp_output_file())}.*"))
 
     def execute(self):
-        self.experiment_root_path.mkdir(exist_ok=False)
-        self.configs.mkdir(exist_ok=False, parents=True)
-        self.weights.mkdir(exist_ok=False, parents=True)
-        return super().execute()
+        try:
+            self.experiment_root_path.mkdir(exist_ok=False, parents=True)
+            self.configs.mkdir(exist_ok=False, parents=True)
+            self.weights.mkdir(exist_ok=False, parents=True)
+            return super().execute()
+        except FileExistsError as e:
+            last_chunk = None
+            for chunk in pd.read_csv(self._get_statistics_file(), chunksize=8*2**30, names=["run", "generation", "timestamp", "mse", "energy", "chromosome"]):
+                last_chunk = chunk
+            
+            if last_chunk.empty:
+                self.experiment_root_path.mkdir(exist_ok=True, parents=True)
+                self.configs.mkdir(exist_ok=True, parents=True)
+                self.weights.mkdir(exist_ok=True, parents=True)
+                return super().execute()
+            else:
+                return self._recover_evolution(last_chunk, e)
+
+    def _recover_evolution(self, last_chunk: pd.DataFrame, e):
+            last_run = last_chunk.loc[last_chunk.index[-1], "run"]
+            last_generation = last_chunk.loc[last_chunk.index[-1], "generation"]
+
+            if last_run == self._cgp.config.get_number_of_runs() and last_generation >= self._cgp.config.get_generation_count():
+                raise e
+
+            last_mse = last_chunk.loc[last_chunk.index[-1], "mse"]
+            last_energy = last_chunk.loc[last_chunk.index[-1], "energy"]
+            last_chromosome = last_chunk.loc[last_chunk.index[-1], "chromosome"]
+
+            try:
+                self._cgp.config.set_start_run(last_run - 1)
+                self._cgp.config.set_start_generation(last_generation)
+                self._cgp.config.set_starting_solution(f"{last_mse} {last_energy} {last_chromosome}")
+                return super().execute()
+            finally:
+                self._cgp.config.delete_start_run()
+                self._cgp.config.delete_start_generation()
+                self._cgp.config.delete_starting_solution()
 
 
 def conv2d_core_slices(kernel_size, core_size):

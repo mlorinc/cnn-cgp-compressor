@@ -1,4 +1,7 @@
+from pathlib import Path
+
 class CGPConfiguration:
+    ignored_arguments = set(["dataset_size", "periodic_log_frequency", "stdout", "stderr"])
     def __init__(self, config_file: str = None):
         self._attributes = {}
         self._config_file = config_file
@@ -46,6 +49,12 @@ class CGPConfiguration:
                 return float(value_str)
             except ValueError:
                 return value_str
+
+    def get_stderr_file(self):
+        return self._attributes.get("stderr")
+
+    def get_stdout_file(self):
+        return self._attributes.get("stdout")
 
     def get_start_generation(self):
         return self._attributes.get("start_generation")
@@ -122,6 +131,12 @@ class CGPConfiguration:
     def set_start_generation(self, value):
         self._attributes["start_generation"] = value
 
+    def set_stderr_file(self, value):
+        self._attributes["stderr"] = value
+
+    def set_stdout_file(self, value):
+        self._attributes["stdout"] = value
+
     def set_start_run(self, value):
         self._attributes["start_run"] = value
 
@@ -190,6 +205,12 @@ class CGPConfiguration:
 
     def set_cgp_statistics_file(self, value):
         self._attributes["cgp_statistics_file"] = value
+
+    def delete_stderr_file(self):
+        del self._attributes["stderr"]
+
+    def delete_stdout_file(self):
+        del self._attributes["stdout"]
 
     def delete_start_generation(self):
         del self._attributes["start_generation"]
@@ -267,6 +288,12 @@ class CGPConfiguration:
         attributes = [f"{attr}: {value}" for attr, value in self._attributes.items()]
         return "\n".join(attributes)
 
+    def has_stderr_file(self):
+        return "stderr" in self._attributes
+
+    def has_stdout_file(self):
+        return "stdout" in self._attributes
+
     def has_start_generation(self):
         return "start_generation" in self._attributes
 
@@ -342,10 +369,16 @@ class CGPConfiguration:
     def to_args(self):
         arguments = []
         for k, v in self._attributes.items():
-            if k in ["dataset_size", "periodic_log_frequency"]:
+            if k in CGPConfiguration.ignored_arguments:
                 continue
 
             key = k.replace("_", "-")
             arguments.append(f"--{key}")
             arguments.append(str(v))
         return arguments
+
+    def get_debug_vector(self, command: str, config: str = None):
+        args = self.to_args()
+        config = str(Path(config or self._config_file).absolute()).replace("\\", "/")
+        return 'std::vector<std::string> arguments{"%s", "%s", ' % (command, config) + ",\n".join(f'"{x}"' for x in args) + '};\n'
+    
