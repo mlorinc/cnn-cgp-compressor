@@ -190,11 +190,12 @@ double CGP::mse(const weight_value_t* predictions, const std::shared_ptr<weight_
 {
 	double sum = 0;
 	int i = 0;
-	//#pragma omp parallel for reduction(+:sum)
-	for (; i < output_count(); i++)
+	int end = output_count();
+	//#pragma omp parallel for reduction(+:sum) default(shared) private(i, end)
+	for (; i < end; i++)
 	{
 		if (CGPConfiguration::no_care_value == expected_output[i]) break;
-		double diff = predictions[i] - expected_output[i];
+		const double diff = predictions[i] - expected_output[i];
 		sum += diff * diff;
 	}
 
@@ -287,9 +288,9 @@ bool CGP::dominates(solution_t a, solution_t b) const
 	double b_energy_fitness = std::get<1>(b);
 	const auto &b_chromosome = std::get<2>(b);
 
-	auto mse_t = mse_threshold();
+	const auto mse_t = mse_threshold();
 	// Allow neutral evolution for error in case energies are the same
-	return (a_chromosome && !b_chromosome) ||
+	return (!b_chromosome) ||
 		((mse_t < a_error_fitness && a_error_fitness <= b_error_fitness) ||
 		(mse_t >= a_error_fitness && a_energy_fitness < b_energy_fitness) ||
 		(mse_t >= a_error_fitness && a_energy_fitness == b_energy_fitness && a_error_fitness <= b_error_fitness));
@@ -313,18 +314,10 @@ void CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, 
 		// known. Map collection was employed to make computation more efficient
 		// on CPU with multiple cores, and to avoid mutex blocking.
 		auto thread_id = omp_get_thread_num();
-		auto &best_solution = best_solutions[thread_id];
+		auto &best_thread_solution = best_solutions[thread_id];
 
-		if (std::get<2>(best_solution))
-		{
-			// Allow neutral evolution for error
-			if (dominates(chromosome_result, best_solution)) {
-				best_solution = std::move(chromosome_result);
-			}
-		}
-		else {
-			// Create default
-			best_solution = std::move(chromosome_result);
+		if (dominates(chromosome_result, best_thread_solution)) {
+			best_thread_solution = std::move(chromosome_result);
 		}
 	}
 
@@ -334,18 +327,18 @@ void CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, 
 	const auto threads_count = omp_get_max_threads();
 	for (int i = 0; i < threads_count; i++)
 	{
-		const auto &thread_solution = best_solutions[i];
-		double thread_best_error_fitness = std::get<0>(thread_solution);
-		double thread_best_energy_fitness = std::get<1>(thread_solution);
+		const auto &best_thread_solution = best_solutions[i];
+		double thread_best_error_fitness = std::get<0>(best_thread_solution);
+		double thread_best_energy_fitness = std::get<1>(best_thread_solution);
 		double best_error_fitness = std::get<0>(best_solution);
 		double best_energy_fitness = std::get<1>(best_solution);
 
 		// Allow neutral evolution for error
-		if (dominates(thread_solution, best_solution)) {
+		if (dominates(best_thread_solution, best_solution)) {
 			if (thread_best_error_fitness != best_error_fitness || thread_best_energy_fitness != best_energy_fitness) {
 				generations_without_change = 0;
 			}
-			best_solution = thread_solution;
+			best_solution = best_thread_solution;
 		}
 	}
 }
