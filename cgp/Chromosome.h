@@ -16,6 +16,7 @@ namespace cgp {
 		using gene_t = CGPConfiguration::gene_t;
 		using weight_value_t = CGPConfiguration::weight_value_t;
 		using weight_actual_value_t = CGPConfiguration::weight_actual_value_t;
+		using gate_parameters_t = CGPConfiguration::gate_parameters_t;
 
 		// Reference to the CGP configuration used for chromosome setup.
 		CGPConfiguration &cgp_configuration;
@@ -42,10 +43,10 @@ namespace cgp {
 		std::unique_ptr<weight_value_t[]> pin_map;
 
 		// Shared pointer to the function energy map array.
-		std::unique_ptr<double[]> energy_map;
+		std::unique_ptr<gate_parameters_t[]> gate_parameters_map;
 
 		// Shared pointer to the function energy visit map array.
-		std::unique_ptr<bool[]> energy_visit_map;
+		std::unique_ptr<bool[]> gate_visit_map;
 
 		// Shared pointer to the input array.
 		std::shared_ptr<weight_value_t[]> input;
@@ -59,8 +60,20 @@ namespace cgp {
 		// Cached energy consumption value.
 		double estimated_energy_consumptation = std::numeric_limits<double>::infinity();
 
+		// Cached delay value.
+		double estimated_largest_delay = 0;
+
+		// Cached depth value.
+		size_t estimated_largest_depth = 0;
+
 		// Cached phenotype node count value. By node it is understood as one digital gate.
 		size_t phenotype_node_count = 0;
+
+		// Cached the lowest used row.
+		size_t top_row = 0;
+
+		// Cached the highest used row.
+		size_t bottom_row = 0;
 
 		// Private method to check if a given position in the chromosome represents a function.
 		bool is_function(size_t position) const;
@@ -208,10 +221,34 @@ namespace cgp {
 		decltype(estimated_energy_consumptation) get_estimated_energy_usage();
 
 		/// <summary>
+		/// Estimate largest delay by phenotype digital circuit.
+		/// </summary>
+		/// <returns>Largest delay.</returns>
+		decltype(estimated_largest_delay) get_estimated_largest_delay();
+
+		/// <summary>
+		/// Estimate largest depth by phenotype digital circuit.
+		/// </summary>
+		/// <returns>Largest depth.</returns>
+		decltype(estimated_largest_depth) get_estimated_largest_depth();
+
+		/// <summary>
 		/// Get quantity of used digital gates used by phenotype.
 		/// </summary>
 		/// <returns>Qunatity of used digital gates.</returns>
 		decltype(phenotype_node_count) get_node_count();
+
+		/// <summary>
+		/// Get the highest row used by phenotype.
+		/// </summary>
+		/// <returns>Qunatity of used digital gates.</returns>
+		decltype(top_row) get_top_row();
+
+		/// <summary>
+		/// Get the lowest row used by phenotype.
+		/// </summary>
+		/// <returns>Qunatity of used digital gates.</returns>
+		decltype(bottom_row) get_bottom_row();
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return array of weights.

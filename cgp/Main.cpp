@@ -3,37 +3,33 @@
 #include "Main.h"
 using namespace cgp;
 
-std::shared_ptr<CGP> init_cgp(const std::string& cgp_file, const std::vector<std::string>& arguments)
+static std::shared_ptr<CGP> init_cgp(const std::string& cgp_file, const std::vector<std::string>& arguments)
 {
 	std::ifstream cgp_in(cgp_file);
 	auto cgp_model = std::make_shared<CGP>(cgp_in, arguments);
 	cgp_in.close();
 
-	std::shared_ptr<double[]> energy_costs = std::make_shared<double[]>(cgp_model->function_count());
+	auto costs = std::make_shared<CGPConfiguration::gate_parameters_t[]>(cgp_model->function_count());
 
 	for (size_t i = 0; i < cgp_model->function_count(); i++)
 	{
-		energy_costs[i] = 1;
+		// energy, delay
+		costs[i] = std::make_tuple(1, 1);
 	}
 
-	cgp_model->function_energy_costs(energy_costs);
+	cgp_model->function_costs(costs);
 	return cgp_model;
 }
 
 static std::string format_timestamp(std::chrono::milliseconds ms) {
 	auto secs = std::chrono::duration_cast<std::chrono::seconds>(ms);
-	ms -= std::chrono::duration_cast<std::chrono::milliseconds>(secs);
-	auto mins = std::chrono::duration_cast<std::chrono::minutes>(secs);
-	secs -= std::chrono::duration_cast<std::chrono::seconds>(mins);
-	auto hour = std::chrono::duration_cast<std::chrono::hours>(mins);
-	mins -= std::chrono::duration_cast<std::chrono::minutes>(hour);
 
 	std::stringstream ss;
-	ss << std::setw(2) << std::setfill('0') << hour.count() << ":" << mins.count() << ":" << secs.count() << "." << ms.count();
+	ss << ms.count();
 	return ss.str();
 }
 
-int evaluate(std::vector<std::string>& arguments, const std::string& cgp_file, const std::string& solution = "")
+static int evaluate(std::vector<std::string>& arguments, const std::string& cgp_file, std::string solution = "")
 {
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs;
 
@@ -63,14 +59,13 @@ int evaluate(std::vector<std::string>& arguments, const std::string& cgp_file, c
 	{
 		cgp_model.restore(solution);
 	}
+
 	cgp_model.dump(std::cerr);
 	log_weights(*out, inputs, cgp_model);
-
-	std::cerr << std::endl << "exitting program" << std::endl;
 	return 0;
 }
 
-int train(std::vector<std::string>& arguments, const std::string& cgp_file)
+static int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 {
 	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
 	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::max();
@@ -107,7 +102,6 @@ int train(std::vector<std::string>& arguments, const std::string& cgp_file)
 		std::cerr << "loading output values" << std::endl;
 		outputs.push_back(load_output(*in, cgp_model.output_count(), min, max));
 	}
-
 
 	cgp_model.build_indices();
 	cgp_model.dump(std::cerr);

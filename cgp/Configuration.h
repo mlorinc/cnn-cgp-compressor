@@ -37,6 +37,33 @@ namespace cgp {
 	/// </summary>
 	struct CGPConfiguration
 	{
+	public:
+		using gate_parameters_t = std::tuple<double, double>;
+		using gene_t = uint16_t;
+		static gate_parameters_t get_default_gate_parameters();
+		static double get_energy_parameter(const gate_parameters_t &params);
+		static double get_delay_parameter(const gate_parameters_t& params);
+		static void set_energy_parameter(gate_parameters_t& params, double energy);
+		static void set_delay_parameter(gate_parameters_t& params, double delay);
+
+#ifndef CNN_FP32_WEIGHTS
+		// Type definition for inferred weight.
+		using weight_value_t = int16_t;
+		// Type definition for hardware inferred weight.
+		using weight_actual_value_t = int8_t;
+		// Type definition for serialization.
+		using weight_repr_value_t = int;
+		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::max();
+		static const weight_value_t no_care_value = std::numeric_limits<weight_value_t>::min();
+#else
+		// Type definition for inferred weight.
+		using weight_value_t = double;
+		// Type definition for inferred weight.
+		using weight_actual_value_t = double;
+		using weight_repr_value_t = double;
+		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::infinity();
+#endif // !CNN_FP32_WEIGHTS
+
 	private:
 		/// <summary>
 		/// Default value for the input arity of functions.
@@ -111,7 +138,7 @@ namespace cgp {
 		/// <summary>
 		/// Array of energy costs for various operations.
 		/// </summary>
-		std::shared_ptr<double[]> function_energy_costs_value;
+		std::shared_ptr<gate_parameters_t[]> function_costs_value;
 
 		/// <summary>
 		/// A path to a file with input data.
@@ -185,26 +212,6 @@ namespace cgp {
 	public:
 		CGPConfiguration();
 		CGPConfiguration(const std::vector<std::string>& arguments);
-
-		// Type definition for the gene.
-		using gene_t = uint16_t;
-
-#ifndef CNN_FP32_WEIGHTS
-		// Type definition for inferred weight.
-		using weight_value_t = int16_t;
-		// Type definition for inferred weight.
-		using weight_actual_value_t = int8_t;
-		using weight_repr_value_t = int;
-		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::max();
-		static const weight_value_t no_care_value = std::numeric_limits<weight_value_t>::min();
-#else
-		// Type definition for inferred weight.
-		using weight_value_t = double;
-		// Type definition for inferred weight.
-		using weight_actual_value_t = double;
-		using weight_repr_value_t = double;
-		static const weight_value_t invalid_value = std::numeric_limits<weight_value_t>::infinity();
-#endif // !CNN_FP32_WEIGHTS
 
 		static const std::string PERIODIC_LOG_FREQUENCY_LONG;
 
@@ -379,7 +386,7 @@ namespace cgp {
 		/// <summary>
 		/// Gets array of energy costs for various operations.
 		/// </summary>
-		decltype(function_energy_costs_value) function_energy_costs() const;
+		decltype(function_costs_value) function_costs() const;
 
 		/// <summary>
 		/// Get Mean Squared Error threshold after optimisation is focused on minimising energy.
@@ -491,7 +498,7 @@ namespace cgp {
 		/// <summary>
 		/// Sets array of energy costs for various operations.
 		/// </summary>
-		CGPConfiguration& function_energy_costs(decltype(function_energy_costs_value));
+		CGPConfiguration& function_costs(decltype(function_costs_value));
 
 		/// <summary>
 		/// Sets a file path in which input data are located.

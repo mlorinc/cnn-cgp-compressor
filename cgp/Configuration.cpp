@@ -97,6 +97,31 @@ namespace cgp {
 		}
 	}
 
+	CGPConfiguration::gate_parameters_t CGPConfiguration::get_default_gate_parameters()
+	{
+		return std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
+	}
+
+	double CGPConfiguration::get_energy_parameter(const gate_parameters_t& params)
+	{
+		return std::get<0>(params);
+	}
+
+	double CGPConfiguration::get_delay_parameter(const gate_parameters_t& params)
+	{
+		return std::get<1>(params);
+	}
+
+	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, double energy)
+	{
+		std::get<0>(params) = energy;
+	}
+
+	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, double energy)
+	{
+		std::get<1>(params) = energy;
+	}
+
 	CGPConfiguration& CGPConfiguration::start_generation(decltype(start_generation_value) value)
 	{
 		start_generation_value = value;
@@ -248,9 +273,9 @@ namespace cgp {
 		return blocks_chromosome_size() + output_count();
 	}
 
-	decltype(CGPConfiguration::function_energy_costs_value) CGPConfiguration::function_energy_costs() const
+	decltype(CGPConfiguration::function_costs_value) CGPConfiguration::function_costs() const
 	{
-		return function_energy_costs_value;
+		return function_costs_value;
 	}
 
 	decltype(CGPConfiguration::function_output_arity_value) CGPConfiguration::function_output_arity() const {
@@ -451,9 +476,9 @@ namespace cgp {
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::function_energy_costs(decltype(function_energy_costs_value) value)
+	CGPConfiguration& CGPConfiguration::function_costs(decltype(function_costs_value) value)
 	{
-		function_energy_costs_value = value;
+		function_costs_value = value;
 		return *this;
 	}
 

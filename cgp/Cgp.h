@@ -15,13 +15,29 @@ namespace cgp {
 	class CGP : public CGPConfiguration {
 	private:
 		using gene_t = CGPConfiguration::gene_t;
-		// A candidate solution tuple in format: error fitness, energy fitness and the genotype.
-		using solution_t = std::tuple<double, double, std::shared_ptr<Chromosome>>;
+		// A candidate solution tuple in format: error fitness, (energy fitness, largest delay), depth, and the genotype.
+		using solution_t = std::tuple<double, double, double, size_t, size_t, std::shared_ptr<Chromosome>>;
+		static inline solution_t get_default_solution();
+		static inline solution_t create_solution(
+			std::shared_ptr<Chromosome> chromosome,
+			double error,
+			double energy = std::numeric_limits<double>::infinity(),
+			double delay = std::numeric_limits<double>::infinity(),
+			size_t depth = std::numeric_limits<size_t>::max(),
+			size_t gate_count = std::numeric_limits<size_t>::max());
+		static inline double get_error(const solution_t solution);
+		static inline double get_energy(const solution_t solution);
+		static inline double get_delay(const solution_t solution);
+		static inline size_t get_depth(const solution_t solution);
+		static inline size_t get_gate_count(const solution_t solution);
+		static inline std::shared_ptr<Chromosome> get_chromosome(const solution_t solution);
+
+		static const std::string default_solution_format;
 
 		solution_t best_solution;
 
 		// Collection of chromosomes representing individuals in the population.
-		std::array<std::shared_ptr<Chromosome>, 128> chromosomes;
+		std::vector<std::shared_ptr<Chromosome>> chromosomes;
 
 		// Array containing tuples specifying the minimum and maximum pin indices for output connections.
 		std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies;
@@ -51,7 +67,16 @@ namespace cgp {
 		double error_fitness_without_aggregation(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output);
 
 		// Calculate the energy fitness of a chromosome.
-		double energy_fitness(Chromosome& chrom);
+		double get_energy_fitness(Chromosome& chrom);
+
+		// Calculate the delay fitness of a chromosome.
+		double get_delay_fitness(Chromosome& chrom);
+
+		// Calculate the depth fitness of a chromosome.
+		size_t get_depth_fitness(Chromosome& chrom);
+
+		// Calculate the gate count fitness of a chromosome.
+		size_t get_gate_count(Chromosome& chrom);
 
 		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
 		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output, size_t selector = 0);
@@ -63,13 +88,13 @@ namespace cgp {
 		double mse_without_division(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const;
 
 		// Determine whether candidate solution A is better than B.
-		bool dominates(solution_t a, solution_t b) const;
+		std::tuple<bool, bool> dominates(solution_t a, solution_t b) const;
 
 		/// <summary>
 		/// Set the best solution from given string.
 		/// </summary>
 		/// <returns>Best chromosome.</returns>
-		void set_best_solution(const std::string &solution);
+		void set_best_solution(const std::string &solution, std::string format);
 	public:
 		/// <summary>
 		/// Constructor for CGP class.
@@ -137,6 +162,24 @@ namespace cgp {
 		double get_best_energy_fitness() const;
 
 		/// <summary>
+		/// Get the current best delay fitness value.
+		/// </summary>
+		/// <returns>Current best delay fitness value.</returns>
+		double get_best_delay_fitness() const;
+
+		/// <summary>
+		/// Get the current best depth value.
+		/// </summary>
+		/// <returns>Current best depth value.</returns>
+		size_t get_best_depth() const;
+
+		/// <summary>
+		/// Get the current best gate count.
+		/// </summary>
+		/// <returns>Current best gate count value.</returns>
+		size_t get_best_gate_count() const;
+
+		/// <summary>
 		/// Get the chromosome with the lowest fitness value.
 		/// </summary>
 		/// <returns>Best chromosome.</returns>
@@ -176,7 +219,8 @@ namespace cgp {
 		/// <param name="solution">Serialized solution string containing error fitness, energy fitness and serialized chromosome.</param>
 		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
 		void restore(
-			const std::string &solution,
+			const std::string& solution,
+			const std::string& solution_format = CGP::default_solution_format,
 			const size_t mutations_made = std::numeric_limits<size_t>::max()
 		);
 
