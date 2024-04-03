@@ -1,15 +1,13 @@
-import torch
 import operator
-import glob
+import torch
+import pandas as pd
 from functools import reduce
 from abc import abstractmethod, ABC
+from pathlib import Path
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from typing import List, Tuple, Union, Iterable
 from models.base import BaseModel
-from pathlib import Path
-import pandas as pd
-import contextlib
 
 ExperimentRange = Union[Tuple[int, int], int]
 InputRange = Union[ExperimentRange, Iterable[Tuple[int, int]]]
@@ -101,19 +99,41 @@ class Experiment(object):
     def _get_stderr_file(self) -> str:
         pass    
 
+    def _before_train(self, config: CGPConfiguration):
+        self.experiment_root_path.mkdir(exist_ok=False, parents=True)
+
+    def _recover_empty_experiment(self, config: CGPConfiguration) -> CGPConfiguration:
+        self.experiment_root_path.mkdir(exist_ok=True, parents=True)
+        return config
+
     @abstractmethod
     def get_number_of_experiment_results(self) -> int:
         pass
 
-    def execute(self):
+    def execute(self, config: Union[None, CGPConfiguration] = CGPConfiguration):
         self._prepare_cgp()
-        config = self._cgp.config.clone()
+        config = config or self._cgp.config.clone()
         config.set_output_file(self._get_cgp_output_file())
         config.set_input_file(self._get_train_file())
         config.set_cgp_statistics_file(self._get_statistics_file())
         config.set_stdout_file(self._get_stdout_file())
         config.set_stderr_file(self._get_stderr_file())
-        self._cgp.train(config)
+        try:
+            self._before_train(config)
+            self._cgp.train(config)
+        except FileExistsError as e:
+            last_chunk = pd.DataFrame()
+
+            if Path(self._get_statistics_file()).exists():
+                for chunk in pd.read_csv(self._get_statistics_file(), chunksize=8*2**30, names=["run", "generation", "timestamp", "mse", "energy", "chromosome"]):
+                    last_chunk = chunk
+            
+            if last_chunk.empty:
+                recovered_config = self._recover_empty_experiment(config)
+                self._cgp.train(recovered_config)
+            else:
+                recovered_config = self._recover_evolution(last_chunk, config, e)
+                self._cgp.train(recovered_config)
 
     def evaluate(self, run: int = 0):
         self._prepare_cgp()
@@ -141,6 +161,23 @@ class Experiment(object):
             new_model = self._inject_weights_from_file(file=file)
             after_acc, after_loss = new_model.evaluate()
             return after_acc, after_loss
+
+    def _recover_evolution(self, last_chunk: pd.DataFrame, config: CGPConfiguration, e) -> CGPConfiguration:
+        last_run = last_chunk.loc[last_chunk.index[-1], "run"]
+        last_generation = last_chunk.loc[last_chunk.index[-1], "generation"]
+
+        if last_run == config.get_number_of_runs() and last_generation >= config.get_generation_count():
+            raise e
+
+        last_mse = last_chunk.loc[last_chunk.index[-1], "mse"]
+        last_energy = last_chunk.loc[last_chunk.index[-1], "energy"]
+        last_chromosome = last_chunk.loc[last_chunk.index[-1], "chromosome"]
+
+        config.set_start_run(last_run - 1)
+        config.set_start_generation(last_generation)
+        config.set_starting_solution(f"{last_mse} {last_energy} {last_chromosome}")
+        self._recover_empty_experiment(config)
+        return config
 
     def _get_bias(self, layer_name: str):
         if self.dtype == torch.int8:
@@ -217,93 +254,6 @@ class Experiment(object):
         else:
             layer.weight = weights 
             layer.bias = biases
-
-class BaseExperiment(Experiment):
-    def __init__(self, experiment_folder: str, experiment_name: str, model: BaseModel, cgp: CGP, dtype=torch.int8) -> None:
-        super().__init__(experiment_name, model, cgp, dtype)
-        self.experiment_folder_path = Path(experiment_folder)
-        self.experiment_folder_path.mkdir(exist_ok=True, parents=True)
-        self.experiment_root_path = self.experiment_folder_path / experiment_name
-        self.configs = self.experiment_root_path / "cgp_configs"
-        self.weights = self.experiment_root_path / "weights"
-    
-    def set_experiment_name(self, experiment_name: str):
-        self.experiment_root_path = self.experiment_folder_path / experiment_name
-        self.configs = self.experiment_root_path / "cgp_configs"
-        self.weights = self.experiment_root_path / "weights"
-
-    @contextlib.contextmanager
-    def new_experiment(self, experiment_name: str):
-        old_name = self.experiment_name
-        try:
-            self.reset()
-            self.set_experiment_name(experiment_name)
-            yield
-        finally:
-            self.reset()
-            self.set_experiment_name(old_name)
-
-    def _get_cgp_output_file(self) -> str:
-        return self.configs / "data.cgp"
-    
-    def _get_weight_output_file(self) -> str:
-        return self.weights / "inferred_weights"
-    
-    def _get_train_file(self) -> str:
-        return self.experiment_root_path / "train.data"
-
-    def _get_statistics_file(self) -> str:
-        return self.experiment_root_path / "statistics.csv"
-
-    def _get_stdout_file(self) -> str:
-        return self.experiment_root_path / "stdout.txt"
-    
-    def _get_stderr_file(self) -> str:
-        return self.experiment_root_path / "stderr.txt"
-
-    def get_number_of_experiment_results(self) -> int:
-        return len(glob.glob(f"{str(self._get_cgp_output_file())}.*"))
-
-    def execute(self):
-        try:
-            self.experiment_root_path.mkdir(exist_ok=False, parents=True)
-            self.configs.mkdir(exist_ok=False, parents=True)
-            self.weights.mkdir(exist_ok=False, parents=True)
-            return super().execute()
-        except FileExistsError as e:
-            last_chunk = None
-            for chunk in pd.read_csv(self._get_statistics_file(), chunksize=8*2**30, names=["run", "generation", "timestamp", "mse", "energy", "chromosome"]):
-                last_chunk = chunk
-            
-            if last_chunk.empty:
-                self.experiment_root_path.mkdir(exist_ok=True, parents=True)
-                self.configs.mkdir(exist_ok=True, parents=True)
-                self.weights.mkdir(exist_ok=True, parents=True)
-                return super().execute()
-            else:
-                return self._recover_evolution(last_chunk, e)
-
-    def _recover_evolution(self, last_chunk: pd.DataFrame, e):
-            last_run = last_chunk.loc[last_chunk.index[-1], "run"]
-            last_generation = last_chunk.loc[last_chunk.index[-1], "generation"]
-
-            if last_run == self._cgp.config.get_number_of_runs() and last_generation >= self._cgp.config.get_generation_count():
-                raise e
-
-            last_mse = last_chunk.loc[last_chunk.index[-1], "mse"]
-            last_energy = last_chunk.loc[last_chunk.index[-1], "energy"]
-            last_chromosome = last_chunk.loc[last_chunk.index[-1], "chromosome"]
-
-            try:
-                self._cgp.config.set_start_run(last_run - 1)
-                self._cgp.config.set_start_generation(last_generation)
-                self._cgp.config.set_starting_solution(f"{last_mse} {last_energy} {last_chromosome}")
-                return super().execute()
-            finally:
-                self._cgp.config.delete_start_run()
-                self._cgp.config.delete_start_generation()
-                self._cgp.config.delete_starting_solution()
-
 
 def conv2d_core_slices(kernel_size, core_size):
     # Ensure the core size is valid

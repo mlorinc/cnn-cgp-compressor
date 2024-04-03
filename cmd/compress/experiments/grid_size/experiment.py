@@ -1,11 +1,10 @@
 import torch
-from typing import List, Tuple
 from cgp.cgp_adapter import CGP
-from cgp.cgp_configuration import CGPConfiguration
 from models.base import BaseModel
-from experiments.experiment import BaseExperiment, conv2d_core, conv2d_outter
+from experiments.experiment import conv2d_core, conv2d_outter
+from experiments.multi_experiment import MultiExperiment
 
-class GridSizeExperiment(BaseExperiment):
+class GridSizeExperiment(MultiExperiment):
     name = "grid_size"
     def __init__(self, 
                 experiment_folder: str, 
@@ -25,16 +24,16 @@ class GridSizeExperiment(BaseExperiment):
     def execute(self):
         for row, col in self.grid_sizes:
             for i, j, sel in self.filters:
-                with self.new_experiment(f"{GridSizeExperiment.name}/results/{sel[0]}_{i}_{j}_{row}_{col}"):
+                with self.experiment_context(f"{sel[0]}_{i}_{j}_{row}_{col}") as (experiment_name, config):
                     try:
-                        print(f"training: {self.experiment_root_path.name}")
-                        self._cgp.config.set_row_count(row)
-                        self._cgp.config.set_col_count(col)
-                        self._cgp.config.set_look_back_parameter(col)
+                        print(f"training: {experiment_name}")
+                        config.set_row_count(row)
+                        config.set_col_count(col)
+                        config.set_look_back_parameter(col)
                         self.add_filters(*sel)
-                        super().execute()
+                        super().execute(config)
                     except FileExistsError:
-                        print(f"skipping {sel[0]}_{i}_{j}_{row}_{col}")
+                        print(f"skipping {experiment_name}")
                         continue
 
 def init(experiment_folder: str, model: BaseModel, cgp: CGP, dtype=torch.int8, experiment_name=None):

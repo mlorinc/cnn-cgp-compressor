@@ -1,7 +1,5 @@
-mse_threshold: 0
-col_count: 50
-row_count: 30
-number_of_runs: 35
+patience: 300000
+number_of_runs: 30
 look_back_parameter: 50
 mutation_max: 0.15
 function_count: 31
@@ -12,4 +10,4 @@ input_count: 54
 output_count: 96
 population_max: 4
 generation_count: 90000000
-periodic_log_frequency: 10000
+periodic_log_frequency: 50000

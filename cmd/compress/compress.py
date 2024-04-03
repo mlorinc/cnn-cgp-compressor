@@ -4,7 +4,7 @@ import torch
 from models.mobilenet_v2 import MobileNetV2
 from models.base import BaseModel
 from cgp.cgp_adapter import CGP
-from experiments.experiment import BaseExperiment
+from experiments.simple_experiment import BaseExperiment
 import importlib
 import argparse
 import pandas as pd
