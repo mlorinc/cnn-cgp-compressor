@@ -49,7 +49,7 @@ static int evaluate(std::vector<std::string>& arguments, const std::string& cgp_
 	weight_repr_value_t min, max;
 	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
 	{
-		std::cerr << "loading values" << std::endl;
+		std::cout << "loading values" << std::endl;
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
 		// Ignore output
 		load_output(*in, cgp_model.output_count(), min, max);
@@ -60,7 +60,7 @@ static int evaluate(std::vector<std::string>& arguments, const std::string& cgp_
 		cgp_model.restore(solution);
 	}
 
-	cgp_model.dump(std::cerr);
+	cgp_model.dump(std::cout);
 	log_weights(*out, inputs, cgp_model);
 	return 0;
 }
@@ -97,15 +97,15 @@ static int train(std::vector<std::string>& arguments, const std::string& cgp_fil
 
 	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
 	{
-		std::cerr << "loading input values" << std::endl;
+		std::cout << "loading input values" << std::endl;
 		inputs.push_back(load_input(*in, cgp_model.input_count()));
-		std::cerr << "loading output values" << std::endl;
+		std::cout << "loading output values" << std::endl;
 		outputs.push_back(load_output(*in, cgp_model.output_count(), min, max));
 	}
 
 	cgp_model.build_indices();
-	cgp_model.dump(std::cerr);
-	std::cerr << "invalid_value: " << CGPConfiguration::invalid_value << std::endl
+	cgp_model.dump(std::cout);
+	std::cout << "invalid_value: " << CGPConfiguration::invalid_value << std::endl
 		<< "no_care_value: " << CGPConfiguration::no_care_value << std::endl;
 
 	auto start = std::chrono::high_resolution_clock::now();
@@ -114,7 +114,7 @@ static int train(std::vector<std::string>& arguments, const std::string& cgp_fil
 	for (size_t run = cgp_model.start_run(); run < cgp_model.number_of_runs(); run++)
 	{
 		size_t i = (run != cgp_model.start_run()) ? (0) : (cgp_model.start_generation());
-		std::cerr << "performin run " << run << " and starting from generation " << i << std::endl;
+		std::cout << "performin run " << run << " and starting from generation " << i << std::endl;
 		for (size_t log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
 		{
 			cgp_model.evaluate(inputs, outputs);
@@ -123,13 +123,13 @@ static int train(std::vector<std::string>& arguments, const std::string& cgp_fil
 				auto now = std::chrono::high_resolution_clock::now();
 				auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
 				log_csv(*stats_out, run, i, cgp_model, format_timestamp(duration));
-				log_human(std::cerr, run, i, cgp_model);
+				log_human(std::cout, run, i, cgp_model);
 				log_counter = 0;
 				start = std::chrono::high_resolution_clock::now();
 			}
 			else if (log_counter >= cgp_model.periodic_log_frequency())
 			{
-				log_human(std::cerr, run, i, cgp_model);
+				log_human(std::cout, run, i, cgp_model);
 				log_counter = 0;
 			}
 			else
@@ -139,22 +139,22 @@ static int train(std::vector<std::string>& arguments, const std::string& cgp_fil
 
 			if ((cgp_model.get_best_error_fitness() <= cgp_model.mse_early_stop() && cgp_model.get_best_energy_fitness() <= cgp_model.energy_early_stop()) || cgp_model.get_generations_without_change() > generation_stop)
 			{
-				log_human(std::cerr, run, i, cgp_model);
+				log_human(std::cout, run, i, cgp_model);
 				break;
 			}
 			cgp_model.mutate();
 		}
 
-		std::cerr << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl
+		std::cout << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl
 			<< "finished evolution after " << i << " generations" << std::endl;
 
 		auto out = get_output(cgp_model.output_file() + "." + std::to_string(run));
 		cgp_model.dump(*out);
-		std::cerr << "resetting cgp" << std::endl;
+		std::cout << "resetting cgp" << std::endl;
 		cgp_model.reset();
-		std::cerr << "resetted cgp" << std::endl << "generating population" << std::endl;
+		std::cout << "resetted cgp" << std::endl << "generating population" << std::endl;
 		cgp_model.generate_population();
-		std::cerr << "generated population" << std::endl;
+		std::cout << "generated population" << std::endl;
 	}
 
 	std::cerr << std::endl << "exitting program" << std::endl;

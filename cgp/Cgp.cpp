@@ -69,10 +69,8 @@ void CGP::dump(std::ostream& out) const
 	out << "expected_value_max: " << static_cast<weight_repr_value_t>(expected_value_max) << std::endl;
 	for (auto it = other_config_attribitues.cbegin(), end = other_config_attribitues.cend(); it != end; it++)
 	{
-		std::cerr << "writing additional parameter to data.cgp\t" << it->first << ": " << it->second << std::endl;
 		out << it->first << ": " << it->second << std::endl;
 	}
-	std::cerr << "data.cgp succesfully saved" << std::endl;
 }
 
 std::map<std::string, std::string> CGP::load(std::istream& in, const std::vector<std::string>& arguments)
@@ -114,12 +112,10 @@ std::map<std::string, std::string> CGP::load(std::istream& in, const std::vector
 	if (!starting_solution().empty())
 	{
 		set_best_solution(starting_solution(), best_solution_format);
-		std::cerr << "loaded chromosome: " << get_best_chromosome()->to_string() << std::endl;
 	}
 	else if (!best_solution_string.empty())
 	{
 		set_best_solution(best_solution_string, best_solution_format);
-		std::cerr << "loaded chromosome: " << get_best_chromosome()->to_string() << std::endl;
 	}
 	other_config_attribitues = remaining_data;
 	return remaining_data;
@@ -159,7 +155,6 @@ void CGP::build_indices()
 void CGP::generate_population()
 {
 	const auto& best_chromosome = get_best_chromosome();
-	std::cerr << "got the best chromosome" << std::endl;
 	const int end = population_max();
 	int i;
 	#pragma omp parallel for default(shared) private(i)

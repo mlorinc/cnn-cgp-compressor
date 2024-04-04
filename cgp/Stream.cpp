@@ -19,13 +19,13 @@ std::shared_ptr<std::istream> cgp::get_input(const std::string& in, std::shared_
 	else
 	{
 		auto file = new std::ifstream(in, mode);
-		std::cerr << "attempting to open: " << in << std::endl;
+		std::cout << "attempting to open: " << in << std::endl;
 		if (!file->is_open())
 		{
 			delete file;
 			throw std::ofstream::failure("could not open input file " + in);
 		}
-		std::cerr << "opened: " << in << std::endl;
+		std::cout << "opened: " << in << std::endl;
 		stream.reset(file);
 	}
 
@@ -53,7 +53,7 @@ std::shared_ptr<std::ostream> cgp::get_output(const std::string& out, std::share
 	}
 	else
 	{
-		std::cerr << "attempting to open: " << out << std::endl;
+		std::cout << "attempting to open: " << out << std::endl;
 		auto file = new std::ofstream(out, mode);
 
 		if (!file->is_open())
@@ -61,7 +61,7 @@ std::shared_ptr<std::ostream> cgp::get_output(const std::string& out, std::share
 			delete file;
 			throw std::ofstream::failure("could not open output file " + out);
 		}
-		std::cerr << "opened: " << out << std::endl;
+		std::cout << "opened: " << out << std::endl;
 		stream.reset(file);
 	}
 
@@ -169,8 +169,6 @@ std::shared_ptr<cgp::weight_value_t[]> cgp::load_input(std::istream& in, size_t 
 			throw std::invalid_argument("invalit unknown input value: expecting weight value or x");
 		}
 	}
-	std::copy(input.get(), input.get() + input_size, std::ostream_iterator<weight_repr_value_t>(std::cerr, " "));
-	std::cerr << std::endl;
 	return input;
 }
 
