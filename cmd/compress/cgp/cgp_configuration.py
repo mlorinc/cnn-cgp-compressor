@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Self
 
 class CGPConfiguration:
-    ignored_arguments = set(["dataset_size", "periodic_log_frequency", "stdout", "stderr"])
+    ignored_arguments = set(["stdout", "stderr"])
     def __init__(self, config_file: str = None):
         self._attributes = {}
         self._config_file = config_file
@@ -49,6 +50,14 @@ class CGPConfiguration:
                 return float(value_str)
             except ValueError:
                 return value_str
+
+    def remove_redundant_attributes(self, other_config: Self):
+        for k, v in self._attributes:
+            if k in CGPConfiguration.ignored_arguments:
+                continue
+            val = other_config._attributes.get(k, None)
+            if v == val:
+                del self._attributes[k]
 
     def get_stderr_file(self):
         return self._attributes.get("stderr")

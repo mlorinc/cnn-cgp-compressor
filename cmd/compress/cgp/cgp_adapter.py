@@ -71,6 +71,7 @@ class CGP(object):
             self._prepare_cgp_algorithm(f)
 
     def train(self, new_configration: CGPConfiguration):
+        new_configration.remove_redundant_attributes(self.config)
         args = [] if new_configration is None else new_configration.to_args()
 
         input_file = new_configration.get_input_file() if new_configration.has_input_file() else self.config.get_input_file()
@@ -80,7 +81,6 @@ class CGP(object):
         resumed_run = (new_configration.has_start_run() and new_configration.get_start_run() != 0)
         resumed_generation = (new_configration.has_start_generation() and new_configration.get_start_generation() != 0)
         file_mode = "a" if resumed_run or resumed_generation else "w"
-
         with open(new_configration.get_stdout_file(), file_mode) as stdout, open(new_configration.get_stderr_file(), file_mode) as stderr:
             process = subprocess.Popen([
                 self._binary,
