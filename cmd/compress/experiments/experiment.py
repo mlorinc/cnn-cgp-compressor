@@ -135,15 +135,17 @@ class Experiment(object):
                 recovered_config = self._recover_evolution(last_chunk, config, e)
                 self._cgp.train(recovered_config)
 
-    def evaluate(self, run: int = 0):
+    def evaluate(self, run: int = None):
         self._prepare_cgp()
+        runs = [run] or range(self.get_number_of_experiment_results())
+        config = self._cgp.config.clone()
         with torch.inference_mode():
-            config = self._cgp.config.clone()
-            config.set_output_file(f"{self._get_weight_output_file()}.{run}")
-            self._cgp.evaluate(new_configration=config, config_file=f"{self._get_cgp_output_file()}.{run}")     
-            new_model = self._inject_weights_from_file(run=run)
-            after_acc, after_loss = new_model.evaluate()
-            return after_acc, after_loss
+            for run in runs:
+                config.set_output_file(f"{self._get_weight_output_file()}.{run}")
+                self._cgp.evaluate(new_configration=config, config_file=f"{self._get_cgp_output_file()}.{run}")     
+                new_model = self._inject_weights_from_file(run=run)
+                after_acc, after_loss = new_model.evaluate()
+                return after_acc, after_loss
 
     def evaluate_from_file(self, file: str = None, run: int = 0):
         self._planner.finish_mapping()

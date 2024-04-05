@@ -46,45 +46,28 @@ def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, exper
         model = _get_model(model_name, model_path)
         model = model.load(model_path)
         model.eval()
-        cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{experiment_name}/config.cgp")
-        experiment = _get_experiment(experiment_name, model, cgp)
+
+        segments = experiment_name.split(":")
+        base = segments[0]
+        name = segments[0] if len(segments) == 1 else segments[1]
+
+        cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{base}/config.cgp")
+        experiment = _get_experiment(base, model, cgp, experiment_name=name)
         experiment.execute()
 
-def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_base_name: str, args):
-    model = _get_model(model_name, model_path)
-    model = model.load(model_path)
-    model.eval()
-    cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{experiment_base_name}/config.cgp")
-    experiment = _get_experiment(experiment_base_name, model, cgp, experiment_name=args.experiment)
+def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: str, args):
+    for experiment_name in experiment_names:
+        model = _get_model(model_name, model_path)
+        model = model.load(model_path)
+        model.eval()
 
-    if args.run is not None and args.file is not None:
-        raise ValueError("run and file must not be specified together")
-    if args.run is None and args.file is None:
-        args.run = range(experiment.get_number_of_experiment_results())
+        segments = experiment_name.split(":")
+        base = segments[0]
+        name = segments[0] if len(segments) == 1 else segments[1]
 
-    initial_acc, initial_loss = model.evaluate()
-    accuracies = []
-    losses = []
-    sources = []
-
-    for run, file in zip_longest(args.run or [], args.file or []):
-        try:
-            after_acc, after_loss = experiment.evaluate_from_file(run=run, file=file)
-        except FileNotFoundError as e:
-            if run is not None:
-                after_acc, after_loss = experiment.evaluate(run=run)
-            else:
-                raise e
-        accuracies.append(after_acc)
-        losses.append(after_loss)
-        sources.append(run or file)
-
-    data = {"sources": sources, "accuracies": accuracies, "losses": losses}
-    df = pd.DataFrame(data)
-    df_model = pd.DataFrame({"acc": [initial_acc], "loss": [initial_loss]})
-    print(df)
-    df.to_csv(experiment.experiment_root_path / "evaluation_stats.csv", index=False)
-    df_model.to_csv(experiment.experiment_root_path / "model_stats.csv", index=False)
+        cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{base}/config.cgp")
+        experiment = _get_experiment(base, model, cgp, experiment_name=name)
+        experiment.evaluate_runs()
 
 def main():
     parser = argparse.ArgumentParser(description="Model Training, Evaluation, Quantization, and Optimization")
@@ -120,10 +103,9 @@ def main():
     evaluate_cgp_parser.add_argument("model_name", help="Name of the model to evaluate")
     evaluate_cgp_parser.add_argument("model_path", help="Path to the model to evaluate")
     evaluate_cgp_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
-    evaluate_cgp_parser.add_argument("experiment_base_name", help="Experiment to evaluate")
+    evaluate_cgp_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
     evaluate_cgp_parser.add_argument("--run", nargs='+', type=int, help="List of runs to evaluate", required=False)
     evaluate_cgp_parser.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
-    evaluate_cgp_parser.add_argument("--experiment", type=str, help="Specific experiment results to evaluate", required=False)
 
     args = parser.parse_args()
 
@@ -136,7 +118,7 @@ def main():
     elif args.command == "cgp:optimize":
         optimize_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
     elif args.command == "cgp:evaluate":
-        evaluate_cgp_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_base_name, args)
+        evaluate_cgp_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
     else:
         print("Invalid command. Use --help for usage information.")
 

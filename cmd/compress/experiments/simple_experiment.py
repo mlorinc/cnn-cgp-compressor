@@ -16,6 +16,8 @@ class BaseExperiment(Experiment):
         self.experiment_root_path = self.experiment_folder_path / experiment_name
         self.configs = self.experiment_root_path / "cgp_configs"
         self.weights = self.experiment_root_path / "weights"
+        self.initial_acc = None
+        self.initial_loss = None
 
     def _get_cgp_output_file(self) -> str:
         return self.configs / "data.cgp"
@@ -48,3 +50,31 @@ class BaseExperiment(Experiment):
         self.configs.mkdir(exist_ok=True, parents=True)
         self.weights.mkdir(exist_ok=True, parents=True)
         return config
+
+    def evaluate_runs(self):
+        run = range(self.get_number_of_experiment_results())
+        if self.initial_acc is None or self.initial_loss is None:
+            self.initial_acc, self.initial_loss = self._model.evaluate()
+        accuracies = []
+        losses = []
+        sources = []
+
+        for run in run:
+            try:
+                after_acc, after_loss = self.evaluate_from_file(run=run)
+            except FileNotFoundError as e:
+                if run is not None:
+                    after_acc, after_loss = self.evaluate(run=run)
+                else:
+                    raise e
+            accuracies.append(after_acc)
+            losses.append(after_loss)
+            sources.append(run)
+
+        data = {"sources": sources, "accuracies": accuracies, "losses": losses}
+        df = pd.DataFrame(data)
+        df_model = pd.DataFrame({"acc": [self.initial_acc], "loss": [self.initial_loss]})
+        print(df)
+        df.to_csv(self.experiment_root_path / "evaluation_stats.csv", index=False)
+        df_model.to_csv(self.experiment_root_path / "model_stats.csv", index=False)
+        return df

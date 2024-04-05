@@ -52,9 +52,10 @@ class CGPConfiguration:
                 return value_str
 
     def remove_redundant_attributes(self, other_config: Self):
-        for k, v in self._attributes:
+        for k in list(self._attributes.keys()):
             if k in CGPConfiguration.ignored_arguments:
                 continue
+            v = self._attributes[k]
             val = other_config._attributes.get(k, None)
             if v == val:
                 del self._attributes[k]
