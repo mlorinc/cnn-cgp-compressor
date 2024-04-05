@@ -155,6 +155,12 @@ void CGP::build_indices()
 void CGP::generate_population()
 {
 	const auto& best_chromosome = get_best_chromosome();
+
+	if ((start_generation() != 0 || start_run() != 0) && !best_chromosome)
+	{
+		throw std::invalid_argument("cannot resume evolution without starting chromosome");
+	}
+
 	const int end = population_max();
 	int i;
 	#pragma omp parallel for default(shared) private(i)
@@ -187,67 +193,7 @@ double CGP::mse_without_division(const weight_value_t* predictions, const std::s
 
 void CGP::set_best_solution(const std::string& solution, std::string format_string)
 {
-	std::istringstream iss(solution), format(format_string);
-	std::string attribute_name, attribute_value;
-
-	std::string chrom;
-	double error, energy, delay;
-	size_t depth, gate_count;
-
-	while (format >> attribute_name)
-	{
-		if (iss >> attribute_value)
-		{
-			if (attribute_name == "error")
-			{
-				error = (attribute_value == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(attribute_value);
-			}
-			else if (attribute_name == "energy")
-			{
-				energy = (attribute_value == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(attribute_value);
-			}
-			else if (attribute_name == "delay")
-			{
-				delay = (attribute_value == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(attribute_value);
-			}
-			else if (attribute_name == "depth")
-			{
-				depth = (attribute_value == "inf") ? (std::numeric_limits<size_t>::max()) : std::stoull(attribute_value);
-			}
-			else if (attribute_name == "gate_count")
-			{
-				gate_count = (attribute_value == "inf") ? (std::numeric_limits<size_t>::max()) : std::stoull(attribute_value);
-			}
-			else
-			{
-				throw std::invalid_argument("unknown fitness parameter " + attribute_name);
-			}
-		}
-		else
-		{
-			throw std::invalid_argument("missing value for " + attribute_name);
-		}
-	}
-
-	if (!format.eof())
-	{
-		throw std::invalid_argument("all attributes were not consumed: " + format.str());
-	}
-
-	if (!iss.eof())
-	{
-		throw std::invalid_argument("all attribute values were not consumed: " + iss.str());
-	}
-
-	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, expected_value_min, expected_value_max, chrom);
-	best_solution = CGP::create_solution(
-		chromosome,
-		error,
-		energy,
-		delay,
-		depth,
-		gate_count
-	);
+	best_solution = create_solution(solution, format_string);
 }
 
 // MSE loss function implementation;
@@ -369,6 +315,75 @@ inline CGP::solution_t CGP::create_solution(
 		depth,
 		gate_count,
 		chromosome
+	);
+}
+
+CGP::solution_t CGP::create_solution(std::string solution, std::string format)
+{
+	std::istringstream iss(solution), format_stream(format);
+	std::string attribute_name, attribute_value;
+
+	std::string chrom;
+	double error, energy, delay;
+	size_t depth, gate_count;
+
+	while (format_stream >> attribute_name)
+	{
+		if (iss >> attribute_value)
+		{
+			if (attribute_name == "error")
+			{
+				error = (attribute_value == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(attribute_value);
+			}
+			else if (attribute_name == "energy")
+			{
+				energy = (attribute_value == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(attribute_value);
+			}
+			else if (attribute_name == "delay")
+			{
+				delay = (attribute_value == "inf") ? (std::numeric_limits<double>::infinity()) : std::stold(attribute_value);
+			}
+			else if (attribute_name == "depth")
+			{
+				depth = (attribute_value == "inf") ? (std::numeric_limits<size_t>::max()) : std::stoull(attribute_value);
+			}
+			else if (attribute_name == "gate_count")
+			{
+				gate_count = (attribute_value == "inf") ? (std::numeric_limits<size_t>::max()) : std::stoull(attribute_value);
+			}
+			else if (attribute_name == "chromosome")
+			{
+				chrom = attribute_value;
+			}
+			else
+			{
+				throw std::invalid_argument("unknown fitness parameter " + attribute_name);
+			}
+		}
+		else
+		{
+			throw std::invalid_argument("missing value for " + attribute_name);
+		}
+	}
+
+	if (!format_stream.eof())
+	{
+		throw std::invalid_argument("all attributes were not consumed: " + format_stream.str());
+	}
+
+	if (!iss.eof())
+	{
+		throw std::invalid_argument("all attribute values were not consumed: " + iss.str());
+	}
+
+	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, expected_value_min, expected_value_max, chrom);
+	return CGP::create_solution(
+		chromosome,
+		error,
+		energy,
+		delay,
+		depth,
+		gate_count
 	);
 }
 

@@ -95,8 +95,8 @@ void cgp::log_csv(std::ostream& stream, size_t run, size_t generation, cgp::CGP&
 		<< cgp_model.get_best_energy_fitness() << ","
 		<< cgp_model.get_best_delay_fitness() << ","
 		<< cgp_model.get_best_depth() << ","
-		<< ((cgp_model.get_best_gate_count() != std::numeric_limits<size_t>::max()) ? (std::to_string(cgp_model.get_best_gate_count())) : ("inf")) << ",\""
-		<< cgp_model.get_best_chromosome()->to_string() << "\"" 
+		<< ((cgp_model.get_best_gate_count() != std::numeric_limits<size_t>::max()) ? (std::to_string(cgp_model.get_best_gate_count())) : ("inf")) 
+		<< ",\"" << cgp_model.get_best_chromosome()->to_string() << "\"" 
 		<< std::endl;
 
 }

@@ -13,14 +13,17 @@ namespace cgp {
 	/// </summary>
 	class Chromosome {
 	private:
+		// Reference to the CGP configuration used for chromosome setup.
+		const CGPConfiguration &cgp_configuration;
+	public:
 		using gene_t = CGPConfiguration::gene_t;
 		using weight_value_t = CGPConfiguration::weight_value_t;
 		using weight_actual_value_t = CGPConfiguration::weight_actual_value_t;
 		using gate_parameters_t = CGPConfiguration::gate_parameters_t;
-
-		// Reference to the CGP configuration used for chromosome setup.
-		CGPConfiguration &cgp_configuration;
-
+		using depth_t = decltype(cgp_configuration.col_count());
+		using delay_t = double;
+		using delay_parameters_t = std::tuple<delay_t, depth_t>;
+	private:
 		// Pointers to the start and end positions of the chromosome output.
 		gene_t* output_start, * output_end;
 
@@ -45,7 +48,7 @@ namespace cgp {
 		// Shared pointer to the function energy map array.
 		std::unique_ptr<gate_parameters_t[]> gate_parameters_map;
 
-		// Shared pointer to the function energy visit map array.
+		// Unique pointer to the function energy visit map array.
 		std::unique_ptr<bool[]> gate_visit_map;
 
 		// Shared pointer to the input array.
@@ -57,6 +60,12 @@ namespace cgp {
 		// Flag indicating whether the genotype needs energy evaluation.
 		bool need_energy_evaluation = true;
 
+		// Flag indicating whether the genotype needs delay evaluation.
+		bool need_delay_evaluation = true;
+
+		// Flag indicating whether the genotype needs depth evaluation.
+		bool need_depth_evaluation = true;
+
 		// Cached energy consumption value.
 		double estimated_energy_consumptation = std::numeric_limits<double>::infinity();
 
@@ -64,16 +73,16 @@ namespace cgp {
 		double estimated_largest_delay = 0;
 
 		// Cached depth value.
-		size_t estimated_largest_depth = 0;
+		depth_t estimated_largest_depth = 0;
 
 		// Cached phenotype node count value. By node it is understood as one digital gate.
 		size_t phenotype_node_count = 0;
 
 		// Cached the lowest used row.
-		size_t top_row = 0;
+		int top_row = 0;
 
 		// Cached the highest used row.
-		size_t bottom_row = 0;
+		int bottom_row = 0;
 
 		// Private method to check if a given position in the chromosome represents a function.
 		bool is_function(size_t position) const;
@@ -92,7 +101,6 @@ namespace cgp {
 
 		// Private method for allocating pin and energy arrays (maps). Chromosome is reused.
 		void setup_maps(decltype(chromosome) chromosome);
-
 		void setup_maps(Chromosome &&that);
 
 		// Private method for setting up iterator pointers.
@@ -107,7 +115,7 @@ namespace cgp {
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
-		Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max);
+		Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max);
 		
 		
 		/// <summary>
@@ -118,7 +126,7 @@ namespace cgp {
 		/// <param name="expected_value_min">Minimum expected value in the dataset.</param>
 		/// <param name="expected_value_max">Maximum expected value in the dataset.</param>
 		/// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
-		Chromosome(CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string &serialized_chromosome);
+		Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string &serialized_chromosome);
 
 		///// <summary>
 		///// Constructor for the Chromosome class using string chromosome representation.

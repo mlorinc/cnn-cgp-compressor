@@ -29,31 +29,15 @@ static std::string format_timestamp(std::chrono::milliseconds ms) {
 	return ss.str();
 }
 
-static int evaluate(std::vector<std::string>& arguments, const std::string& cgp_file, std::string solution = "")
+static int evaluate(CGP& cgp_model, std::vector<std::shared_ptr<weight_value_t[]>> &inputs, std::vector<std::shared_ptr<weight_value_t[]>> &outputs, size_t run, size_t generation, std::string solution = "")
 {
-	std::vector<std::shared_ptr<weight_value_t[]>> inputs;
-
-	auto cgp_model_pointer = init_cgp(cgp_file, arguments);
-	CGP& cgp_model = *cgp_model_pointer;
-
-	auto in = get_input(cgp_model.input_file());
 	auto out = get_output(cgp_model.output_file());
-
-	// Read two values from the standard input
-	if (cgp_model.input_count() == 0 || cgp_model.output_count() == 0)
-	{
-		std::cerr << "invalid input size and output size" << std::endl;
-		return 2;
-	}
-
-	weight_repr_value_t min, max;
-	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
-	{
-		std::cout << "loading values" << std::endl;
-		inputs.push_back(load_input(*in, cgp_model.input_count()));
-		// Ignore output
-		load_output(*in, cgp_model.output_count(), min, max);
-	}
+	//auto stats_out = get_output(
+	//	cgp_model.cgp_statistics_file(),
+	//	nullptr,
+	//	(cgp_model.start_run() == 0) ?
+	//	(std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app)
+	//);
 
 	if (!solution.empty())
 	{
@@ -62,19 +46,12 @@ static int evaluate(std::vector<std::string>& arguments, const std::string& cgp_
 
 	cgp_model.dump(std::cout);
 	log_weights(*out, inputs, cgp_model);
+	log_csv(*stats_out, run, generation, cgp_model, "nan");
 	return 0;
 }
 
-static int train(std::vector<std::string>& arguments, const std::string& cgp_file)
+static int train(CGP &cgp_model, std::vector<std::shared_ptr<weight_value_t[]>>& inputs, std::vector<std::shared_ptr<weight_value_t[]>>& outputs)
 {
-	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
-	weight_repr_value_t min = std::numeric_limits<weight_repr_value_t>::max();
-	weight_repr_value_t max = std::numeric_limits<weight_repr_value_t>::min();
-
-	auto cgp_model_pointer = init_cgp(cgp_file, arguments);
-	CGP& cgp_model = *cgp_model_pointer;
-
-	auto in = get_input(cgp_model.input_file());
 	auto stats_out = get_output(
 		cgp_model.cgp_statistics_file(),
 		nullptr,
@@ -82,31 +59,8 @@ static int train(std::vector<std::string>& arguments, const std::string& cgp_fil
 		(std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app)
 	);
 
-	// Read two values from the standard input
-	if (cgp_model.input_count() == 0 || cgp_model.output_count() == 0)
-	{
-		std::cerr << "invalid input size and output size" << std::endl;
-		return 2;
-	}
-
-	if ((cgp_model.start_generation() != 0 || cgp_model.start_run() != 0) && !cgp_model.get_best_chromosome())
-	{
-		std::cerr << "cannot resume evolution without starting chromosome" << std::endl;
-		return 3;
-	}
-
-	for (size_t i = 0; i < cgp_model.dataset_size(); i++)
-	{
-		std::cout << "loading input values" << std::endl;
-		inputs.push_back(load_input(*in, cgp_model.input_count()));
-		std::cout << "loading output values" << std::endl;
-		outputs.push_back(load_output(*in, cgp_model.output_count(), min, max));
-	}
-
 	cgp_model.build_indices();
 	cgp_model.dump(std::cout);
-	std::cout << "invalid_value: " << CGPConfiguration::invalid_value << std::endl
-		<< "no_care_value: " << CGPConfiguration::no_care_value << std::endl;
 
 	auto start = std::chrono::high_resolution_clock::now();
 	cgp_model.generate_population();
@@ -166,66 +120,55 @@ int main(int argc, const char** args) {
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
 
+	if (arguments.size() < 1)
+	{
+		std::cerr << "missing command: evaluate | train" << std::endl;
+		return 12;
+	}
+
+	if (arguments.size() < 2)
+	{
+		std::cerr << "missing cgp configuration file" << std::endl;
+		return 13;
+	}
+
+	std::string command = arguments[0];
+	std::string cgp_file = arguments[1];
+	arguments.erase(arguments.begin(), arguments.begin() + 2);
+	auto cgp_model_pointer = init_cgp(cgp_file, arguments);
+
+	// Read two values from the standard input
+	if (cgp_model_pointer->input_count() == 0 || cgp_model_pointer->output_count() == 0)
+	{
+		std::cerr << "invalid input size and output size" << std::endl;
+		return 2;
+	}
+
+	auto in = get_input(cgp_model_pointer->input_file());
+	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
+	int min, max;
+	for (size_t i = 0; i < cgp_model_pointer->dataset_size(); i++)
+	{
+		std::cout << "loading input values" << std::endl;
+		inputs.push_back(load_input(*in, cgp_model_pointer->input_count()));
+		std::cout << "loading output values" << std::endl;
+		outputs.push_back(load_output(*in, cgp_model_pointer->output_count(), min, max));
+	}
+
 	try
 	{
-		if (arguments.size() >= 1 && arguments[0] == "evaluate")
+		if (command == "evaluate")
 		{
-			if (arguments.size() < 2)
-			{
-				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
-				return 12;
-			}
-			std::string cgp_file = arguments[1];
-
-			arguments.erase(arguments.begin(), arguments.begin() + 2);
-			return evaluate(arguments, cgp_file);
+			return evaluate(*cgp_model_pointer, inputs, outputs, 0, 0);
 		}
-		else if (arguments.size() >= 1 && arguments[0] == "evaluate:inline")
+		else if (command == "train")
 		{
-			if (arguments.size() < 2)
-			{
-				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
-				return 12;
-			}
-			std::string cgp_file = arguments[1];
-
-			if (arguments.size() < 3)
-			{
-				std::cerr << "missing argument for serialized chromosome solution" << std::endl;
-				return 13;
-			}
-
-			std::string solution = arguments[2];
-
-			if (solution.empty())
-			{
-				std::cerr << "solution must not be empty string" << std::endl;
-				return 14;
-			}
-
-			arguments.erase(arguments.begin(), arguments.begin() + 3);
-			return evaluate(arguments, cgp_file, solution);
+			return train(*cgp_model_pointer, inputs, outputs);
 		}
-		else if (arguments.size() >= 1 && arguments[0] == "train")
+		else
 		{
-			if (arguments.size() < 2)
-			{
-				std::cerr << "missing argument for cgp configuraiton file" << std::endl;
-				return 12;
-			}
-			std::string cgp_file = arguments[1];
-
-			arguments.erase(arguments.begin(), arguments.begin() + 2);
-			return train(arguments, cgp_file);
-		}
-		else if (arguments.size() >= 1)
-		{
-			std::cerr << "invalid first argument " + arguments[0] + "; expected evaluate or train." << std::endl;
-			return 10;
-		}
-		else {
-			std::cerr << "missing first argument; expected evaluate or train." << std::endl;
-			return 11;
+			std::cerr << "unknown command: " + command << std::endl;
+			return 13;
 		}
 	}
 	catch (const std::exception& e)

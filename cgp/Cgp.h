@@ -95,6 +95,8 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Best chromosome.</returns>
 		void set_best_solution(const std::string &solution, std::string format);
+
+		solution_t create_solution(std::string solution, std::string format);
 	public:
 		/// <summary>
 		/// Constructor for CGP class.
