@@ -248,6 +248,11 @@ CGP::energy_t CGP::get_energy_fitness(Chromosome& chrom)
 	return chrom.get_estimated_energy_usage();
 }
 
+CGP::area_t CGP::get_area_fitness(Chromosome& chrom)
+{
+	return chrom.get_estimated_area_usage();
+}
+
 CGP::delay_t CGP::get_delay_fitness(Chromosome& chrom)
 {
 	return chrom.get_estimated_largest_delay();
@@ -276,6 +281,7 @@ CGP::solution_t CGP::get_default_solution()
 	return std::make_tuple(
 		error_nan,
 		energy_nan,
+		area_nan,
 		delay_nan,
 		depth_nan,
 		gate_count_nan,
@@ -287,6 +293,7 @@ CGP::solution_t CGP::create_solution(
 	std::shared_ptr<Chromosome> chromosome,
 	error_t error,
 	energy_t energy,
+	area_t area,
 	delay_t delay,
 	depth_t depth,
 	gate_count_t gate_count)
@@ -294,6 +301,7 @@ CGP::solution_t CGP::create_solution(
 	return std::make_tuple(
 		error,
 		energy,
+		area,
 		delay,
 		depth,
 		gate_count,
@@ -308,6 +316,7 @@ CGP::solution_t CGP::create_solution(std::string solution, std::string format)
 
 	std::string chrom;
 	error_t error = error_nan;
+	area_t area = area_nan;
 	energy_t energy = energy_nan;
 	delay_t delay = delay_nan;
 	depth_t depth = depth_nan;
@@ -324,6 +333,10 @@ CGP::solution_t CGP::create_solution(std::string solution, std::string format)
 			else if (attribute_name == "energy")
 			{
 				energy = (attribute_value == energy_nan_string) ? (energy_nan) : std::stold(attribute_value);
+			}
+			else if (attribute_name == "area")
+			{
+				area = (attribute_value == area_nan_string) ? (area_nan) : std::stold(attribute_value);
 			}
 			else if (attribute_name == "delay")
 			{
@@ -367,6 +380,7 @@ CGP::solution_t CGP::create_solution(std::string solution, std::string format)
 		chromosome,
 		error,
 		energy,
+		area,
 		delay,
 		depth,
 		gate_count
@@ -383,24 +397,29 @@ CGP::energy_t CGP::get_energy(const solution_t solution)
 	return std::get<1>(solution);
 }
 
-CGP::delay_t CGP::get_delay(const solution_t solution)
+CGP::area_t CGP::get_area(const solution_t solution)
 {
 	return std::get<2>(solution);
 }
 
-CGP::depth_t CGP::get_depth(const solution_t solution)
+CGP::delay_t CGP::get_delay(const solution_t solution)
 {
 	return std::get<3>(solution);
 }
 
-CGP::gate_count_t CGP::get_gate_count(const solution_t solution)
+CGP::depth_t CGP::get_depth(const solution_t solution)
 {
 	return std::get<4>(solution);
 }
 
-std::shared_ptr<Chromosome> CGP::get_chromosome(const solution_t solution)
+CGP::gate_count_t CGP::get_gate_count(const solution_t solution)
 {
 	return std::get<5>(solution);
+}
+
+std::shared_ptr<Chromosome> CGP::get_chromosome(const solution_t solution)
+{
+	return std::get<6>(solution);
 }
 
 decltype(CGP::get_error(CGP::solution_t())) CGP::set_error(solution_t& solution, decltype(CGP::get_error(solution_t())) value)
@@ -415,21 +434,27 @@ decltype(CGP::get_energy(CGP::solution_t())) CGP::set_energy(solution_t& solutio
 	return value;
 }
 
-decltype(CGP::get_delay(CGP::solution_t())) CGP::set_delay(solution_t& solution, decltype(CGP::get_delay(solution_t())) value)
+decltype(CGP::get_area(CGP::solution_t())) CGP::set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value)
 {
 	std::get<2>(solution) = value;
 	return value;
 }
 
-decltype(CGP::get_depth(CGP::solution_t())) CGP::set_depth(solution_t& solution, decltype(CGP::get_depth(solution_t())) value)
+decltype(CGP::get_delay(CGP::solution_t())) CGP::set_delay(solution_t& solution, decltype(CGP::get_delay(solution_t())) value)
 {
 	std::get<3>(solution) = value;
 	return value;
 }
 
-decltype(CGP::get_gate_count(CGP::solution_t())) CGP::set_gate_count(solution_t& solution, decltype(CGP::get_gate_count(solution_t())) value)
+decltype(CGP::get_depth(CGP::solution_t())) CGP::set_depth(solution_t& solution, decltype(CGP::get_depth(solution_t())) value)
 {
 	std::get<4>(solution) = value;
+	return value;
+}
+
+decltype(CGP::get_gate_count(CGP::solution_t())) CGP::set_gate_count(solution_t& solution, decltype(CGP::get_gate_count(solution_t())) value)
+{
+	std::get<5>(solution) = value;
 	return value;
 }
 
@@ -441,6 +466,16 @@ decltype(CGP::get_energy(CGP::solution_t())) CGP::ensure_energy(solution_t& solu
 	}
 
 	return CGP::get_energy(solution);
+}
+
+decltype(CGP::get_area(CGP::solution_t())) CGP::ensure_area(solution_t& solution)
+{
+	if (CGP::get_area(solution) == area_nan)
+	{
+		CGP::set_area(solution, CGP::get_chromosome(solution)->get_estimated_area_usage());
+	}
+
+	return CGP::get_area(solution);
 }
 
 decltype(CGP::get_delay(CGP::solution_t())) CGP::ensure_delay(solution_t& solution)
@@ -598,9 +633,18 @@ CGP::energy_t CGP::get_best_energy_fitness() {
 	return ensure_energy(best_solution);
 }
 
+CGP::area_t CGP::get_best_area_fitness() {
+	return ensure_area(best_solution);
+}
+
 CGP::delay_t CGP::get_best_delay_fitness()
 {
 	return ensure_delay(best_solution);
+}
+
+decltype(CGP::evolution_steps_made) cgp::CGP::get_evolution_steps_made() const
+{
+	return evolution_steps_made;
 }
 
 CGP::depth_t CGP::get_best_depth()
@@ -614,7 +658,7 @@ CGP::gate_count_t CGP::get_best_gate_count()
 }
 
 std::shared_ptr<Chromosome> CGP::get_best_chromosome() const {
-	return std::get<5>(best_solution);
+	return std::get<6>(best_solution);
 }
 
 decltype(CGP::generations_without_change) CGP::get_generations_without_change() const {

@@ -34,6 +34,11 @@ namespace cgp {
 		using energy_t = CGPConfiguration::energy_t;
 
 		/// <summary>
+		/// Type alias for area values, represented as double-precision floating-point numbers.
+		/// </summary>
+		using area_t = CGPConfiguration::area_t;
+
+		/// <summary>
 		/// Type alias for delay values, represented as double-precision floating-point numbers.
 		/// </summary>
 		using delay_t = CGPConfiguration::delay_t;
@@ -51,7 +56,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for gate parameters, represented as a tuple of energy and delay values.
 		/// </summary>
-		using gate_parameters_t = std::tuple<energy_t, delay_t>;
+		using gate_parameters_t = CGPConfiguration::gate_parameters_t;
 
 		/// <summary>
 		/// Type alias for gene values, represented as unsigned 16-bit integers.
@@ -63,6 +68,8 @@ namespace cgp {
 		/// </summary>
 		static const std::string nan_chromosome_string;
 
+		static bool is_mux(int func);
+		static bool is_demux(int func);
 	private:
 		/// <summary>
 		/// Reference to the CGP configuration used for chromosome setup.
@@ -143,6 +150,11 @@ namespace cgp {
 		/// Cached energy consumption value.
 		/// </summary>
 		energy_t estimated_energy_consumption = CGPConfiguration::energy_nan;
+
+		/// <summary>
+		/// Cached area consumption value.
+		/// </summary>
+		area_t estimated_area_utilisation = CGPConfiguration::area_nan;
 
 		/// <summary>
 		/// Cached delay value.
@@ -230,6 +242,11 @@ namespace cgp {
 		/// </summary>
 		/// <param name="that">The chromosome to be transferred.</param>
 		void setup_iterators(Chromosome&& that);
+
+		weight_value_t plus(weight_value_t a, weight_value_t b);
+		weight_value_t minus(weight_value_t a, weight_value_t b);
+		weight_value_t mul(weight_value_t a, weight_value_t b);
+		weight_value_t bit_shift(weight_value_t a);
 
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
@@ -350,6 +367,12 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Energy estimation.</returns>
 		decltype(estimated_energy_consumption) get_estimated_energy_usage();
+
+		/// <summary>
+		/// Estimate area used by phenotype digital circuit.
+		/// </summary>
+		/// <returns>Area estimation.</returns>
+		decltype(estimated_energy_consumption) get_estimated_area_usage();
 
 		/// <summary>
 		/// Estimate largest delay by phenotype digital circuit.

@@ -9,15 +9,13 @@ static std::shared_ptr<CGP> init_cgp(const std::string& cgp_file, const std::vec
 	auto cgp_model = std::make_shared<CGP>(cgp_in, arguments);
 	cgp_in.close();
 
-	auto costs = std::make_shared<CGPConfiguration::gate_parameters_t[]>(cgp_model->function_count());
-
-	for (size_t i = 0; i < cgp_model->function_count(); i++)
+	if (cgp_model->gate_parameters_input_file().empty())
 	{
-		// energy, delay
-		costs[i] = std::make_tuple(1, 1);
+		throw std::invalid_argument("missing " + CGPConfiguration::GATE_PARAMETERS_FILE_LONG + " in file or as CLI argument");
 	}
 
-	cgp_model->function_costs(costs);
+	CGPInputStream gate_parameter_loader(cgp_model, cgp_model->gate_parameters_input_file());
+	gate_parameter_loader.load_gate_parameters();
 	return cgp_model;
 }
 
@@ -31,14 +29,32 @@ static std::string format_timestamp(std::chrono::milliseconds ms) {
 
 static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, size_t run, size_t generation, std::string solution = "")
 {
-	CGPOutputStream out(cgp_model, cgp_model->output_file());
+	CGPOutputStream out(cgp_model, cgp_model->output_file(), {{"run", std::to_string(run+1)}, {"generation", std::to_string(generation+1)}});
+	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), { {"run", std::to_string(run+1)}, {"generation", std::to_string(generation+1)} });
+	CGPOutputStream logger(cgp_model, "-");
 	if (!solution.empty())
 	{
 		cgp_model->restore(solution);
 	}
 
-	cgp_model->dump(std::cout);
+	logger.dump();
 	out.log_weights(get_dataset_input(dataset));
+	stats_out.log_csv(run, generation, cgp_model->get_best_chromosome(), get_dataset_input(dataset), get_dataset_output(dataset));
+	return 0;
+}
+
+static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
+{
+	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file());
+	CGPOutputStream logger(cgp_model, "-");
+	for (size_t i = cgp_model->start_run(); i < cgp_model->number_of_runs(); i++)
+	{
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(i+1)}});
+		logger.dump();
+		out.log_weights(get_dataset_input(dataset));
+		stats_out.log_csv(i, cgp_model->get_evolution_steps_made(), cgp_model->get_best_chromosome(), get_dataset_input(dataset), get_dataset_output(dataset));
+	}
+
 	return 0;
 }
 
@@ -55,9 +71,9 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t &dataset)
 	auto generation_stop = cgp_model->patience();
 	for (size_t run = cgp_model->start_run(); run < cgp_model->number_of_runs(); run++)
 	{
-		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, { {"run", std::to_string(run)} });
+		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, { {"run", std::to_string(run+1)} });
 		size_t i = (run != cgp_model->start_run()) ? (0) : (cgp_model->start_generation());
-		std::cout << "performin run " << run << " and starting from generation " << i << std::endl;
+		std::cout << "performin run " << run+1 << " and starting from generation " << i << std::endl;
 		for (size_t log_counter = cgp_model->periodic_log_frequency(); i < cgp_model->generation_count(); i++)
 		{
 			cgp_model->evaluate(get_dataset_input(dataset), get_dataset_output(dataset));
@@ -91,7 +107,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t &dataset)
 		std::cout << "chromosome size: " << cgp_model->get_serialized_chromosome_size() << std::endl
 			<< "finished evolution after " << i << " generations" << std::endl;
 
-		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(run)}});
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(run+1)}});
 		out.dump_all();
 		std::cout << "resetting cgp" << std::endl;
 		cgp_model->reset();
@@ -141,7 +157,7 @@ int main(int argc, const char** args) {
 	{
 		if (command == "evaluate")
 		{
-			return evaluate(cgp_model_pointer, train_dataset, 0, 0);
+			return evaluate(cgp_model_pointer, train_dataset);
 		}
 		else if (command == "train")
 		{

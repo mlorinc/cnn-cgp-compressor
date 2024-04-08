@@ -15,7 +15,7 @@ namespace cgp {
 	class CGP : public CGPConfiguration {
 	public:
 		// A candidate solution tuple in format: error fitness, (energy fitness, largest delay), depth, and the genotype.
-		using solution_t = std::tuple<error_t, energy_t, delay_t, depth_t, gate_count_t, std::shared_ptr<Chromosome>>;
+		using solution_t = std::tuple<error_t, energy_t, area_t, delay_t, depth_t, gate_count_t, std::shared_ptr<Chromosome>>;
 
 		/// <summary>
 		/// Get the error value of the given solution.
@@ -30,6 +30,13 @@ namespace cgp {
 		/// <param name="solution">The solution to retrieve the energy value from</param>
 		/// <returns>The energy value of the solution</returns>
 		static energy_t get_energy(const solution_t solution);
+
+		/// <summary>
+		/// Get the area value of the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to retrieve the area value from</param>
+		/// <returns>The area value of the solution</returns>
+		static area_t get_area(const solution_t solution);
 
 		/// <summary>
 		/// Get the delay value of the given solution.
@@ -58,6 +65,13 @@ namespace cgp {
 		/// <param name="solution">The solution to ensure the energy value for</param>
 		/// <returns>The ensured energy value of the solution</returns>
 		static decltype(CGP::get_energy(solution_t())) ensure_energy(solution_t& solution);
+
+		/// <summary>
+		/// Ensure that the area value of the given solution is valid.
+		/// </summary>
+		/// <param name="solution">The solution to ensure the area value for</param>
+		/// <returns>The ensured area value of the solution</returns>
+		static decltype(CGP::get_area(solution_t())) ensure_area(solution_t& solution);
 
 		/// <summary>
 		/// Ensure that the delay value of the given solution is valid.
@@ -107,6 +121,7 @@ namespace cgp {
 			std::shared_ptr<Chromosome> chromosome,
 			error_t error,
 			energy_t energy = energy_nan,
+			area_t area = area_nan,
 			delay_t delay = delay_nan,
 			depth_t depth = depth_nan,
 			gate_count_t gate_count = gate_count_nan);
@@ -126,6 +141,14 @@ namespace cgp {
 		/// <param name="value">The value to set as the energy value</param>
 		/// <returns>The updated energy value of the solution</returns>
 		static decltype(CGP::get_energy(solution_t())) set_energy(solution_t& solution, decltype(CGP::get_energy(solution_t())) value);
+
+		/// <summary>
+		/// Set the area value of the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to set the area value for</param>
+		/// <param name="value">The value to set as the area value</param>
+		/// <returns>The updated area value of the solution</returns>
+		static decltype(CGP::get_area(solution_t())) set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value);
 
 		/// <summary>
 		/// Set the delay value of the given solution.
@@ -214,6 +237,13 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <returns>The energy fitness value.</returns>
 		energy_t get_energy_fitness(Chromosome& chrom);
+
+		/// <summary>
+		/// Calculate the area fitness of a chromosome.
+		/// </summary>
+		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
+		/// <returns>The area fitness value.</returns>
+		area_t get_area_fitness(Chromosome& chrom);
 
 		/// <summary>
 		/// Calculate the delay fitness of a chromosome.
@@ -320,6 +350,11 @@ namespace cgp {
 		~CGP();
 
 		/// <summary>
+		/// Get number of evolutions preformed.
+		/// </summary>
+		decltype(evolution_steps_made) get_evolution_steps_made() const;
+
+		/// <summary>
 		/// Build the initial pin indices.
 		/// </summary>
 		void build_indices();
@@ -362,6 +397,12 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Current best energy fitness value.</returns>
 		energy_t get_best_energy_fitness();
+
+		/// <summary>
+		/// Get the current best area fitness value.
+		/// </summary>
+		/// <returns>Current best area fitness value.</returns>
+		area_t get_best_area_fitness();
 
 		/// <summary>
 		/// Get the current best delay fitness value.

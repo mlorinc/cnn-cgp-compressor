@@ -9,6 +9,7 @@ namespace cgp {
 	const std::string CGPConfiguration::delay_nan_string = "inf";
 	const std::string CGPConfiguration::depth_nan_string = "nan";
 	const std::string CGPConfiguration::gate_count_nan_string = "nan";
+	const std::string CGPConfiguration::area_nan_string = "inf";
 
 	const std::string CGPConfiguration::PERIODIC_LOG_FREQUENCY_LONG = "--periodic-log-frequency";
 
@@ -56,6 +57,9 @@ namespace cgp {
 
 	const std::string CGPConfiguration::CGP_STATISTICS_FILE_LONG = "--cgp-statistics-file";
 	const std::string CGPConfiguration::CGP_STATISTICS_FILE_SHORT = "-s";
+
+	const std::string CGPConfiguration::GATE_PARAMETERS_FILE_LONG = "--gate-parameters-file";
+	const std::string CGPConfiguration::GATE_PARAMETERS_FILE_SHORT = "-fp";
 
 	const std::string CGPConfiguration::MSE_THRESHOLD_LONG = "--mse-threshold";
 	const std::string CGPConfiguration::MSE_THRESHOLD_SHORT = "-mse";
@@ -133,9 +137,14 @@ namespace cgp {
 		return std::to_string(static_cast<CGPConfiguration::weight_repr_value_t>(value));
 	}
 
+	std::string area_to_string(CGPConfiguration::area_t value)
+	{
+		return (value != CGPConfiguration::area_nan) ? (std::to_string(value)) : (CGPConfiguration::area_nan_string);
+	}
+
 	CGPConfiguration::gate_parameters_t CGPConfiguration::get_default_gate_parameters()
 	{
-		return std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
+		return std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
 	}
 
 	CGPConfiguration::energy_t CGPConfiguration::get_energy_parameter(const gate_parameters_t& params)
@@ -144,6 +153,11 @@ namespace cgp {
 	}
 
 	CGPConfiguration::delay_t CGPConfiguration::get_delay_parameter(const gate_parameters_t& params)
+	{
+		return std::get<2>(params);
+	}
+
+	CGPConfiguration::area_t CGPConfiguration::get_area_parameter(const gate_parameters_t& params)
 	{
 		return std::get<1>(params);
 	}
@@ -155,7 +169,27 @@ namespace cgp {
 
 	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, delay_t delay)
 	{
-		std::get<1>(params) = delay;
+		std::get<2>(params) = delay;
+	}
+
+	void CGPConfiguration::set_area_parameter(gate_parameters_t& params, area_t area)
+	{
+		std::get<1>(params) = area;
+	}
+
+	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, const std::string& energy)
+	{
+		set_energy_parameter(params, (energy == energy_nan_string) ? (energy_nan) : (std::stold(energy)));
+	}
+
+	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, const std::string& delay)
+	{
+		set_delay_parameter(params, (delay == delay_nan_string) ? (delay_nan) : (std::stold(delay)));
+	}
+
+	void CGPConfiguration::set_area_parameter(gate_parameters_t& params, const std::string& area)
+	{
+		set_area_parameter(params, (area == area_nan_string) ? (area_nan) : (std::stold(area)));
 	}
 
 	CGPConfiguration& CGPConfiguration::start_generation(decltype(start_generation_value) value)
@@ -243,6 +277,10 @@ namespace cgp {
 				}
 				else if (arguments[i] == CGP_STATISTICS_FILE_LONG || arguments[i] == CGP_STATISTICS_FILE_SHORT) {
 					cgp_statistics_file(arguments.at(i + 1));
+					i += 1;
+				}
+				else if (arguments[i] == GATE_PARAMETERS_FILE_LONG || arguments[i] == GATE_PARAMETERS_FILE_SHORT) {
+					gate_parameters_input_file(arguments.at(i + 1));
 					i += 1;
 				}
 				else if (arguments[i] == MSE_THRESHOLD_LONG || arguments[i] == MSE_THRESHOLD_SHORT) {
@@ -443,6 +481,16 @@ namespace cgp {
 		return expected_value_max_value;
 	}
 
+	decltype(CGPConfiguration::gate_parameters_input_file_value) CGPConfiguration::gate_parameters_input_file() const
+	{
+		return gate_parameters_input_file_value;
+	}
+
+	decltype(CGPConfiguration::max_multiplexer_bit_variant_value) CGPConfiguration::max_multiplexer_bit_variant() const
+	{
+		return max_multiplexer_bit_variant_value;
+	}
+
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
 		function_input_arity_value = value;
 		return *this;
@@ -555,6 +603,7 @@ namespace cgp {
 	CGPConfiguration& CGPConfiguration::dataset_size(decltype(dataset_size_value) value)
 	{
 		dataset_size_value = value;
+		max_multiplexer_bit_variant_value = std::min(static_cast<double>(max_hardware_multiplexer_bit_variant), std::ceil(std::log2(value)));
 		return *this;
 	}
 
@@ -594,6 +643,12 @@ namespace cgp {
 		return *this;
 	}
 
+	CGPConfiguration& CGPConfiguration::gate_parameters_input_file(decltype(gate_parameters_input_file_value) value)
+	{
+		gate_parameters_input_file_value = value;
+		return *this;
+	}
+
 	void CGPConfiguration::dump(std::ostream& out) const
 	{
 		// Serialize each variable to the file
@@ -613,6 +668,7 @@ namespace cgp {
 		if (!input_file().empty()) out << "input_file: " << input_file() << std::endl;
 		if (!output_file().empty()) out << "output_file: " << output_file() << std::endl;
 		if (!cgp_statistics_file().empty()) out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
+		if (!gate_parameters_input_file().empty()) out << "gate_parameters_file: " << gate_parameters_input_file() << std::endl;
 		if (!starting_solution().empty()) out << "starting_solution: " << starting_solution() << std::endl;
 		out << "mse_threshold: " << mse_threshold() << std::endl;
 		out << "dataset_size: " << dataset_size() << std::endl;
@@ -657,6 +713,7 @@ namespace cgp {
 			else if (key == "input_file") input_file(value);
 			else if (key == "output_file") output_file(value);
 			else if (key == "cgp_statistics_file") cgp_statistics_file(value);
+			else if (key == "gate_parameters_file") gate_parameters_input_file(value);
 			else if (key == "starting_solution") starting_solution(value);
 			else if (key == "mse_threshold") mse_threshold(std::stod(value));
 			else if (key == "dataset_size") dataset_size(std::stoull(value));
@@ -665,6 +722,7 @@ namespace cgp {
 			else if (key == "energy_early_stop") energy_early_stop(std::stold(value));
 			else if (key == "expected_value_min") expected_value_min(std::stoul(value));
 			else if (key == "expected_value_max") expected_value_max(std::stoul(value));
+
 			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{
 				remaining_data[key] = value;

@@ -61,9 +61,14 @@ namespace cgp {
 		using gate_count_t = size_t;
 
 		/// <summary>
+		/// Type alias for area values, represented as double-precision floating-point numbers.
+		/// </summary>
+		using area_t = double;
+
+		/// <summary>
 		/// Type alias for gate parameters, represented as a tuple of energy and delay values.
 		/// </summary>
-		using gate_parameters_t = std::tuple<energy_t, delay_t>;
+		using gate_parameters_t = std::tuple<energy_t, area_t, delay_t>;
 
 		/// <summary>
 		/// Type alias for gene values, represented as unsigned 16-bit integers.
@@ -96,6 +101,16 @@ namespace cgp {
 		static constexpr gate_count_t gate_count_nan = (std::numeric_limits<gate_count_t>::has_infinity) ? (std::numeric_limits<gate_count_t>::infinity()) : (std::numeric_limits<gate_count_t>::max());
 
 		/// <summary>
+		/// Value representing NaN for area_t.
+		/// </summary>
+		static constexpr area_t area_nan = (std::numeric_limits<error_t>::has_infinity) ? (std::numeric_limits<error_t>::infinity()) : (std::numeric_limits<error_t>::max());
+
+		/// <summary>
+		/// The biggest possible multiplexer bit variant.
+		/// </summary>
+		static constexpr int max_hardware_multiplexer_bit_variant = 4;
+
+		/// <summary>
 		/// Retrieve the default gate parameters.
 		/// </summary>
 		/// <returns>A tuple containing default energy and delay parameters.</returns>
@@ -116,6 +131,13 @@ namespace cgp {
 		static delay_t get_delay_parameter(const gate_parameters_t& params);
 
 		/// <summary>
+		/// Get the area parameter from the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <returns>The area parameter.</returns>
+		static area_t get_area_parameter(const gate_parameters_t& params);
+
+		/// <summary>
 		/// Set the energy parameter in the given gate parameters.
 		/// </summary>
 		/// <param name="params">The gate parameters tuple.</param>
@@ -128,6 +150,34 @@ namespace cgp {
 		/// <param name="params">The gate parameters tuple.</param>
 		/// <param name="delay">The delay parameter to set.</param>
 		static void set_delay_parameter(gate_parameters_t& params, delay_t delay);
+
+		/// <summary>
+		/// Set the area parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="delay">The area parameter to set.</param>
+		static void set_area_parameter(gate_parameters_t& params, area_t area);
+
+		/// <summary>
+		/// Set the energy parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="energy">The energy parameter to set.</param>
+		static void set_energy_parameter(gate_parameters_t& params, const std::string &energy);
+
+		/// <summary>
+		/// Set the delay parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="delay">The delay parameter to set.</param>
+		static void set_delay_parameter(gate_parameters_t& params, const std::string &delay);
+
+		/// <summary>
+		/// Set the area parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="delay">The area parameter to set.</param>
+		static void set_area_parameter(gate_parameters_t& params, const std::string &area);
 
 		/// <summary>
 		/// String representation of error_nan.
@@ -154,6 +204,10 @@ namespace cgp {
 		/// </summary>
 		static const std::string gate_count_nan_string;
 
+		/// <summary>
+		/// String representation of gate_count_nan.
+		/// </summary>
+		static const std::string area_nan_string;
 
 		static const std::string PERIODIC_LOG_FREQUENCY_LONG;
 
@@ -202,6 +256,9 @@ namespace cgp {
 		static const std::string CGP_STATISTICS_FILE_LONG;
 		static const std::string CGP_STATISTICS_FILE_SHORT;
 
+		static const std::string GATE_PARAMETERS_FILE_LONG;
+		static const std::string GATE_PARAMETERS_FILE_SHORT;
+
 		static const std::string MSE_THRESHOLD_LONG;
 		static const std::string MSE_THRESHOLD_SHORT;
 
@@ -248,6 +305,11 @@ namespace cgp {
 		/// Value representing a weight that is not considered during error evaluation.
 		/// </summary>
 		static constexpr weight_value_t no_care_value = std::numeric_limits<weight_value_t>::min();
+
+		/// <summary>
+		/// Value representing a weight that is not considered during error evaluation.
+		/// </summary>
+		static constexpr uint8_t bit_shift_mask = std::numeric_limits<uint8_t>::max();
 #else
 		/// <summary>
 		/// Type alias for inferred weight, represented as a double-precision floating-point number.
@@ -340,7 +402,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the number of functions in the CGP algorithm.
 		/// </summary>
-		uint8_t function_count_value = 33;
+		uint8_t function_count_value = 30;
 
 		/// <summary>
 		/// Default value for the log frequency in the CGP algorithm.
@@ -363,19 +425,14 @@ namespace cgp {
 		std::string output_file_value = "-";
 
 		/// <summary>
-		/// A path where resulting chromosome array will be saved.
-		/// </summary>
-		std::string chromosome_output_file_value = "-";
-
-		/// <summary>
 		/// A path where CGP statistics will be saved.
 		/// </summary>
 		std::string cgp_statistics_file_value = "+";
 
 		/// <summary>
-		/// A path where chromosome array is saved.
+		/// A path where gate parameters are stored.
 		/// </summary>
-		std::string chromosome_input_file_value = "";
+		std::string gate_parameters_input_file_value = "";
 
 		/// <summary>
 		/// Mean Squared Error threshold after optimisation is focused on minimising energy.
@@ -428,6 +485,11 @@ namespace cgp {
 		/// Maximum expected value in the dataset.
 		/// </summary>
 		weight_value_t expected_value_max_value;
+
+		/// <summary>
+		/// Maximum supported multiplexer bit variant.
+		/// </summary>
+		int max_multiplexer_bit_variant_value = 0;
 
 		/// <summary>
 		/// Sets the starting generation value for Cartesian Genetic Programming (CGP) configuration.
@@ -609,6 +671,17 @@ namespace cgp {
 		decltype(expected_value_max_value) expected_value_max() const;
 
 		/// <summary>
+		/// A path where gate parameters are stored.
+		/// </summary>
+		decltype(gate_parameters_input_file_value) gate_parameters_input_file() const;
+
+
+		/// <summary>
+		/// Maximum supported multiplexer bit variant.
+		/// </summary>
+		decltype(max_multiplexer_bit_variant_value) max_multiplexer_bit_variant() const;
+
+		/// <summary>
 		/// Sets the input arity of functions in the CGP configuration.
 		/// </summary>
 		CGPConfiguration& function_input_arity(decltype(function_input_arity_value));
@@ -738,6 +811,11 @@ namespace cgp {
 		CGPConfiguration& expected_value_max(decltype(expected_value_max_value) value);
 
 		/// <summary>
+		/// Sets a path where gate parameters are stored.
+		/// </summary>
+		CGPConfiguration& gate_parameters_input_file(decltype(gate_parameters_input_file_value) value);
+
+		/// <summary>
 		/// Saves the configuration to a file.
 		/// </summary>
 		virtual void dump(std::ostream& out) const;
@@ -755,4 +833,5 @@ namespace cgp {
 	std::string depth_to_string(CGPConfiguration::depth_t value);
 	std::string gate_count_to_string(CGPConfiguration::gate_count_t value);
 	std::string weight_to_string(CGPConfiguration::weight_value_t value);
+	std::string area_to_string(CGPConfiguration::area_t value);
 }

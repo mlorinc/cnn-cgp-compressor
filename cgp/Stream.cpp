@@ -1,6 +1,7 @@
 #include "Stream.h"
 #include "StringTemplate.h"
 #include <iostream>
+#include <cmath>
 
 using namespace cgp;
 
@@ -238,6 +239,8 @@ void CGPOutputStream::log_human(size_t run, size_t generation)
 		<< error_to_string(cgp_model->get_best_error_fitness())
 		<< ", Energy: "
 		<< energy_to_string(cgp_model->get_best_energy_fitness())
+		<< ", Area: "
+		<< area_to_string(cgp_model->get_best_area_fitness()) << ","
 		<< ", Delay: "
 		<< delay_to_string(cgp_model->get_best_delay_fitness())
 		<< ", Depth: "
@@ -255,6 +258,7 @@ void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& 
 		<< ",\"" << timestamp << "\","
 		<< error_to_string(cgp_model->get_best_error_fitness()) << ","
 		<< energy_to_string(cgp_model->get_best_energy_fitness()) << ","
+		<< area_to_string(cgp_model->get_best_area_fitness()) << ","
 		<< delay_to_string(cgp_model->get_best_delay_fitness()) << ","
 		<< depth_to_string(cgp_model->get_best_depth()) << ","
 		<< gate_count_to_string(cgp_model->get_best_gate_count())
@@ -271,6 +275,7 @@ void CGPOutputStream::log_csv(size_t run, size_t generation, std::shared_ptr<Chr
 		<< ",,"
 		<< error_to_string(CGP::get_error(solution)) << ","
 		<< energy_to_string(CGP::get_energy(solution)) << ","
+		<< energy_to_string(CGP::get_area(solution)) << ","
 		<< delay_to_string(CGP::get_delay(solution)) << ","
 		<< depth_to_string(CGP::get_depth(solution)) << ","
 		<< gate_count_to_string(CGP::get_gate_count(solution))
@@ -454,6 +459,59 @@ std::tuple<std::vector<std::shared_ptr<weight_value_t[]>>, std::vector<std::shar
 	}
 
 	return std::make_tuple(inputs, outputs);
+}
+
+std::shared_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load_gate_parameters()
+{
+	int bit_variant = cgp_model->max_multiplexer_bit_variant();
+	int function_count = cgp_model->function_count();
+	bool has_mux = Chromosome::is_mux(function_count - 2);
+
+	if (has_mux && bit_variant == 0)
+	{
+		throw std::invalid_argument("multiplexer is unneccesary when dataset size is 1");
+	}
+
+	auto costs = std::make_shared<CGPConfiguration::gate_parameters_t[]>(cgp_model->function_count());
+	cgp_model->function_costs(costs);
+
+	int end = (has_mux) ? (function_count - 2) : (function_count);
+	for (int i = 0; i < end; i++)
+	{
+		std::string energy, area, delay;
+		auto parameters = CGPConfiguration::get_default_gate_parameters();
+		if (*stream >> energy >> area >> delay)
+		{
+			CGPConfiguration::set_energy_parameter(parameters, energy);
+			CGPConfiguration::set_area_parameter(parameters, area);
+			CGPConfiguration::set_delay_parameter(parameters, delay);
+			costs[i] = parameters;
+		}
+		else
+		{
+			throw std::invalid_argument("could not read all gate parameters on line: " + std::to_string(i+1));
+		}
+	}
+
+	// skip mux and demux configurations
+	for (int i = end, j = 0; i < end + bit_variant * 2; i++, j = (j == 0) ? (1) : (0))
+	{
+		std::string energy, area, delay;
+		auto parameters = CGPConfiguration::get_default_gate_parameters();
+		if (*stream >> energy >> area >> delay)
+		{
+			CGPConfiguration::set_energy_parameter(parameters, energy);
+			CGPConfiguration::set_area_parameter(parameters, area);
+			CGPConfiguration::set_delay_parameter(parameters, delay);
+			costs[end + j] = parameters;
+		}
+		else
+		{
+			throw std::invalid_argument("could not read all gate parameters on line: " + std::to_string(i + 1));
+		}
+	}
+
+	return costs;
 }
 
 std::vector<std::shared_ptr<weight_value_t[]>> cgp::get_dataset_input(const dataset_t& dataset)

@@ -164,5 +164,6 @@ namespace cgp
 		std::shared_ptr<weight_value_t[]> load_input();
 		std::shared_ptr<weight_value_t[]> load_output();
 		std::tuple<std::vector<std::shared_ptr<weight_value_t[]>>, std::vector<std::shared_ptr<weight_value_t[]>>> load_train_data();
+		std::shared_ptr<CGPConfiguration::gate_parameters_t[]> load_gate_parameters();
 	};
 }

@@ -40,6 +40,7 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 	setup_maps(that.chromosome);
 	setup_iterators();
 	estimated_energy_consumption = that.estimated_energy_consumption;
+	estimated_area_utilisation = that.estimated_area_utilisation;
 	estimated_largest_delay = that.estimated_largest_delay;
 	estimated_largest_depth = that.estimated_largest_depth;
 	phenotype_node_count = that.phenotype_node_count;
@@ -61,6 +62,7 @@ Chromosome::Chromosome(Chromosome&& that) noexcept :
 	setup_maps(std::move(that));
 	setup_iterators(std::move(that));
 	estimated_energy_consumption = that.estimated_energy_consumption;
+	estimated_area_utilisation = that.estimated_area_utilisation;
 	estimated_largest_delay = that.estimated_largest_delay;
 	estimated_largest_depth = that.estimated_largest_depth;
 	phenotype_node_count = that.phenotype_node_count;
@@ -194,6 +196,52 @@ void cgp::Chromosome::setup_iterators(Chromosome&& that)
 	std::swap(output_pin_end, that.output_pin_end);
 }
 
+Chromosome::weight_value_t cgp::Chromosome::plus(weight_value_t a, weight_value_t b)
+{
+	auto c = a + b;
+	if (c > cgp_configuration.expected_value_max())
+	{
+		return c - 256;
+	}
+	else if (c < cgp_configuration.expected_value_min())
+	{
+		return 256 + c;
+	}
+	else
+	{
+		return c;
+	}
+}
+
+Chromosome::weight_value_t cgp::Chromosome::minus(weight_value_t a, weight_value_t b)
+{
+	return plus(a, -b);
+}
+
+Chromosome::weight_value_t cgp::Chromosome::mul(weight_value_t a, weight_value_t b)
+{
+	auto c = a * b;
+	int period = std::abs(c) / 128;
+	int result = std::abs(c) % 128;
+	if (c > cgp_configuration.expected_value_max())
+	{
+		return (period % 2 == 0) ? (result) : (cgp_configuration.expected_value_min() + result);
+	}
+	else if (c < cgp_configuration.expected_value_min())
+	{
+		return (period % 2 == 0) ? (-result) : (cgp_configuration.expected_value_max() + 1 - result);
+	}
+	else
+	{
+		return c;
+	}
+}
+
+Chromosome::weight_value_t Chromosome::bit_shift(weight_value_t a)
+{
+	return a & CGPConfiguration::bit_shift_mask;
+}
+
 Chromosome::gene_t* Chromosome::get_outputs() const {
 	return output_start;
 }
@@ -249,7 +297,7 @@ std::shared_ptr<Chromosome> Chromosome::mutate() const
 			chrom->chromosome[random_gene_index] = (random_number % (max - min)) + min;
 		}
 		else {
-			chrom->chromosome[random_gene_index] = random_number % cgp_configuration.function_count();
+			chrom->chromosome[random_gene_index] = random_number % (cgp_configuration.function_count());
 		}
 	}
 	chrom->need_evaluation = true;
@@ -282,24 +330,23 @@ inline static void set_value(CGPConfiguration::weight_value_t& target, const CGP
 	target = (value != CGPConfiguration::invalid_value) ? (value) : (CGPConfiguration::invalid_value);
 }
 
-inline static bool is_mux(int func)
+bool Chromosome::is_mux(int func)
 {
 #ifdef CNN_FP32_WEIGHTS
-	return func == 13;
+	return func == 10;
 #else
-	return func == 31;
+	return func == 28;
 #endif
 }
 
-inline static bool is_demux(int func)
+bool Chromosome::is_demux(int func)
 {
 #ifdef CNN_FP32_WEIGHTS
-	return func == 14;
+	return func == 11;
 #else
-	return func == 32;
+	return func == 29;
 #endif
 }
-
 
 void Chromosome::evaluate(size_t selector)
 {
@@ -327,127 +374,118 @@ void Chromosome::evaluate(size_t selector)
 			set_value(block_output_pins[0], pin_map[input_pin[0]]);
 			break;
 		case 1:
-			set_value(block_output_pins[0], expected_value_max - pin_map[input_pin[0]]);
+			set_value(block_output_pins[0], minus(expected_value_max, pin_map[input_pin[0]]));
 			break;
 		case 2:
-			set_value(block_output_pins[0], expected_value_max + pin_map[input_pin[0]]);
+			set_value(block_output_pins[0], plus(pin_map[input_pin[0]], pin_map[input_pin[1]]));
 			break;
 		case 3:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] + pin_map[input_pin[1]]);
+			set_value(block_output_pins[0], minus(pin_map[input_pin[0]], pin_map[input_pin[1]]));
 			break;
 		case 4:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] - pin_map[input_pin[1]]);
+			set_value(block_output_pins[0], mul(pin_map[input_pin[0]], pin_map[input_pin[1]]));
 			break;
 		case 5:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] * pin_map[input_pin[1]]);
-			break;
-		case 6:
 			set_value(block_output_pins[0], -pin_map[input_pin[0]]);
 			break;
-		case 7:
-			set_value(block_output_pins[0], std::max(expected_value_min, std::min(pin_map[input_pin[0]], expected_value_max)));
-			break;
-		case 8:
-			set_value(block_output_pins[0], expected_value_min - pin_map[input_pin[0]]);
-			break;
-		case 9:
-			set_value(block_output_pins[0], expected_value_min + pin_map[input_pin[0]]);
+		case 6:
+			set_value(block_output_pins[0], plus(expected_value_min, pin_map[input_pin[0]]));
 			break;
 #ifdef CNN_FP32_WEIGHTS
-		case 10:
+		case 7:
 			set_value(block_output_pins[0], pin_map[input_pin[0]] * 0.25);
 			break;
 #else
-		case 10:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 2);
+		case 7:
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] >> 2));
 			break;
 #endif
 #ifdef CNN_FP32_WEIGHTS
-		case 11:
+		case 8:
 			set_value(block_output_pins[0], pin_map[input_pin[0]] * 0.5);
 			break;
 #else
-		case 11:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 1);
+		case 8:
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] >> 1));
 			break;
 #endif
 #ifndef CNN_FP32_WEIGHTS
-		case 12:
+		case 9:
 			set_value(block_output_pins[0], pin_map[input_pin[0]] & pin_map[input_pin[1]]);
 			break;
-		case 13:
+		case 10:
 			set_value(block_output_pins[0], pin_map[input_pin[0]] | pin_map[input_pin[1]]);
 			break;
-		case 14:
+		case 11:
 			set_value(block_output_pins[0], pin_map[input_pin[0]] ^ pin_map[input_pin[1]]);
 			break;
-		case 15:
+		case 12:
 			set_value(block_output_pins[0], ~(pin_map[input_pin[0]]));
 			break;
+		case 13:
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] << 1));
+			break;
+		case 14:
+			set_value(block_output_pins[0], plus(pin_map[input_pin[0]], + 1));
+			break;
+		case 15:
+			set_value(block_output_pins[0], minus(pin_map[input_pin[0]], 1));
+			break;
 		case 16:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] << 1);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] >> 3));
 			break;
 		case 17:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] + 1);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] >> 4));
 			break;
 		case 18:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] - 1);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] >> 5));
 			break;
 		case 19:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 3);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] << 2));
 			break;
 		case 20:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 4);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] << 3));
 			break;
 		case 21:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] >> 5);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] << 4));
 			break;
 		case 22:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] << 2);
+			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] << 5));
 			break;
 		case 23:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] << 3);
-			break;
-		case 24:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] << 4);
-			break;
-		case 25:
-			set_value(block_output_pins[0], pin_map[input_pin[0]] << 5);
-			break;
-		case 26:
 			set_value(block_output_pins[0], 1);
 			break;
-		case 27:
+		case 24:
 			set_value(block_output_pins[0], -1);
 			break;
-		case 28:
+		case 25:
 			set_value(block_output_pins[0], 0);
 			break;
-		case 29:
+		case 26:
 			set_value(block_output_pins[0], expected_value_min);
 			break;
-		case 30:
+		case 27:
 			set_value(block_output_pins[0], expected_value_max);
 			break;
 		// multiplexor
-		case 31:
+		case 28:
 			set_value(block_output_pins[0], pin_map[input_pin[selector]]);
 			break;
 		// de-multiplexor
-		case 32:
+		case 29:
 			set_value(block_output_pins[selector], pin_map[input_pin[0]]);
 			used_pin = selector;
 			break;
 #else
-		case 12:
+		case 9:
 			set_value(block_output_pins[0], pin_map[input_pin[0]] * 1.05);
 			break;
 		// multiplexor
-		case 13:
+		case 10:
 			set_value(block_output_pins[0], pin_map[input_pin[selector]]);
 			break;
 		// de-multiplexor
-		case 14:
+		case 11:
 			set_value(block_output_pins[selector], pin_map[input_pin[0]]);
 			used_pin = selector;
 			break;
@@ -461,17 +499,15 @@ void Chromosome::evaluate(size_t selector)
 		{
 			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
 			{
-				block_output_pins[i] = (i == used_pin) ? (block_output_pins[i]) : (CGPConfiguration::invalid_value);
+				set_value(block_output_pins[i], (i == used_pin) ? (block_output_pins[i]) : (0));
 			}
-			// Prevent overflows hence undefined behaviour
-			set_value(block_output_pins[used_pin], std::max(expected_value_min, std::min(block_output_pins[used_pin], expected_value_max)));
 		}
 		else [[likely]]
 		{
-			// speed up evolution of operator + multiplexor; shortciruit pins
+			// speed up evolution of operator + multiplexor; shortcircuit pins
 			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
 			{
-				set_value(block_output_pins[i], std::max(expected_value_min, std::min(block_output_pins[selector], expected_value_max)));
+				set_value(block_output_pins[i], block_output_pins[selector]);
 			}
 		}
 
@@ -562,6 +598,7 @@ decltype(Chromosome::estimated_energy_consumption) cgp::Chromosome::get_estimate
 	}
 
 	estimated_energy_consumption = 0;
+	estimated_area_utilisation = 0;
 	phenotype_node_count = 0;
 	bottom_row = cgp_configuration.row_count();
 	top_row = 0;
@@ -584,6 +621,7 @@ decltype(Chromosome::estimated_energy_consumption) cgp::Chromosome::get_estimate
 			gate_visit_map[gate_index] = true;
 			phenotype_node_count += 1;
 			estimated_energy_consumption += CGPConfiguration::get_energy_parameter(gate_parameters_map[gate_index]);
+			estimated_area_utilisation += CGPConfiguration::get_area_parameter(gate_parameters_map[gate_index]);
 			gene_t* inputs = get_block_inputs(gate_index);
 
 			for (size_t i = 0; i < cgp_configuration.function_input_arity(); i++)
@@ -598,6 +636,13 @@ decltype(Chromosome::estimated_energy_consumption) cgp::Chromosome::get_estimate
 	}
 
 	need_energy_evaluation = false;
+	return estimated_energy_consumption;
+}
+
+decltype(Chromosome::estimated_energy_consumption) Chromosome::get_estimated_area_usage()
+{
+	assert(("Chromosome::get_estimated_area_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	get_estimated_energy_usage();
 	return estimated_energy_consumption;
 }
 
