@@ -4,6 +4,12 @@
 
 namespace cgp {
 
+	const std::string CGPConfiguration::error_nan_string = "inf";
+	const std::string CGPConfiguration::energy_nan_string = "inf";
+	const std::string CGPConfiguration::delay_nan_string = "inf";
+	const std::string CGPConfiguration::depth_nan_string = "nan";
+	const std::string CGPConfiguration::gate_count_nan_string = "nan";
+
 	const std::string CGPConfiguration::PERIODIC_LOG_FREQUENCY_LONG = "--periodic-log-frequency";
 
 	const std::string CGPConfiguration::FUNCTION_INPUT_ARITY_LONG = "--function-input-arity";
@@ -97,29 +103,59 @@ namespace cgp {
 		}
 	}
 
+	std::string error_to_string(CGPConfiguration::error_t value)
+	{
+		return (value != CGPConfiguration::error_nan) ? (std::to_string(value)) : (CGPConfiguration::error_nan_string);
+	}
+
+	std::string energy_to_string(CGPConfiguration::energy_t value)
+	{
+		return (value != CGPConfiguration::energy_nan) ? (std::to_string(value)) : (CGPConfiguration::energy_nan_string);
+	}
+
+	std::string delay_to_string(CGPConfiguration::delay_t value)
+	{
+		return (value != CGPConfiguration::delay_nan) ? (std::to_string(value)) : (CGPConfiguration::delay_nan_string);
+	}
+
+	std::string depth_to_string(CGPConfiguration::depth_t value)
+	{
+		return (value != CGPConfiguration::depth_nan) ? (std::to_string(value)) : (CGPConfiguration::depth_nan_string);
+	}
+
+	std::string gate_count_to_string(CGPConfiguration::gate_count_t value)
+	{
+		return (value != CGPConfiguration::gate_count_nan) ? (std::to_string(value)) : (CGPConfiguration::gate_count_nan_string);
+	}
+
+	std::string weight_to_string(CGPConfiguration::weight_value_t value)
+	{
+		return std::to_string(static_cast<CGPConfiguration::weight_repr_value_t>(value));
+	}
+
 	CGPConfiguration::gate_parameters_t CGPConfiguration::get_default_gate_parameters()
 	{
 		return std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
 	}
 
-	double CGPConfiguration::get_energy_parameter(const gate_parameters_t& params)
+	CGPConfiguration::energy_t CGPConfiguration::get_energy_parameter(const gate_parameters_t& params)
 	{
 		return std::get<0>(params);
 	}
 
-	double CGPConfiguration::get_delay_parameter(const gate_parameters_t& params)
+	CGPConfiguration::delay_t CGPConfiguration::get_delay_parameter(const gate_parameters_t& params)
 	{
 		return std::get<1>(params);
 	}
 
-	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, double energy)
+	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, energy_t energy)
 	{
 		std::get<0>(params) = energy;
 	}
 
-	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, double energy)
+	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, delay_t delay)
 	{
-		std::get<1>(params) = energy;
+		std::get<1>(params) = delay;
 	}
 
 	CGPConfiguration& CGPConfiguration::start_generation(decltype(start_generation_value) value)
@@ -397,6 +433,16 @@ namespace cgp {
 		return energy_early_stop_value;
 	}
 
+	decltype(CGPConfiguration::expected_value_min_value) CGPConfiguration::expected_value_min() const
+	{
+		return expected_value_min_value;
+	}
+
+	decltype(CGPConfiguration::expected_value_max_value) CGPConfiguration::expected_value_max() const
+	{
+		return expected_value_max_value;
+	}
+
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
 		function_input_arity_value = value;
 		return *this;
@@ -536,6 +582,18 @@ namespace cgp {
 		return *this;
 	}
 
+	CGPConfiguration& CGPConfiguration::expected_value_min(decltype(expected_value_min_value) value)
+	{
+		expected_value_min_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::expected_value_max(decltype(expected_value_max_value) value)
+	{
+		expected_value_max_value = value;
+		return *this;
+	}
+
 	void CGPConfiguration::dump(std::ostream& out) const
 	{
 		// Serialize each variable to the file
@@ -561,6 +619,8 @@ namespace cgp {
 		out << "patience: " << patience() << std::endl;
 		out << "mse_early_stop: " << mse_early_stop() << std::endl;
 		out << "energy_early_stop: " << energy_early_stop() << std::endl;
+		out << "expected_value_min: " << weight_to_string(expected_value_min()) << std::endl;
+		out << "expected_value_max: " << weight_to_string(expected_value_max()) << std::endl;
 	}
 
 	std::map<std::string, std::string> CGPConfiguration::load(std::istream& in, const std::vector<std::string>& arguments)
@@ -603,6 +663,8 @@ namespace cgp {
 			else if (key == "patience") patience(std::stoull(value));
 			else if (key == "mse_early_stop") mse_early_stop(std::stold(value));
 			else if (key == "energy_early_stop") energy_early_stop(std::stold(value));
+			else if (key == "expected_value_min") expected_value_min(std::stoul(value));
+			else if (key == "expected_value_max") expected_value_max(std::stoul(value));
 			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{
 				remaining_data[key] = value;

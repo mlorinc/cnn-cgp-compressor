@@ -9,7 +9,7 @@ add_executable (CGP
     "Chromosome.cpp" "Chromosome.h"
     "Configuration.cpp" "Configuration.h"
     "Stream.cpp" "Stream.h"
- "Stream.h" "Stream.cpp")
+ "Stream.h" "Stream.cpp" "StringTemplate.h" "StringTemplate.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CGP PROPERTY CXX_STANDARD 20)

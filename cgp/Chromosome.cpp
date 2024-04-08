@@ -7,64 +7,31 @@
 
 using namespace cgp;
 
-Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max) :
+const std::string Chromosome::nan_chromosome_string = "null";
+
+Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies) :
 	cgp_configuration(cgp_configuration),
-	minimum_output_indicies(minimum_output_indicies),
-	expected_value_min(expected_value_min),
-	expected_value_max(expected_value_max)
+	minimum_output_indicies(minimum_output_indicies)
 {
 	setup_maps();
 	setup_iterators();
 	setup_chromosome();
 }
 
-cgp::Chromosome::Chromosome(const CGPConfiguration& cgp_config, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies, weight_actual_value_t expected_value_min, weight_actual_value_t expected_value_max, const std::string& serialized_chromosome) :
+cgp::Chromosome::Chromosome(const CGPConfiguration& cgp_config, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies, const std::string& serialized_chromosome) :
 	cgp_configuration(cgp_config),
-	minimum_output_indicies(minimum_output_indicies),
-	expected_value_min(expected_value_min),
-	expected_value_max(expected_value_max)
+	minimum_output_indicies(minimum_output_indicies)
 {
-	std::istringstream input(serialized_chromosome);
+	setup_chromosome(serialized_chromosome);
+}
 
-	char discard;
-	size_t input_count, output_count, col_count, row_count, function_input_arity, l_back;
-
-	// {n,n,n,n,n,n,5}
-	input >> discard >> input_count >> discard >> output_count >> discard >> col_count >> discard >> row_count
-		>> discard >> function_input_arity >> discard >> l_back >> discard >> discard >> discard;
-
-	setup_maps();
-	setup_iterators();
-	size_t block_size = cgp_configuration.function_input_arity() + 1;
-	size_t value;
-	auto it = chromosome.get();
-	for (size_t i = 0; i < col_count * row_count; i++)
-	{
-		// ([n]i,i,...,f)
-		input >> discard >> discard >> input_count >> discard;
-
-		for (size_t i = 0; i < block_size; i++)
-		{
-			input >> *it++ >> discard;
-		}
-	}
-
-	// (n,n,...,n)
-	input >> discard;
-	for (size_t i = 0; i < output_count; i++)
-	{
-		input >> *it++ >> discard;
-	}
-
-	auto check_chromosome = to_string();
-	assert(("Chromosome::Chromosome serialized chromosome does not correspond to built chromosome", check_chromosome == serialized_chromosome));
+Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::string& serialized_chromosome) : Chromosome(cgp_configuration, nullptr, serialized_chromosome)
+{
 }
 
 Chromosome::Chromosome(const Chromosome& that) noexcept :
 	cgp_configuration(that.cgp_configuration),
-	minimum_output_indicies(that.minimum_output_indicies),
-	expected_value_min(that.expected_value_min),
-	expected_value_max(that.expected_value_max) {
+	minimum_output_indicies(that.minimum_output_indicies) {
 	input = that.input;
 	need_evaluation = that.need_evaluation;
 	need_energy_evaluation = that.need_energy_evaluation;
@@ -72,7 +39,9 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 	need_depth_evaluation = that.need_depth_evaluation;
 	setup_maps(that.chromosome);
 	setup_iterators();
-	estimated_energy_consumptation = that.estimated_energy_consumptation;
+	estimated_energy_consumption = that.estimated_energy_consumption;
+	estimated_largest_delay = that.estimated_largest_delay;
+	estimated_largest_depth = that.estimated_largest_depth;
 	phenotype_node_count = that.phenotype_node_count;
 
 	if (!need_evaluation) [[likely]]
@@ -83,9 +52,7 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 
 Chromosome::Chromosome(Chromosome&& that) noexcept :
 	cgp_configuration(that.cgp_configuration),
-	minimum_output_indicies(that.minimum_output_indicies),
-	expected_value_min(that.expected_value_min),
-	expected_value_max(that.expected_value_max) {
+	minimum_output_indicies(that.minimum_output_indicies) {
 	input = std::move(that.input);
 	need_evaluation = that.need_evaluation;
 	need_energy_evaluation = that.need_energy_evaluation;
@@ -93,7 +60,9 @@ Chromosome::Chromosome(Chromosome&& that) noexcept :
 	need_depth_evaluation = that.need_depth_evaluation;
 	setup_maps(std::move(that));
 	setup_iterators(std::move(that));
-	estimated_energy_consumptation = that.estimated_energy_consumptation;
+	estimated_energy_consumption = that.estimated_energy_consumption;
+	estimated_largest_delay = that.estimated_largest_delay;
+	estimated_largest_depth = that.estimated_largest_depth;
 	phenotype_node_count = that.phenotype_node_count;
 }
 
@@ -145,6 +114,44 @@ void Chromosome::setup_chromosome()
 	}
 }
 
+void Chromosome::setup_chromosome(const std::string& serialized_chromosome)
+{
+	std::istringstream input(serialized_chromosome);
+
+	char discard;
+	size_t input_count, output_count, col_count, row_count, function_input_arity, l_back;
+
+	// {n,n,n,n,n,n,5}
+	input >> discard >> input_count >> discard >> output_count >> discard >> col_count >> discard >> row_count
+		>> discard >> function_input_arity >> discard >> l_back >> discard >> discard >> discard;
+
+	setup_maps();
+	setup_iterators();
+	size_t block_size = cgp_configuration.function_input_arity() + 1;
+	size_t value;
+	auto it = chromosome.get();
+	for (size_t i = 0; i < col_count * row_count; i++)
+	{
+		// ([n]i,i,...,f)
+		input >> discard >> discard >> input_count >> discard;
+
+		for (size_t i = 0; i < block_size; i++)
+		{
+			input >> *it++ >> discard;
+		}
+	}
+
+	// (n,n,...,n)
+	input >> discard;
+	for (size_t i = 0; i < output_count; i++)
+	{
+		input >> *it++ >> discard;
+	}
+
+	auto check_chromosome = to_string();
+	assert(("Chromosome::Chromosome serialized chromosome does not correspond to built chromosome", check_chromosome == serialized_chromosome));
+}
+
 void Chromosome::setup_maps()
 {
 	setup_maps(nullptr);
@@ -181,10 +188,10 @@ void cgp::Chromosome::setup_iterators()
 
 void cgp::Chromosome::setup_iterators(Chromosome&& that)
 {
-	output_start = that.output_start;
-	output_end = that.output_end;
-	output_pin_start = that.output_pin_start;
-	output_pin_end = that.output_pin_end;
+	std::swap(output_start, that.output_start);
+	std::swap(output_end, that.output_end);
+	std::swap(output_pin_start, that.output_pin_start);
+	std::swap(output_pin_end, that.output_pin_end);
 }
 
 Chromosome::gene_t* Chromosome::get_outputs() const {
@@ -307,6 +314,8 @@ void Chromosome::evaluate(size_t selector)
 	auto input_pin = chromosome.get();
 	auto func = chromosome.get() + cgp_configuration.function_input_arity();
 	auto reference_costs = cgp_configuration.function_costs();
+	const auto expected_value_min = cgp_configuration.expected_value_min();
+	const auto expected_value_max = cgp_configuration.expected_value_max();
 	size_t used_pin = 0;
 	for (size_t i = 0; i < cgp_configuration.col_count() * cgp_configuration.row_count(); i++)
 	{
@@ -534,13 +543,13 @@ size_t cgp::Chromosome::get_serialized_chromosome_size() const
 	return cgp_configuration.chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);
 }
 
-decltype(Chromosome::estimated_energy_consumptation) cgp::Chromosome::get_estimated_energy_usage()
+decltype(Chromosome::estimated_energy_consumption) cgp::Chromosome::get_estimated_energy_usage()
 {
 	assert(("Chromosome::estimate_energy_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 
 	if (!need_energy_evaluation)
 	{
-		return estimated_energy_consumptation;
+		return estimated_energy_consumption;
 	}
 
 
@@ -552,7 +561,7 @@ decltype(Chromosome::estimated_energy_consumptation) cgp::Chromosome::get_estima
 		pins_to_visit.push(*it);
 	}
 
-	estimated_energy_consumptation = 0;
+	estimated_energy_consumption = 0;
 	phenotype_node_count = 0;
 	bottom_row = cgp_configuration.row_count();
 	top_row = 0;
@@ -574,7 +583,7 @@ decltype(Chromosome::estimated_energy_consumptation) cgp::Chromosome::get_estima
 		{
 			gate_visit_map[gate_index] = true;
 			phenotype_node_count += 1;
-			estimated_energy_consumptation += CGPConfiguration::get_energy_parameter(gate_parameters_map[gate_index]);
+			estimated_energy_consumption += CGPConfiguration::get_energy_parameter(gate_parameters_map[gate_index]);
 			gene_t* inputs = get_block_inputs(gate_index);
 
 			for (size_t i = 0; i < cgp_configuration.function_input_arity(); i++)
@@ -589,7 +598,7 @@ decltype(Chromosome::estimated_energy_consumptation) cgp::Chromosome::get_estima
 	}
 
 	need_energy_evaluation = false;
-	return estimated_energy_consumptation;
+	return estimated_energy_consumption;
 }
 
 decltype(Chromosome::estimated_largest_delay) Chromosome::get_estimated_largest_delay()
@@ -750,4 +759,9 @@ std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)
 std::string cgp::to_string(const cgp::Chromosome& chromosome)
 {
 	return chromosome.to_string();
+}
+
+std::string cgp::to_string(const std::shared_ptr<Chromosome>& chromosome)
+{
+	return (chromosome) ? (to_string(*chromosome)) : Chromosome::nan_chromosome_string;
 }

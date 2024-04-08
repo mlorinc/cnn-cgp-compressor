@@ -29,61 +29,50 @@ static std::string format_timestamp(std::chrono::milliseconds ms) {
 	return ss.str();
 }
 
-static int evaluate(CGP& cgp_model, std::vector<std::shared_ptr<weight_value_t[]>> &inputs, std::vector<std::shared_ptr<weight_value_t[]>> &outputs, size_t run, size_t generation, std::string solution = "")
+static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, size_t run, size_t generation, std::string solution = "")
 {
-	auto out = get_output(cgp_model.output_file());
-	//auto stats_out = get_output(
-	//	cgp_model.cgp_statistics_file(),
-	//	nullptr,
-	//	(cgp_model.start_run() == 0) ?
-	//	(std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app)
-	//);
-
+	CGPOutputStream out(cgp_model, cgp_model->output_file());
 	if (!solution.empty())
 	{
-		cgp_model.restore(solution);
+		cgp_model->restore(solution);
 	}
 
-	cgp_model.dump(std::cout);
-	log_weights(*out, inputs, cgp_model);
-	log_csv(*stats_out, run, generation, cgp_model, "nan");
+	cgp_model->dump(std::cout);
+	out.log_weights(get_dataset_input(dataset));
 	return 0;
 }
 
-static int train(CGP &cgp_model, std::vector<std::shared_ptr<weight_value_t[]>>& inputs, std::vector<std::shared_ptr<weight_value_t[]>>& outputs)
+static int train(std::shared_ptr<CGP> cgp_model, const dataset_t &dataset)
 {
-	auto stats_out = get_output(
-		cgp_model.cgp_statistics_file(),
-		nullptr,
-		(cgp_model.start_generation() == 0 && cgp_model.start_run() == 0) ?
-		(std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app)
-	);
+	bool new_evolution = cgp_model->start_generation() == 0 && cgp_model->start_run() == 0;
+	auto mode = (new_evolution) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
+	CGPOutputStream logger(cgp_model, "-");
 
-	cgp_model.build_indices();
-	cgp_model.dump(std::cout);
-
+	cgp_model->build_indices();
+	logger.dump();
 	auto start = std::chrono::high_resolution_clock::now();
-	cgp_model.generate_population();
-	auto generation_stop = cgp_model.patience();
-	for (size_t run = cgp_model.start_run(); run < cgp_model.number_of_runs(); run++)
+	cgp_model->generate_population();
+	auto generation_stop = cgp_model->patience();
+	for (size_t run = cgp_model->start_run(); run < cgp_model->number_of_runs(); run++)
 	{
-		size_t i = (run != cgp_model.start_run()) ? (0) : (cgp_model.start_generation());
+		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, { {"run", std::to_string(run)} });
+		size_t i = (run != cgp_model->start_run()) ? (0) : (cgp_model->start_generation());
 		std::cout << "performin run " << run << " and starting from generation " << i << std::endl;
-		for (size_t log_counter = cgp_model.periodic_log_frequency(); i < cgp_model.generation_count(); i++)
+		for (size_t log_counter = cgp_model->periodic_log_frequency(); i < cgp_model->generation_count(); i++)
 		{
-			cgp_model.evaluate(inputs, outputs);
-			if (cgp_model.get_generations_without_change() == 0)
+			cgp_model->evaluate(get_dataset_input(dataset), get_dataset_output(dataset));
+			if (cgp_model->get_generations_without_change() == 0)
 			{
 				auto now = std::chrono::high_resolution_clock::now();
 				auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-				log_csv(*stats_out, run, i, cgp_model, format_timestamp(duration));
-				log_human(std::cout, run, i, cgp_model);
+				stats_out.log_csv(run, i, format_timestamp(duration));
+				logger.log_human(run, i);
 				log_counter = 0;
 				start = std::chrono::high_resolution_clock::now();
 			}
-			else if (log_counter >= cgp_model.periodic_log_frequency())
+			else if (log_counter >= cgp_model->periodic_log_frequency())
 			{
-				log_human(std::cout, run, i, cgp_model);
+				logger.log_human(run, i);
 				log_counter = 0;
 			}
 			else
@@ -91,23 +80,23 @@ static int train(CGP &cgp_model, std::vector<std::shared_ptr<weight_value_t[]>>&
 				log_counter++;
 			}
 
-			if ((cgp_model.get_best_error_fitness() <= cgp_model.mse_early_stop() && cgp_model.get_best_energy_fitness() <= cgp_model.energy_early_stop()) || cgp_model.get_generations_without_change() > generation_stop)
+			if ((cgp_model->get_best_error_fitness() <= cgp_model->mse_early_stop() && cgp_model->get_best_energy_fitness() <= cgp_model->energy_early_stop()) || cgp_model->get_generations_without_change() > generation_stop)
 			{
-				log_human(std::cout, run, i, cgp_model);
+				logger.log_human(run, i);
 				break;
 			}
-			cgp_model.mutate();
+			cgp_model->mutate();
 		}
 
-		std::cout << "chromosome size: " << cgp_model.get_serialized_chromosome_size() << std::endl
+		std::cout << "chromosome size: " << cgp_model->get_serialized_chromosome_size() << std::endl
 			<< "finished evolution after " << i << " generations" << std::endl;
 
-		auto out = get_output(cgp_model.output_file() + "." + std::to_string(run));
-		cgp_model.dump(*out);
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(run)}});
+		out.dump_all();
 		std::cout << "resetting cgp" << std::endl;
-		cgp_model.reset();
+		cgp_model->reset();
 		std::cout << "resetted cgp" << std::endl << "generating population" << std::endl;
-		cgp_model.generate_population();
+		cgp_model->generate_population();
 		std::cout << "generated population" << std::endl;
 	}
 
@@ -143,27 +132,20 @@ int main(int argc, const char** args) {
 		std::cerr << "invalid input size and output size" << std::endl;
 		return 2;
 	}
-
-	auto in = get_input(cgp_model_pointer->input_file());
-	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
-	int min, max;
-	for (size_t i = 0; i < cgp_model_pointer->dataset_size(); i++)
-	{
-		std::cout << "loading input values" << std::endl;
-		inputs.push_back(load_input(*in, cgp_model_pointer->input_count()));
-		std::cout << "loading output values" << std::endl;
-		outputs.push_back(load_output(*in, cgp_model_pointer->output_count(), min, max));
-	}
+	
+	CGPInputStream in(cgp_model_pointer, cgp_model_pointer->input_file());
+	auto train_dataset = in.load_train_data();
+	in.close();
 
 	try
 	{
 		if (command == "evaluate")
 		{
-			return evaluate(*cgp_model_pointer, inputs, outputs, 0, 0);
+			return evaluate(cgp_model_pointer, train_dataset, 0, 0);
 		}
 		else if (command == "train")
 		{
-			return train(*cgp_model_pointer, inputs, outputs);
+			return train(cgp_model_pointer, train_dataset);
 		}
 		else
 		{
