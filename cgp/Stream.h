@@ -107,19 +107,31 @@ namespace cgp
 		void log_human(size_t run, size_t generation);
 
 		/// <summary>
+		/// Logs human-readable information about the CGP model to the specified stream.
+		/// </summary>
+		/// <param name="run">The current run number.</param>
+		/// <param name="generation">The current generation number.</param>
+		/// <param name="solution">Solution to log.</param>
+		void log_human(size_t run, size_t generation, const CGP::solution_t &solution);
+
+		/// <summary>
 		/// Logs CSV-formatted information about the CGP model to the specified stream.
 		/// </summary>
 		/// <param name="run">The current run number.</param>
 		/// <param name="generation">The current generation number.</param>
 		/// <param name="timestamp">The timestamp to include in the log.</param>
-		void log_csv(size_t run, size_t generation, const std::string& timestamp);
+		/// <param name="show_chromosome">Flag indicating whether chromosome will be part of the csv file.</param>
+		void log_csv(size_t run, size_t generation, const std::string& timestamp, bool show_chromosome = false);
 
 		/// <summary>
-		/// Logs weight information about the CGP model to the specified stream.
+		/// Logs CSV-formatted information about the CGP model to the specified stream.
 		/// </summary>
-		/// <param name="stream">The output stream to log to.</param>
-		/// <param name="inputs">The input values used for evaluation.</param>
-		void log_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& inputs);
+		/// <param name="run">The current run number.</param>
+		/// <param name="generation">The current generation number.</param>
+		/// <param name="timestamp">The timestamp to include in the log.</param>
+		/// <param name="solution">Solution to log.</param>
+		/// <param name="show_chromosome">Flag indicating whether chromosome will be part of the csv file.</param>
+		void log_csv(size_t run, size_t generation, const std::string& timestamp, const CGP::solution_t &solution, bool show_chromosome = false);
 
 		/// <summary>
 		/// Logs CSV-formatted information about the CGP model to the specified stream.
@@ -128,7 +140,21 @@ namespace cgp
 		/// <param name="generation">The current generation number.</param>
 		/// <param name="timestamp">The timestamp to include in the log.</param>
 		/// <param name="chromosome">The chromosome to log information about.</param>
-		void log_csv(size_t run, size_t generation, std::shared_ptr<Chromosome> chromosome, const std::vector<std::shared_ptr<weight_value_t[]>>& inputs, const std::vector<std::shared_ptr<weight_value_t[]>>& outputs);
+		/// <param name="chromosome">The chromosome to log information about.</param>
+		void log_csv(
+			size_t run,
+			size_t generation,
+			std::shared_ptr<Chromosome> chromosome,
+			const std::vector<std::shared_ptr<weight_value_t[]>>& inputs,
+			const std::vector<std::shared_ptr<weight_value_t[]>>& outputs,
+			bool show_chromosome = false);
+
+		/// <summary>
+		/// Logs weight information about the CGP model to the specified stream.
+		/// </summary>
+		/// <param name="stream">The output stream to log to.</param>
+		/// <param name="inputs">The input values used for evaluation.</param>
+		void log_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& inputs);
 
 		/// <summary>
 		/// Logs weight information about the CGP model to the specified stream.

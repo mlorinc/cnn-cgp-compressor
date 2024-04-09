@@ -6,23 +6,20 @@
 using namespace cgp;
 
 std::string cgp::replace_string_variables(const std::string& input, const std::unordered_map<std::string, std::string>& variables) {
-    std::string result = input;
+    std::string result = "";
+    std::string text = input;
     std::regex placeholder_regex(R"(\{(\w+)\})");
     std::smatch match;
 
-    while (std::regex_search(result, match, placeholder_regex)) {
+    while (std::regex_search(text, match, placeholder_regex)) {
         auto it = variables.find(match[1].str());
+        result += match.prefix();
         if (it != variables.end()) {
-            result.replace(match.position(), match.length(), it->second);
+            result += it->second;
         }
-        else
-        {
-
-        }
-        // Skip to the next match
-        result = match.suffix();
+        text = match.suffix().str();
     }
-
+    result += text;
     return result;
 }
 

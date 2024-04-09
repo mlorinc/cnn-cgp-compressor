@@ -468,23 +468,23 @@ namespace cgp {
 		/// Value indicating stop condition for parameter of approximation error. Defaultly
 		/// that stop condition is delegated to energy parameter.
 		/// </summary>
-		error_t mse_early_stop_value = -1;
+		error_t mse_early_stop_value = 0;
 
 		/// <summary>
 		/// Value indicating stop condition for parameter of energy usage. By default
-		/// it never stops until patience runs out.
+		/// it stops at 0.
 		/// </summary>
 		energy_t energy_early_stop_value = 0;
 
 		/// <summary>
 		/// Minimum expected value in the dataset.
 		/// </summary>
-		weight_value_t expected_value_min_value;
+		weight_value_t expected_value_min_value = std::numeric_limits<weight_actual_value_t>::min();
 
 		/// <summary>
 		/// Maximum expected value in the dataset.
 		/// </summary>
-		weight_value_t expected_value_max_value;
+		weight_value_t expected_value_max_value = std::numeric_limits<weight_actual_value_t>::max();
 
 		/// <summary>
 		/// Maximum supported multiplexer bit variant.

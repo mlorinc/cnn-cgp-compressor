@@ -41,7 +41,7 @@ def quantize_model(model_name, model_path, new_path):
     model.quantize(new_path)
     model.save(new_path)
 
-def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
+def prepare_experiment(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
     for experiment_name in experiment_names:
         model = _get_model(model_name, model_path)
         model = model.load(model_path)
@@ -53,20 +53,18 @@ def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, exper
 
         cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{base}/config.cgp")
         experiment = _get_experiment(base, model, cgp, experiment_name=name)
-        experiment.execute()
+        yield experiment
+
+def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
+    for experiment in prepare_experiment(model_name, model_path, cgp_binary_path, experiment_names, args):
+        experiment.train()
+
+def optimize_prepare_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
+    for experiment in prepare_experiment(model_name, model_path, cgp_binary_path, experiment_names, args):
+        experiment.prepare_train_files()
 
 def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: str, args):
-    for experiment_name in experiment_names:
-        model = _get_model(model_name, model_path)
-        model = model.load(model_path)
-        model.eval()
-
-        segments = experiment_name.split(":")
-        base = segments[0]
-        name = segments[0] if len(segments) == 1 else segments[1]
-
-        cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{base}/config.cgp")
-        experiment = _get_experiment(base, model, cgp, experiment_name=name)
+    for experiment in prepare_experiment(model_name, model_path, cgp_binary_path, experiment_names, args):
         experiment.evaluate_runs()
 
 def main():
@@ -98,6 +96,13 @@ def main():
     optimize_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
     optimize_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
 
+    # cgp:optimize-prepare
+    optimize_preapre_parser = subparsers.add_parser("cgp:optimize-prepare", help="Prepare experiments for optimisations")
+    optimize_preapre_parser.add_argument("model_name", help="Name of the model to optimize")
+    optimize_preapre_parser.add_argument("model_path", help="Path to the model to optimize")
+    optimize_preapre_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
+    optimize_preapre_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
+
     # cgp:optimize
     evaluate_cgp_parser = subparsers.add_parser("cgp:evaluate", help="Evalaute a model")
     evaluate_cgp_parser.add_argument("model_name", help="Name of the model to evaluate")
@@ -117,6 +122,8 @@ def main():
         quantize_model(args.model_name, args.model_path, args.new_path)
     elif args.command == "cgp:optimize":
         optimize_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
+    elif args.command == "cgp:optimize-prepare":
+        optimize_prepare_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
     elif args.command == "cgp:evaluate":
         evaluate_cgp_model(args.model_name, args.model_path, args.cgp_binary_path, args.experiment_name, args)
     else:

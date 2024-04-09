@@ -5,49 +5,6 @@
 
 using namespace cgp;
 
-std::shared_ptr<weight_value_t[]> load_output(std::istream& in, size_t output_size, weight_repr_value_t& min, weight_repr_value_t& max)
-{
-	weight_repr_value_t weight;
-	std::string no_care;
-	std::shared_ptr<weight_value_t[]> output = std::make_shared<weight_value_t[]>(output_size);
-
-	for (size_t i = 0; i < output_size; i++)
-	{
-		if (in >> weight)
-		{
-			output[i] = static_cast<weight_value_t>(weight);
-			min = std::min(min, weight);
-			max = std::max(max, weight);
-			continue;
-		}
-		else if (in.eof())
-		{
-			throw std::invalid_argument("not enough value values passed; got: " + std::to_string(i) + ", need: " + std::to_string(output_size));
-		}
-		else
-		{
-			in.clear();
-		}
-
-		if (in >> no_care)
-		{
-			if (no_care == "x")
-			{
-				// Ignore value when evaluating fitness
-				output[i] = CGPConfiguration::no_care_value;
-			}
-			else
-			{
-				throw std::invalid_argument("invalit no care value: expecting \"x\"; got: \"" + no_care + "\"");
-			}
-		}
-		else {
-			throw std::invalid_argument("invalit unknown output value: expecting weight value or x");
-		}
-	}
-	return output;
-}
-
 InputStream::InputStream(const std::string& in)
 	: InputStream(in, nullptr, std::ios::in)
 {
@@ -175,7 +132,7 @@ OutputStream::OutputStream(const std::string& out, std::shared_ptr<std::ostream>
 	else
 	{
 		const auto& path = replace_string_variables(out, variables);
-		auto file = new std::ofstream(out, mode);
+		auto file = new std::ofstream(path, mode);
 
 		if (!file->is_open())
 		{
@@ -240,7 +197,7 @@ void CGPOutputStream::log_human(size_t run, size_t generation)
 		<< ", Energy: "
 		<< energy_to_string(cgp_model->get_best_energy_fitness())
 		<< ", Area: "
-		<< area_to_string(cgp_model->get_best_area_fitness()) << ","
+		<< area_to_string(cgp_model->get_best_area_fitness())
 		<< ", Delay: "
 		<< delay_to_string(cgp_model->get_best_delay_fitness())
 		<< ", Depth: "
@@ -250,7 +207,26 @@ void CGPOutputStream::log_human(size_t run, size_t generation)
 		<< std::endl;
 }
 
-void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& timestamp)
+void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::solution_t& solution)
+{
+	*this
+		<< "[" << (run + 1)
+		<< ", " << (generation + 1) << "] MSE: "
+		<< error_to_string(CGP::get_error(solution))
+		<< ", Energy: "
+		<< energy_to_string(CGP::get_energy(solution))
+		<< ", Area: "
+		<< area_to_string(CGP::get_area(solution))
+		<< ", Delay: "
+		<< delay_to_string(CGP::get_delay(solution))
+		<< ", Depth: "
+		<< depth_to_string(CGP::get_depth(solution))
+		<< ", Gates: "
+		<< gate_count_to_string(CGP::get_gate_count(solution))
+		<< std::endl;
+}
+
+void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& timestamp, bool print_chromosome)
 {
 	*this
 		<< (run + 1)
@@ -262,11 +238,33 @@ void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& 
 		<< delay_to_string(cgp_model->get_best_delay_fitness()) << ","
 		<< depth_to_string(cgp_model->get_best_depth()) << ","
 		<< gate_count_to_string(cgp_model->get_best_gate_count())
-		<< ",\"" << cgp_model->get_best_chromosome()->to_string() << "\""
+		<< ((print_chromosome) ? ( ",\"" + cgp_model->get_best_chromosome()->to_string() + "\"") : (""))
 		<< std::endl;
 }
 
-void CGPOutputStream::log_csv(size_t run, size_t generation, std::shared_ptr<Chromosome> chromosome, const std::vector<std::shared_ptr<weight_value_t[]>>& inputs, const std::vector<std::shared_ptr<weight_value_t[]>>& outputs)
+void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& timestamp, const CGP::solution_t &solution, bool print_chromosome)
+{
+	*this
+		<< (run + 1)
+		<< "," << (generation + 1)
+		<< ",\"" << timestamp << "\","
+		<< error_to_string(CGP::get_error(solution)) << ","
+		<< energy_to_string(CGP::get_energy(solution)) << ","
+		<< area_to_string(CGP::get_area(solution)) << ","
+		<< delay_to_string(CGP::get_delay(solution)) << ","
+		<< depth_to_string(CGP::get_depth(solution)) << ","
+		<< gate_count_to_string(CGP::get_gate_count(solution))
+		<< ((print_chromosome) ? (",\"" + cgp_model->get_best_chromosome()->to_string() + "\"") : (""))
+		<< std::endl;
+}
+
+void CGPOutputStream::log_csv(
+	size_t run,
+	size_t generation,
+	std::shared_ptr<Chromosome> chromosome,
+	const std::vector<std::shared_ptr<weight_value_t[]>>& inputs,
+	const std::vector<std::shared_ptr<weight_value_t[]>>& outputs,
+	bool print_chromosome)
 {
 	auto solution = cgp_model->evaluate(inputs, outputs, chromosome);
 	*this
@@ -279,7 +277,7 @@ void CGPOutputStream::log_csv(size_t run, size_t generation, std::shared_ptr<Chr
 		<< delay_to_string(CGP::get_delay(solution)) << ","
 		<< depth_to_string(CGP::get_depth(solution)) << ","
 		<< gate_count_to_string(CGP::get_gate_count(solution))
-		<< ",\"" << chromosome->to_string() << "\""
+		<< ((print_chromosome) ? (",\"" + chromosome->to_string() + "\"") : (""))
 		<< std::endl;
 }
 
@@ -450,7 +448,7 @@ std::shared_ptr<weight_value_t[]> cgp::CGPInputStream::load_output()
 
 std::tuple<std::vector<std::shared_ptr<weight_value_t[]>>, std::vector<std::shared_ptr<weight_value_t[]>>> cgp::CGPInputStream::load_train_data()
 {
-	std::vector<std::shared_ptr<weight_value_t[]>> inputs(cgp_model->dataset_size()), outputs(cgp_model->dataset_size());
+	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
 	
 	for (size_t i = 0; i < cgp_model->dataset_size(); i++)
 	{
@@ -476,9 +474,9 @@ std::shared_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load
 	cgp_model->function_costs(costs);
 
 	int end = (has_mux) ? (function_count - 2) : (function_count);
+	std::string energy, area, delay;
 	for (int i = 0; i < end; i++)
 	{
-		std::string energy, area, delay;
 		auto parameters = CGPConfiguration::get_default_gate_parameters();
 		if (*stream >> energy >> area >> delay)
 		{

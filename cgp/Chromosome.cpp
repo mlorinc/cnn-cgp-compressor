@@ -266,13 +266,8 @@ std::shared_ptr<Chromosome::gene_t[]> Chromosome::get_chromosome() const
 	return chromosome;
 }
 
-std::shared_ptr<Chromosome> Chromosome::mutate() const
+void Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 {
-	auto chrom = std::make_shared<Chromosome>(*this);
-	chrom->chromosome = std::make_shared<Chromosome::gene_t[]>(cgp_configuration.chromosome_size());
-	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), chrom->chromosome.get());
-	chrom->setup_iterators();
-
 	// Number of genes to mutate
 	auto genes_to_mutate = (rand() % cgp_configuration.max_genes_to_mutate()) + 1;
 	for (auto i = 0; i < genes_to_mutate; i++) {
@@ -288,27 +283,46 @@ std::shared_ptr<Chromosome> Chromosome::mutate() const
 			auto min = std::get<0>(column_values);
 			auto max = std::get<1>(column_values);
 
-			chrom->chromosome[random_gene_index] = (random_number % (max - min)) + min;
+			that->chromosome[random_gene_index] = (random_number % (max - min)) + min;
 		}
 		else if (is_output(random_gene_index)) {
 			const auto& output_values = minimum_output_indicies[cgp_configuration.col_count()];
 			auto min = std::get<0>(output_values);
 			auto max = std::get<1>(output_values);
-			chrom->chromosome[random_gene_index] = (random_number % (max - min)) + min;
+			that->chromosome[random_gene_index] = (random_number % (max - min)) + min;
 		}
 		else {
-			chrom->chromosome[random_gene_index] = random_number % (cgp_configuration.function_count());
+			that->chromosome[random_gene_index] = random_number % (cgp_configuration.function_count());
 		}
 	}
-	chrom->need_evaluation = true;
-	chrom->need_energy_evaluation = true;
-	chrom->need_delay_evaluation = true;
-	chrom->need_depth_evaluation = true;
-	chrom->input = nullptr;
+	that->need_evaluation = true;
+	that->need_energy_evaluation = true;
+	that->need_delay_evaluation = true;
+	that->need_depth_evaluation = true;
+}
 
+std::shared_ptr<Chromosome> Chromosome::mutate() const
+{
+	auto chrom = std::make_shared<Chromosome>(*this);
+	chrom->chromosome = std::make_shared<Chromosome::gene_t[]>(cgp_configuration.chromosome_size());
+	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), chrom->chromosome.get());
+	chrom->setup_iterators();
+	mutate_genes(chrom);
+	chrom->input = nullptr;
 	return chrom;
 }
 
+std::shared_ptr<Chromosome> cgp::Chromosome::mutate(std::shared_ptr<Chromosome> that)
+{
+	if (this == that.get())
+	{
+		return mutate();
+	}
+
+	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), that->chromosome.get());
+	mutate_genes(that);
+	return that;
+}
 
 void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
 {
@@ -426,7 +440,7 @@ void Chromosome::evaluate(size_t selector)
 			set_value(block_output_pins[0], bit_shift(pin_map[input_pin[0]] << 1));
 			break;
 		case 14:
-			set_value(block_output_pins[0], plus(pin_map[input_pin[0]], + 1));
+			set_value(block_output_pins[0], plus(pin_map[input_pin[0]], 1));
 			break;
 		case 15:
 			set_value(block_output_pins[0], minus(pin_map[input_pin[0]], 1));
@@ -643,7 +657,7 @@ decltype(Chromosome::estimated_energy_consumption) Chromosome::get_estimated_are
 {
 	assert(("Chromosome::get_estimated_area_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 	get_estimated_energy_usage();
-	return estimated_energy_consumption;
+	return estimated_area_utilisation;
 }
 
 decltype(Chromosome::estimated_largest_delay) Chromosome::get_estimated_largest_delay()
@@ -677,7 +691,7 @@ decltype(Chromosome::estimated_largest_delay) Chromosome::get_estimated_largest_
 		// if is CGP input pin
 		if (pin < cgp_configuration.input_count())
 		{
-			current_delay = std::max(estimated_largest_delay, current_delay);
+			estimated_largest_delay = std::max(estimated_largest_delay, current_delay);
 			continue;
 		}
 
@@ -731,7 +745,7 @@ decltype(Chromosome::estimated_largest_depth) Chromosome::get_estimated_largest_
 		// if is CGP input pin
 		if (pin < cgp_configuration.input_count())
 		{
-			current_depth = std::max(estimated_largest_depth, current_depth);
+			estimated_largest_depth = std::max(estimated_largest_depth, current_depth);
 			continue;
 		}
 

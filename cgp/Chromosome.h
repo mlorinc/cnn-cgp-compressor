@@ -248,6 +248,7 @@ namespace cgp {
 		weight_value_t mul(weight_value_t a, weight_value_t b);
 		weight_value_t bit_shift(weight_value_t a);
 
+		void mutate_genes(std::shared_ptr<Chromosome> that) const;
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -326,6 +327,12 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
 		std::shared_ptr<Chromosome> mutate() const;
+
+		/// <summary>
+		/// Method to perform mutation on the chromosome while reusing given chromosome.
+		/// </summary>
+		/// <returns>Shared pointer to the mutated chromosome.</returns>
+		std::shared_ptr<Chromosome> mutate(std::shared_ptr<Chromosome> that);
 
 		/// <summary>
 		/// Method to set the input for the chromosome.

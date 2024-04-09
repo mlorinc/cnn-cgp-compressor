@@ -328,9 +328,8 @@ namespace cgp {
 		/// <summary>
 		/// Constructor for CGP class.
 		/// </summary>
-		/// <param name="expected_min_value">Minimum expected value in the dataset.</param>
-		/// <param name="expected_max_value">Maximum expected value in the dataset.</param>
-		CGP(const weight_actual_value_t expected_min_value, const weight_actual_value_t expected_max_value);
+		/// <param name="population">Population argument for debug reasoning and paralelism optimisation.</param>
+		CGP(int population);
 
 		/// <summary>
 		/// Constructor for CGP class.
@@ -343,6 +342,14 @@ namespace cgp {
 		/// <param name="in">Input stream containing serialized form of the CGP class.</param>
 		/// <param name="arguments">CGP arguments entered from CLI by the user.</param>
 		CGP(std::istream& in, const std::vector<std::string>& arguments = {});
+
+		/// <summary>
+		/// Constructor for CGP class using text stream to initialize variables.
+		/// </summary>
+		/// <param name="in">Input stream containing serialized form of the CGP class.</param>
+		/// <param name="population">Population argument for debug reasoning and paralelism optimisation.</param>
+		/// <param name="arguments">CGP arguments entered from CLI by the user.</param>
+		CGP(std::istream& in, int population, const std::vector<std::string>& arguments = {});
 
 		/// <summary>
 		/// Destructor for CGP class.
@@ -374,7 +381,8 @@ namespace cgp {
 		/// </summary>
 		/// <param name="input">Vector reference to shared array pointer of input values.</param>
 		/// <param name="expected_output">Vector reference to shared array pointer of expected output values.</param>
-		void evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
+		/// /// <returns>A solution containing some of the fitness values.</returns>
+		CGP::solution_t evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
 
 		/// <summary>
 		/// Evaluate the fitness of the chromosome based on the given inputs and expected outputs. Compared to the train variant,
