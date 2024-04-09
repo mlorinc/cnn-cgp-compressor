@@ -18,10 +18,16 @@ class GridSizeExperiment(MultiExperiment):
             *[(i, j, self._get_filter("conv2", i, j)) for j in range(model.conv2.in_channels) for i in range(model.conv2.out_channels)]
         ]
 
+    def forward_filters(self):
+        pass
+
+    def forward_experiments(self):
+        return [f"{sel[0]}_{i}_{j}_{row}_{col}" for i, j, sel in self.filters for row, col in self.grid_sizes]
+
     def _get_filter(self, layer_name: str, filter_i: int, channel_i: int):
         return layer_name, [conv2d_core([filter_i, channel_i], 5, 3)], [*conv2d_outter([filter_i, channel_i], 5, 3)]
 
-    def execute(self):
+    def train(self):
         for row, col in self.grid_sizes:
             for i, j, sel in self.filters:
                 with self.experiment_context(f"{sel[0]}_{i}_{j}_{row}_{col}") as (experiment_name, config):
@@ -31,7 +37,7 @@ class GridSizeExperiment(MultiExperiment):
                         config.set_col_count(col)
                         config.set_look_back_parameter(col)
                         self.add_filters(*sel)
-                        super().execute(config)
+                        super().train(config)
                     except FileExistsError:
                         print(f"skipping {experiment_name}")
                         continue

@@ -46,12 +46,12 @@ class LeNet5(BaseModel):
         train_loss, val_loss = self._fit(dataset=dataset, optimizer=optimizer, criterion=criterion, on_improve=self._on_improve, batch_count=500, batch_size=16, epochs=100, patience=10)
         return train_loss, val_loss
 
-    def evaluate(self, batch_size: int = 16, max_batches = None):
+    def evaluate(self, batch_size: int = 16, max_batches = None, top: int=1):
         # Load MNIST dataset
         dataset = self._get_test_data()
         # Define loss function and optimizer
         criterion = nn.CrossEntropyLoss()
-        return self._evaluate(dataset=dataset, criterion=criterion, batch_size=batch_size, max_batches=max_batches)
+        return self._evaluate(dataset=dataset, criterion=criterion, batch_size=batch_size, max_batches=max_batches, top=top)
 
     def _get_train_data(self):
         return torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=self.transform)

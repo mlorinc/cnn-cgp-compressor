@@ -7,28 +7,42 @@ from pathlib import Path
 from typing import Dict
 
 key_order = {
-    "add": 0,
-    "bit_and": 1,
-    "bit_dec": 2,
-    "bit_inc": 3,
-    "bit_lshift": 4,
-    "bit_neg": 5,
-    "bit_or": 6,
-    "bit_rshift": 7,
-    "bit_xor": 8,
-    "clip": 9,
-    "mul": 10,
-    "neg": 11,
-    "noop": 12,
-    "reverse_max_a": 13,
-    "reverse_max_b": 14,
-    "reverse_min_a": 15,
-    "reverse_min_b": 16,
-    "reverse_mul_a": 17,
-    "reverse_mul_b": 18,
-    "reverse_mul_c": 19,
-    "reverse_mul_d": 20,
-    "sub": 21
+    "noop": 0,
+    "reverse_max_a": 1,
+    "add": 2,
+    "sub": 3,
+    "mul": 4,
+    "neg": 5,
+    "reverse_min_b": 6,
+    "quarter": 7,
+    "half": 8,
+    "bit_and": 9,
+    "bit_or": 10,
+    "bit_xor": 11,
+    "bit_neg": 12,
+    "double": 13,
+    "bit_inc": 14,
+    "bit_dec": 15,
+    "r_shift_3": 16,
+    "r_shift_4": 17,
+    "r_shift_5": 18,
+    "l_shift_2": 19,
+    "l_shift_3": 20,
+    "l_shift_4": 21,
+    "l_shift_5": 22,
+    "one_const": 23,
+    "minus_one_const": 24,
+    "zero_const": 25,
+    "expected_value_min": 26,
+    "expected_value_max": 27,
+    "mux_2to1": 28,
+    "mux_4to1": 29,
+    "mux_8to1": 30,
+    "mux_16to1": 31,
+    "demux_2to1": 32,
+    "demux_4to1": 33,
+    "demux_8to1": 34,
+    "demux_16to1": 35,
 }
 
 class DataExtractor(object):
@@ -50,10 +64,12 @@ class DataExtractor(object):
     def save(self, df: pd.DataFrame):
         df.to_csv(self.output_file, header=True, index=True)
 
+        df = df[df.index.isin(key_order.keys())]
         df["order"] = df.index.map(key_order)
         df.sort_values("order", inplace=True)
         df.drop("order", axis=1, inplace=True)
-        template = "{power} {delay} {area} {energy}"
+        print(df)
+        template = "{energy} {area} {delay}"
 
         df_string: pd.Series = df.apply(lambda x: template.format(**x), 1)
         with open(self.output_file_text, "w") as f:
@@ -92,16 +108,22 @@ class DataExtractor(object):
         for file in self._get_timing_files():
             with open(file, "r") as f:
                 file_name = Path(file).name
-                total_line = f.readlines()[-6].strip()
+                name_stop = file_name.rfind("_")
+                lines = f.readlines()
+                total_line = lines[-6].strip()
+                no_paths_line = lines[-3].strip()
                 segments = re.split("\s+", total_line)
+
+                if no_paths_line == "No paths.":
+                    values.append(0)
+                    index.append(file_name[:name_stop])
+                    continue
 
                 if " ".join(segments[:3]) != "data arrival time":
                     raise ValueError(f'[{file_name}] expecting "data arrival time" in the beginning of the line: "{total_line}"')
                 if len(segments) != 4:
                     raise ValueError(f"[{file_name}] expected 4 segments; got: {len(segments)}")
 
-                file_name = Path(file).name
-                name_stop = file_name.rfind("_")
                 values.append(segments[-1])
                 index.append(file_name[:name_stop])
 

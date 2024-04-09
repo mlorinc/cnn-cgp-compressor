@@ -1,8 +1,8 @@
-patience: 300000
+patience: 600000
 number_of_runs: 30
 look_back_parameter: 50
 mutation_max: 0.15
-function_count: 31
+function_count: 28
 function_input_arity: 2
 function_output_arity: 1
 dataset_size: 1

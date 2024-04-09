@@ -150,25 +150,25 @@ class BaseModel(nn.Module):
             running_loss = 0
             total_samples = 0
             running_correct = 0
-            with torch.no_grad():
+            with torch.inference_mode():
                 for batch_index, (x, y) in enumerate(loader):
                     y_hat = self(x)
                     loss = criterion(y_hat, y)
-                    loss = loss.item() * y.size(0)
-                    running_loss += loss
-                    _, predicted = torch.max(y_hat, 1)
+                    running_loss += loss.item() * y.size(0)
+
+                    _, predicted = y_hat.topk(top, dim=1)
+                    correct = predicted.eq(y.view(-1, 1).expand_as(predicted))
+                    running_correct += correct.sum().item()
                     total_samples += y.size(0)
-                    correct = (predicted == y).sum().item()
-                    running_correct += correct 
-                    
+
                     if batch_index % 100 == 0:
                         print(f"batch {batch_index} acc: {100 * correct / y.size(0):.12f}%, loss: {loss / y.size(0):.12f}")
                     if max_batches is not None and batch_index >= max_batches:
                         break
 
             acc = 100 * running_correct / total_samples
-            test_loss = running_loss / total_samples
-            return acc, test_loss
+            average_loss = running_loss / total_samples
+            return acc, average_loss
         except Exception as e:
             raise e
         finally:
@@ -177,7 +177,7 @@ class BaseModel(nn.Module):
     def fit(self, batch_size: int = 32) -> Tuple[float, float]:
         raise NotImplementedError()
 
-    def evaluate(self, batch_size: int = 32, max_batches: int = None):
+    def evaluate(self, batch_size: int = 32, max_batches: int = None, top: int=1):
         raise NotImplementedError()
     
 def init(model_path: Optional[str]) -> BaseModel:

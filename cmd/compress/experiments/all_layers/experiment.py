@@ -21,7 +21,7 @@ class AllLayersExperiment(MultiExperiment):
                          [*conv2d_outter([slice(None), slice(None)], 5, 3)]
                          )
 
-    def execute(self):
+    def train(self):
         for mse_threshold in self.mse_thresholds:
             with self.experiment_context(f"{mse_threshold}") as (experiment_name, config):
                 try:
@@ -31,7 +31,7 @@ class AllLayersExperiment(MultiExperiment):
                     self._prepare_filters()
                     print(f"training: {experiment_name}")
                     config.set_mse_threshold(mse_threshold)
-                    super().execute(config)
+                    super().train(config)
                 except FileExistsError:
                     print(f"skipping {experiment_name}")
                     continue

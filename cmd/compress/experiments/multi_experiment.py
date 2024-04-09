@@ -39,7 +39,7 @@ class MultiExperiment(BaseExperiment):
 
     def evaluate_runs(self, experiment_name: str = None):
         experiments = [experiment_name] if experiment_name else self.forward_experiments()
-        stats_file = self._get_statistics_file()
+        stats_file = self._get_train_statistics_file()
         for i, experiment in enumerate(experiments):
             if os.path.exists(self.experiment_folder_path / experiment):
                 raise FileNotFoundError(self.experiment_folder_path / experiment_name)

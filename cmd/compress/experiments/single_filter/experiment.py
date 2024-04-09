@@ -1,7 +1,8 @@
 import torch
 from cgp.cgp_adapter import CGP
 from models.base import BaseModel
-from experiments.experiment import BaseExperiment, conv2d_core, conv2d_outter
+from experiments.experiment import conv2d_core, conv2d_outter
+from experiments.simple_experiment import BaseExperiment, conv2d_core, conv2d_outter
 
 class SingleFilterExperiment(BaseExperiment):
     name = "single_filter"

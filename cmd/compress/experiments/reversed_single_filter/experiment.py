@@ -19,7 +19,7 @@ class ReversedSingleFilterExperiment(MultiExperiment):
     def forward_filters(self):
         pass
 
-    def execute(self):
+    def train(self):
         row = col = 5
         for i, j, sel in self.filters:
             with self.experiment_context(f"{sel[0]}_{i}_{j}_{row}_{col}") as (experiment_name, config):
@@ -29,7 +29,7 @@ class ReversedSingleFilterExperiment(MultiExperiment):
                     config.set_col_count(col)
                     config.set_look_back_parameter(col)
                     self.add_filters(*sel)
-                    super().execute(config)
+                    super().train(config)
                 except FileExistsError:
                     print(f"skipping {experiment_name}")
                     continue        

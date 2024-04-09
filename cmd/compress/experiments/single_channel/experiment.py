@@ -17,7 +17,7 @@ class SingleChannelExperiment(MultiExperiment):
     def forward_experiments(self):
         return [str(mse_threshold) for mse_threshold in self.mse_thresholds]
 
-    def execute(self):
+    def train(self):
         for mse_threshold in self.mse_thresholds:
             with self.experiment_context(f"{mse_threshold}") as (experiment_name, config):
                 try:
@@ -27,7 +27,7 @@ class SingleChannelExperiment(MultiExperiment):
                     config.set_col_count(15)
                     config.set_look_back_parameter(15)
                     config.set_mse_threshold(mse_threshold)
-                    super().execute(config)
+                    super().train(config)
                 except FileExistsError:
                     print(f"skipping {experiment_name}")
                     continue

@@ -2,6 +2,7 @@ import torch
 import subprocess
 from typing import TextIO
 from cgp.cgp_configuration import CGPConfiguration
+from pathlib import Path
 
 class CGPProcessError(Exception):
     def __init__(self, code: int, what: str = None) -> None:
@@ -67,36 +68,23 @@ class CGP(object):
             stream.write("\n")
 
     def create_train_file(self, file: str):
+        if file == "-":
+            raise ValueError("cannot write train data to stdin")
         with open(file, "w") as f:
             self._prepare_cgp_algorithm(f)
 
-    def train(self, new_configration: CGPConfiguration):
-        new_configration.remove_redundant_attributes(self.config)
-        args = [] if new_configration is None else new_configration.to_args()
+    def get_train_cli(self, new_configuration: CGPConfiguration):
+        args = [] if new_configuration is None or new_configuration.can_use_without_args else new_configuration.to_args()
+        path = Path(new_configuration._config_file or self.config._config_file)
+        return [self._binary, "train", str(path.absolute()), *args]
 
-        input_file = new_configration.get_input_file() if new_configration.has_input_file() else self.config.get_input_file()
-        if input_file != "-":
-            self.create_train_file(input_file)
+    def train(self, new_configuration: CGPConfiguration):
+        args = self.get_train_cli(new_configuration)
 
-        resumed_run = (new_configration.has_start_run() and new_configration.get_start_run() != 0)
-        resumed_generation = (new_configration.has_start_generation() and new_configration.get_start_generation() != 0)
-        file_mode = "a" if resumed_run or resumed_generation else "w"
-        with open(new_configration.get_stdout_file(), file_mode) as stdout, open(new_configration.get_stderr_file(), file_mode) as stderr:
-            process = subprocess.Popen([
-                self._binary,
-                "train",
-                self.config._config_file,
-            *args
-            ], stdin=subprocess.PIPE if input_file == "-" else None, stdout=stdout, stderr=stderr, text=True)
-            
-            if input_file == "-":
-                self._prepare_cgp_algorithm(process.stdin)
-                process.stdin.close()
+        file_mode = "a" if new_configuration.should_resume_evolution() else "w"
+        with open(new_configuration.get_stdout_file(), file_mode) as stdout, open(new_configuration.get_stderr_file(), file_mode) as stderr:
+            process = subprocess.Popen(args, stdout=stdout, stderr=stderr, text=True)
 
-            # for stdout_line in iter(process.stderr.readline, ""):
-            #     print("CGP:", stdout_line, end="")
-
-            # Wait for the subprocess to finish
             process.wait()
             print("Return code:", process.returncode)
             if process.returncode != 0:

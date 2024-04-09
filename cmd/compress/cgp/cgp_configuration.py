@@ -6,8 +6,10 @@ class CGPConfiguration:
     def __init__(self, config_file: str = None):
         self._attributes = {}
         self._config_file = config_file
+        self.can_use_without_args = False
         if config_file:
             self.load(config_file)
+            self.can_use_without_args = True
 
     def clone(self, new_config_file: str = None):
         cloned_instance = CGPConfiguration()
@@ -35,9 +37,14 @@ class CGPConfiguration:
                 "either config file must be passed to the save function or the class constructor must have been provided a configuration file as argument"
             )
 
+        if (config_file == self._config_file and self.can_use_without_args) or (config_file is None and self.can_use_without_args):
+            return
+
         with open(config_file or self._config_file, "w") as f:
             for key, value in self._attributes.items():
                 f.write(f"{key}: {value}\n")
+        self._config_file = config_file or self._config_file
+        self.can_use_without_args = True
 
     def __contains__(self, key):
         return key in self._attributes
@@ -59,6 +66,15 @@ class CGPConfiguration:
             val = other_config._attributes.get(k, None)
             if v == val:
                 del self._attributes[k]
+                self.can_use_without_args = False
+
+    def should_resume_evolution(self):
+        resumed_run = (self.has_start_run() and self.get_start_run() != 0)
+        resumed_generation = (self.has_start_generation() and self.get_start_generation() != 0)
+        return resumed_run or resumed_generation
+
+    def get_gate_parameters_file(self):
+        return self._attributes.get("gate_parameters_file")
 
     def get_stderr_file(self):
         return self._attributes.get("stderr")
@@ -138,83 +154,94 @@ class CGPConfiguration:
     def get_cgp_statistics_file(self):
         return self._attributes.get("cgp_statistics_file")
 
+    def set_attribute(self, attribute, value):
+        if attribute not in self._attributes or self._attributes[attribute] != value:
+            self._attributes[attribute] = value
+            self.can_use_without_args = False
+
+    def set_gate_parameters_file(self, value):
+        self.set_attribute("gate_parameters_file", value)
+
     def set_start_generation(self, value):
-        self._attributes["start_generation"] = value
+        self.set_attribute("start_generation", value)
 
     def set_stderr_file(self, value):
-        self._attributes["stderr"] = value
+        self.set_attribute("stderr", value)
 
     def set_stdout_file(self, value):
-        self._attributes["stdout"] = value
+        self.set_attribute("stdout", value)
 
     def set_start_run(self, value):
-        self._attributes["start_run"] = value
+        self.set_attribute("start_run", value)
 
     def set_energy_early_stop(self, value):
-        self._attributes["energy_early_stop"] = value
+        self.set_attribute("energy_early_stop", value)
 
     def set_mse_early_stop(self, value):
-        self._attributes["mse_early_stop"] = value
+        self.set_attribute("mse_early_stop", value)
 
     def set_patience(self, value):
-        self._attributes["patience"] = value
+        self.set_attribute("patience", value)
 
     def set_starting_solution(self, value):
-        self._attributes["starting_solution"] = value
+        self.set_attribute("starting_solution", value)
 
     def set_mse_threshold(self, value):
-        self._attributes["mse_threshold"] = value
+        self.set_attribute("mse_threshold", value)
 
     def set_dataset_size(self, value):
-        self._attributes["dataset_size"] = value
+        self.set_attribute("dataset_size", value)
 
     def set_col_count(self, value):
-        self._attributes["col_count"] = value
+        self.set_attribute("col_count", value)
 
     def set_row_count(self, value):
-        self._attributes["row_count"] = value
+        self.set_attribute("row_count", value)
 
     def set_number_of_runs(self, value):
-        self._attributes["number_of_runs"] = value
+        self.set_attribute("number_of_runs", value)
 
     def set_look_back_parameter(self, value):
-        self._attributes["look_back_parameter"] = value
+        self.set_attribute("look_back_parameter", value)
 
     def set_mutation_max(self, value):
-        self._attributes["mutation_max"] = value
+        self.set_attribute("mutation_max", value)
 
     def set_function_count(self, value):
-        self._attributes["function_count"] = value
+        self.set_attribute("function_count", value)
 
     def set_function_input_arity(self, value):
-        self._attributes["function_input_arity"] = value
+        self.set_attribute("function_input_arity", value)
 
     def set_function_output_arity(self, value):
-        self._attributes["function_output_arity"] = value
+        self.set_attribute("function_output_arity", value)
 
     def set_input_count(self, value):
-        self._attributes["input_count"] = value
+        self.set_attribute("input_count", value)
 
     def set_output_count(self, value):
-        self._attributes["output_count"] = value
+        self.set_attribute("output_count", value)
 
     def set_population_max(self, value):
-        self._attributes["population_max"] = value
+        self.set_attribute("population_max", value)
 
     def set_generation_count(self, value):
-        self._attributes["generation_count"] = value
+        self.set_attribute("generation_count", value)
 
     def set_periodic_log_frequency(self, value):
-        self._attributes["periodic_log_frequency"] = value
+        self.set_attribute("periodic_log_frequency", value)
 
     def set_input_file(self, value):
-        self._attributes["input_file"] = value
+        self.set_attribute("input_file", value)
 
     def set_output_file(self, value):
-        self._attributes["output_file"] = value
+        self.set_attribute("output_file", value)
 
     def set_cgp_statistics_file(self, value):
-        self._attributes["cgp_statistics_file"] = value
+        self.set_attribute("cgp_statistics_file", value)
+
+    def delete_gate_parameters_file(self):
+        del self._attributes["gate_parameters_file"]
 
     def delete_stderr_file(self):
         del self._attributes["stderr"]
@@ -297,6 +324,9 @@ class CGPConfiguration:
     def __str__(self):
         attributes = [f"{attr}: {value}" for attr, value in self._attributes.items()]
         return "\n".join(attributes)
+
+    def has_gate_parameters_file(self):
+        "gate_parameters_file" in self._attributes
 
     def has_stderr_file(self):
         return "stderr" in self._attributes
