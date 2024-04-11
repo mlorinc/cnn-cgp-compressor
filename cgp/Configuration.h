@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <limits>
 #include <stdexcept>
 #include <map>
 
@@ -336,8 +337,8 @@ namespace cgp {
 		/// </summary>
 		static constexpr weight_value_t no_care_value = std::numeric_limits<weight_value_t>::min();
 #endif // !CNN_FP32_WEIGHTS
-
-
+		using weight_input_t = weight_value_t*;
+		using weight_output_t = weight_value_t*;
 	private:
 		/// <summary>
 		/// Default value for the input arity of functions.
@@ -387,7 +388,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the look-back parameter in the CGP algorithm.
 		/// </summary>
-		uint16_t look_back_parameter_value = 1;
+		int look_back_parameter_value = 1;
 
 		/// <summary>
 		/// Default value for the maximum number of generations in the CGP algorithm.
@@ -412,7 +413,7 @@ namespace cgp {
 		/// <summary>
 		/// Array of energy costs for various operations.
 		/// </summary>
-		std::shared_ptr<gate_parameters_t[]> function_costs_value;
+		std::unique_ptr<gate_parameters_t[]> function_costs_value;
 
 		/// <summary>
 		/// A path to a file with input data.
@@ -516,32 +517,32 @@ namespace cgp {
 		/// <summary>
 		/// Gets the input arity of functions.
 		/// </summary>
-		inline decltype(function_input_arity_value) function_input_arity() const;
+		decltype(function_input_arity_value) function_input_arity() const;
 
 		/// <summary>
 		/// Gets the output arity of functions.
 		/// </summary>
-		inline decltype(function_output_arity_value) function_output_arity() const;
+		decltype(function_output_arity_value) function_output_arity() const;
 
 		/// <summary>
 		/// Gets the number of output pins in the CGP configuration.
 		/// </summary>
-		inline decltype(output_count_val) output_count() const;
+		decltype(output_count_val) output_count() const;
 
 		/// <summary>
 		/// Gets the number of input pins in the CGP configuration.
 		/// </summary>
-		inline decltype(input_count_val) input_count() const;
+		decltype(input_count_val) input_count() const;
 
 		/// <summary>
 		/// Gets the maximum population size in the CGP algorithm.
 		/// </summary>
-		inline decltype(population_max_value) population_max() const;
+		decltype(population_max_value) population_max() const;
 
 		/// <summary>
 		/// Gets the maximum mutation value in the CGP algorithm.
 		/// </summary>
-		inline decltype(mutation_max_value) mutation_max() const;
+		decltype(mutation_max_value) mutation_max() const;
 
 		/// <summary>
 		/// Gets maximum number of genes that can be mutated.
@@ -551,52 +552,52 @@ namespace cgp {
 		/// <summary>
 		/// Gets the number of rows in the CGP grid.
 		/// </summary>
-		inline decltype(row_count_value) row_count() const;
+		decltype(row_count_value) row_count() const;
 
 		/// <summary>
 		/// Gets the number of columns in the CGP grid.
 		/// </summary>
-		inline decltype(col_count_value) col_count() const;
+		decltype(col_count_value) col_count() const;
 
 		/// <summary>
 		/// Gets the look-back parameter in the CGP algorithm.
 		/// </summary>
-		inline decltype(look_back_parameter_value) look_back_parameter() const;
+		decltype(look_back_parameter_value) look_back_parameter() const;
 
 		/// <summary>
 		/// Gets the maximum number of generations in the CGP algorithm.
 		/// </summary>
-		inline decltype(generation_count_value) generation_count() const;
+		decltype(generation_count_value) generation_count() const;
 
 		/// <summary>
 		/// Gets the number of runs in the CGP algorithm.
 		/// </summary>
-		inline decltype(number_of_runs_value) number_of_runs() const;
+		decltype(number_of_runs_value) number_of_runs() const;
 
 		/// <summary>
 		/// Gets the number of functions in the CGP algorithm.
 		/// </summary>
-		inline decltype(function_count_value) function_count() const;
+		decltype(function_count_value) function_count() const;
 
 		/// <summary>
 		/// Gets the log frequency in the CGP algorithm.
 		/// </summary>
-		inline decltype(periodic_log_frequency_value) periodic_log_frequency() const;
+		decltype(periodic_log_frequency_value) periodic_log_frequency() const;
 
 		/// <summary>
 		/// Gets a file path in which input data are located.
 		/// </summary>
-		inline decltype(input_file_value) input_file() const;
+		decltype(input_file_value) input_file() const;
 
 		/// <summary>
 		/// Gets a file path in which output data will be stored.
 		/// </summary>
-		inline decltype(output_file_value) output_file() const;
+		decltype(output_file_value) output_file() const;
 
 		/// <summary>
 		/// Gets the path where CGP statistics will be saved.
 		/// </summary>
-		inline decltype(cgp_statistics_file_value) cgp_statistics_file() const;
+		decltype(cgp_statistics_file_value) cgp_statistics_file() const;
 
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
@@ -606,27 +607,27 @@ namespace cgp {
 		/// <summary>
 		/// Calculates the size of the chromosome blocks.
 		/// </summary>
-		inline size_t blocks_chromosome_size() const;
+		size_t blocks_chromosome_size() const;
 
 		/// <summary>
 		/// Calculates the total size of the chromosome.
 		/// </summary>
-		inline size_t chromosome_size() const;
+		size_t chromosome_size() const;
 
 		/// <summary>
 		/// Gets array of energy costs for various operations.
 		/// </summary>
-		decltype(function_costs_value) function_costs() const;
+		const decltype(function_costs_value)& function_costs() const;
 
 		/// <summary>
 		/// Get Mean Squared Error threshold after optimisation is focused on minimising energy.
 		/// </summary>
-		inline decltype(mse_threshold_value) mse_threshold() const;
+		decltype(mse_threshold_value) mse_threshold() const;
 
 		/// <summary>
 		/// Get dataset size of the CGP.
 		/// </summary>
-		inline decltype(dataset_size_value) dataset_size() const;
+		decltype(dataset_size_value) dataset_size() const;
 
 		/// <summary>
 		/// Get start generation number.
@@ -749,7 +750,7 @@ namespace cgp {
 		/// <summary>
 		/// Sets array of energy costs for various operations in the CGP algorithm.
 		/// </summary>
-		CGPConfiguration& function_costs(decltype(function_costs_value));
+		CGPConfiguration& function_costs(decltype(function_costs_value)&&);
 
 		/// <summary>
 		/// Sets the file path in which input data are located for the CGP algorithm.

@@ -1,10 +1,8 @@
 #include "Cgp.h"
 #include <algorithm>
-#include <execution>
 #include <limits>
 #include <omp.h>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 
 using namespace cgp;
@@ -131,7 +129,7 @@ void CGP::build_indices()
 	const auto fn_arity = function_output_arity();
 	const auto row_count = this->row_count();
 	const auto col_count = this->col_count();
-	minimum_output_indicies = std::make_shared<std::tuple<int, int>[]>(col_count + 1);
+	minimum_output_indicies = std::make_unique<std::tuple<int, int>[]>(col_count + 1);
 	int l_back = look_back_parameter();
 
 	// Calculate pin available according to defined L parameter.
@@ -170,20 +168,20 @@ void CGP::generate_population()
 	// Create new population
 	for (int i = 0; i < end; i++)
 	{
-		chromosomes[i] = (best_chromosome) ? (best_chromosome->mutate()) : (std::make_shared<Chromosome>(*this, minimum_output_indicies));;
+		chromosomes[i] = (best_chromosome) ? (best_chromosome->mutate()) : (std::make_shared<Chromosome>(*this, minimum_output_indicies));
 	}
 }
 
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const
+CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output) const
 {
 	CGP::error_t sum = 0;
 	int end = output_count();
 	#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < end; i++)
 	{
-		if (expected_output[i] == no_care_value) break;
+		if (expected_output[i] == no_care_value) continue;
 		error_t diff = predictions[i] - expected_output[i];
 		sum += diff * diff;
 	}
@@ -203,7 +201,7 @@ void CGP::set_best_solution(const std::string& solution, std::string format_stri
 
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-CGP::error_t CGP::mse(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const
+CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& expected_output) const
 {
 	error_t sum = 0;
 	int quantity = 0;
@@ -211,7 +209,7 @@ CGP::error_t CGP::mse(const weight_value_t* predictions, const std::shared_ptr<w
 	#pragma omp parallel for reduction(+:sum) reduction(+:quantity)
 	for (int i = 0; i < end; i++)
 	{
-		if (expected_output[i] == no_care_value) break;
+		if (expected_output[i] == no_care_value) continue;
 		const error_t diff = predictions[i] - expected_output[i];
 		sum += diff * diff;
 		quantity += 1;
@@ -225,18 +223,20 @@ CGP::error_t CGP::mse(const weight_value_t* predictions, const std::shared_ptr<w
 	return sum / quantity;
 }
 
-CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output)
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const dataset_t& dataset)
 {
-	auto end = input.end();
+	const auto& input = get_dataset_input(dataset);
+	const auto& expected_output = get_dataset_output(dataset);
+	const auto end = input.size();
 	decltype(mse(nullptr, nullptr)) mse_accumulator = 0;
 	size_t selector = 0;
 
-	for (auto input_it = input.begin(), output_it = expected_output.begin(); input_it != end; input_it++, output_it++)
+	for (int i = 0; i < end; i++)
 	{
-		chrom->set_input(*input_it);
+		chrom->set_input(input[i]);
 		chrom->evaluate(selector++);
-		mse_accumulator += error_fitness(*chrom, *output_it);
-		if (mse_accumulator < 0) [[unlikely]]
+		mse_accumulator += error_fitness(*chrom, expected_output[i]);
+		if (mse_accumulator < 0) 
 			{
 				mse_accumulator = error_nan;
 				break;
@@ -245,7 +245,7 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	return CGP::create_solution(chrom, mse_accumulator /= input.size());
 }
 
-CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output, size_t selector)
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t& input, const weight_output_t& expected_output, size_t selector)
 {
 	chrom->set_input(input);
 	chrom->evaluate(selector);
@@ -277,11 +277,11 @@ CGP::gate_count_t CGP::get_gate_count(Chromosome& chrom)
 	return chrom.get_node_count();
 }
 
-CGP::error_t CGP::error_fitness(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output) {
+CGP::error_t CGP::error_fitness(Chromosome& chrom, const weight_output_t &expected_output) {
 	return mse(chrom.begin_output(), expected_output);
 }
 
-CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output) {
+CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output) {
 	return mse_without_division(chrom.begin_output(), expected_output);
 }
 
@@ -610,13 +610,13 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 	return std::make_tuple(false, true);
 }
 
-CGP::solution_t CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output)
+CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 {
 	const int end = population_max();
 #pragma omp parallel for default(shared)
 	for (int i = 0; i < end; i++) {
 		auto& chromosome = chromosomes[i];
-		auto chromosome_result = analyse_chromosome(chromosome, input, expected_output);
+		auto chromosome_result = analyse_chromosome(chromosome, dataset);
 
 		// The following section will set fitness and the chromosome
 		// to best_solutions map if the fitness is better than the best fitness
@@ -650,9 +650,9 @@ CGP::solution_t CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]
 	return best_solution;
 }
 
-CGP::solution_t CGP::evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output, std::shared_ptr<Chromosome> chromosome)
+CGP::solution_t CGP::evaluate(const dataset_t &dataset, std::shared_ptr<Chromosome> chromosome)
 {
-	auto solution = analyse_chromosome(chromosome, input, expected_output);
+	auto solution = analyse_chromosome(chromosome, dataset);
 
 	return CGP::create_solution(
 		CGP::get_chromosome(solution),
@@ -723,8 +723,8 @@ void CGP::restore(
 
 void CGP::restore(
 	std::shared_ptr<Chromosome> chromosome,
-	const std::shared_ptr<weight_value_t[]> input,
-	const std::shared_ptr<weight_value_t[]> expected_output,
+	const weight_input_t& input,
+	const weight_output_t& expected_output,
 	const size_t mutations_made
 )
 {
@@ -734,12 +734,11 @@ void CGP::restore(
 }
 
 void CGP::restore(std::shared_ptr<Chromosome> chromosome,
-	const std::vector<std::shared_ptr<weight_value_t[]>>& input,
-	const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output,
+	const dataset_t& dataset,
 	const size_t mutations_made
 )
 {
 	generations_without_change = 0;
 	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
-	best_solution = analyse_chromosome(chromosome, input, expected_output);
+	best_solution = analyse_chromosome(chromosome, dataset);
 }

@@ -2,13 +2,14 @@
 #include <string>
 #include <unordered_map>
 #include <stdexcept>
+#include <vector>
 
 namespace cgp
 {
     class StringTemplateError : public std::invalid_argument {
     public:
         StringTemplateError(const std::vector<std::string>& missing_arguments);
-        inline virtual const char* what() const override;
+        std::string get_message() const;
     private:
         std::string message;
     };

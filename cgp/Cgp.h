@@ -1,12 +1,12 @@
 #pragma once
 
-#include <array>
 #include <vector>
 #include <memory>
 #include <map>
 #include <omp.h>
 #include "Configuration.h"
 #include "Chromosome.h"
+#include "Dataset.h"
 
 namespace cgp {
 	/// <summary>
@@ -192,7 +192,7 @@ namespace cgp {
 		/// <summary>
 		/// Array containing tuples specifying the minimum and maximum pin indices for output connections.
 		/// </summary>
-		std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies;
+		std::unique_ptr<std::tuple<int, int>[]> minimum_output_indicies;
 
 		/// <summary>
 		/// Count of generations without improvement in the best fitness.
@@ -221,7 +221,7 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
 		/// <returns>The error fitness value.</returns>
-		error_t error_fitness(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output);
+		error_t error_fitness(Chromosome& chrom, const weight_output_t& expected_output);
 
 		/// <summary>
 		/// Calculate the accuracy (error) fitness of a chromosome without aggregation.
@@ -229,7 +229,7 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
 		/// <returns>The error fitness value.</returns>
-		error_t error_fitness_without_aggregation(Chromosome& chrom, const std::shared_ptr<weight_value_t[]> expected_output);
+		error_t error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output);
 
 		/// <summary>
 		/// Calculate the energy fitness of a chromosome.
@@ -272,7 +272,7 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value.</returns>
-		error_t mse(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const;
+		error_t mse(const weight_value_t* predictions, const weight_output_t& expected_output) const;
 
 		/// <summary>
 		/// Calculate the Mean Squared Error (MSE) metric for made predictions without division.
@@ -280,16 +280,15 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value without being divided.</returns>
-		error_t mse_without_division(const weight_value_t* predictions, const std::shared_ptr<weight_value_t[]> expected_output) const;
+		error_t mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output) const;
 
 		/// <summary>
 		/// Analyze chromosome and calculate MSE metric for made predictions. It does not fill up other fitnesses due to performance.
 		/// </summary>
 		/// <param name="chrom">The chromosome to analyze.</param>
-		/// <param name="input">The input data.</param>
-		/// <param name="expected_output">The expected output data.</param>
+		/// <param name="dataset">Dataset to analyse chromosome on.</param>
 		/// <returns>The solution containing the chromosome and MSE metric. Other attributes can be accesed from the chromosome instance.</returns>
-		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const dataset_t& dataset);
 
 		/// <summary>
 		/// Analyze chromosome and calculate MSE metric for made predictions. It does not fill up other fitnesses due to performance.
@@ -299,7 +298,7 @@ namespace cgp {
 		/// <param name="expected_output">The expected output data.</param>
 		/// <param name="selector">Optional parameter for selector.</param>
 		/// <returns>The solution containing the analyzed chromosome and MSE metric. Other attributes can be accesed from the chromosome instance.</returns>
-		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const std::shared_ptr<weight_value_t[]> input, const std::shared_ptr<weight_value_t[]> expected_output, size_t selector = 0);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t &input, const weight_output_t &expected_output, size_t selector = 0);
 
 		/// <summary>
 		/// Determine whether candidate solution A is better than B.
@@ -379,20 +378,18 @@ namespace cgp {
 		/// <summary>
 		/// Evaluate the fitness of the population based on the given inputs and expected outputs.
 		/// </summary>
-		/// <param name="input">Vector reference to shared array pointer of input values.</param>
-		/// <param name="expected_output">Vector reference to shared array pointer of expected output values.</param>
-		/// /// <returns>A solution containing some of the fitness values.</returns>
-		CGP::solution_t evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output);
+		/// <param name="dataset">Dataset to perform one evolution cycle on.</param>
+		/// <returns>A solution containing some of the fitness values.</returns>
+		CGP::solution_t evaluate(const dataset_t &dataset);
 
 		/// <summary>
 		/// Evaluate the fitness of the chromosome based on the given inputs and expected outputs. Compared to the train variant,
 		/// this method returns all fitness values in the solution.
 		/// </summary>
-		/// <param name="input">Reference to a vector of shared pointers to arrays containing input values.</param>
-		/// <param name="expected_output">Reference to a vector of shared pointers to arrays containing expected output values.</param>
+		/// <param name="dataset">Dataset to perform one evolution cycle on.</param>
 		/// <param name="chromosome">The chromosome to evaluate.</param>
 		/// <returns>A solution containing all fitness values.</returns>
-		solution_t evaluate(const std::vector<std::shared_ptr<weight_value_t[]>>& input, const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output, std::shared_ptr<Chromosome> chromosome);
+		solution_t evaluate(const dataset_t& dataset, std::shared_ptr<Chromosome> chromosome);
 
 		/// <summary>
 		/// Get the current best error fitness value.
@@ -445,8 +442,8 @@ namespace cgp {
 		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
 		void restore(
 			std::shared_ptr<Chromosome> chromosome,
-			const std::shared_ptr<weight_value_t[]> input,
-			const std::shared_ptr<weight_value_t[]> expected_output,
+			const weight_input_t& input,
+			const weight_output_t& expected_output,
 			const size_t mutations_made = std::numeric_limits<size_t>::max()
 		);
 
@@ -454,13 +451,11 @@ namespace cgp {
 		/// Set evoluton to the specific point.
 		/// </summary>
 		/// <param name="chromosome">Starting chromosome for evolution.</param>
-		/// <param name="input">Vector reference to shared array pointer of input values.</param>
-		/// <param name="expected_output">Vector reference to shared array pointer of expected output values.</param>
+		/// <param name="dataset">Dataset to use to get missing fitness values.</param>
 		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
 		void restore(
 			std::shared_ptr<Chromosome> chromosome,
-			const std::vector<std::shared_ptr<weight_value_t[]>>& input,
-			const std::vector<std::shared_ptr<weight_value_t[]>>& expected_output,
+			const dataset_t &dataset,
 			const size_t mutations_made = std::numeric_limits<size_t>::max()
 		);
 

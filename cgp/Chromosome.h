@@ -13,6 +13,9 @@ namespace cgp {
 	/// </summary>
 	class Chromosome {
 	public:
+		using weight_input_t = CGPConfiguration::weight_input_t;
+		using weight_output_t = CGPConfiguration::weight_output_t;
+
 		/// <summary>
 		/// Type definition for inferred weight in Cartesian Genetic Programming.
 		/// </summary>
@@ -99,12 +102,12 @@ namespace cgp {
 		/// <summary>
 		/// Array containing tuples specifying the minimum and maximum pin indices for possible output connections based on the look-back parameter.
 		/// </summary>
-		const std::shared_ptr<std::tuple<int, int>[]> minimum_output_indicies;
+		const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies;
 
 		/// <summary>
 		/// Shared pointer to the chromosome array.
 		/// </summary>
-		std::shared_ptr<gene_t[]> chromosome;
+		std::unique_ptr<gene_t[]> chromosome;
 
 		/// <summary>
 		/// Unique pointer to the pin map array.
@@ -124,7 +127,7 @@ namespace cgp {
 		/// <summary>
 		/// Shared pointer to the input array.
 		/// </summary>
-		std::shared_ptr<weight_value_t[]> input;
+		weight_value_t *input = nullptr;
 
 		/// <summary>
 		/// Flag indicating whether the chromosome needs evaluation.
@@ -223,7 +226,7 @@ namespace cgp {
 		/// Given chromosome is reused, otherwise new chromosome array is created.
 		/// </summary>
 		/// <param name="chromosome">The chromosome to be reused or null.</param>
-		void setup_maps(decltype(chromosome) chromosome);
+		void setup_maps(const decltype(chromosome)& chromosome);
 
 		/// <summary>
 		/// Method for allocating required maps in order to perform evaluating.
@@ -256,7 +259,7 @@ namespace cgp {
 		/// </summary>
 		/// <param name="cgp_configuration">Reference to the CGP configuration.</param>
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
-		Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies);
+		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies);
 		
 		
 		/// <summary>
@@ -265,7 +268,7 @@ namespace cgp {
 		/// <param name="cgp_configuration">Reference to the CGP configuration.</param>
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		/// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
-		Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]> &minimum_output_indicies, const std::string &serialized_chromosome);
+		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies, const std::string &serialized_chromosome);
 
 		/// <summary>
 		/// Constructs a Chromosome object using a string chromosome representation.
@@ -320,7 +323,7 @@ namespace cgp {
 		/// Getter for the shared pointer to the chromosome array.
 		/// </summary>
 		/// <returns>Shared pointer to the chromosome array.</returns>
-		std::shared_ptr<gene_t[]> get_chromosome() const;
+		const std::unique_ptr<gene_t[]>& get_chromosome() const;
 
 		/// <summary>
 		/// Method to perform mutation on the chromosome.
@@ -338,7 +341,7 @@ namespace cgp {
 		/// Method to set the input for the chromosome.
 		/// </summary>
 		/// <param name="input">Shared pointer to the input array.</param>
-		void set_input(std::shared_ptr<weight_value_t[]> input);
+		void set_input(const weight_input_t &input);
 
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.
@@ -417,14 +420,14 @@ namespace cgp {
 		/// <param name="input">Shared pointer to an array of input values.</param>
 		/// <param name="selector">Selector set to multipexor and de-multiplexor gates.</param>
 		/// <returns>Shared pointer to an array of infered weights</returns>
-		std::shared_ptr<weight_value_t[]> get_weights(const std::shared_ptr<weight_value_t[]> input, size_t selector = 0);
+		weight_output_t get_weights(const weight_input_t &input, size_t selector = 0);
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return vector of weights arrays.
 		/// </summary>
 		/// <param name="input">Vector of shared pointers to an array of input values.</param>
 		/// <returns>Vector of shared pointers to an array of infered weights associated with specific inputs</returns>
-		std::vector<std::shared_ptr<weight_value_t[]>> get_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& input);
+		std::vector<weight_output_t> get_weights(const std::vector<weight_input_t>& input);
 	};
 
 	std::string to_string(const Chromosome& chromosome);

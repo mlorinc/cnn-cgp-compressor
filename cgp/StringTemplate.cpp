@@ -46,7 +46,7 @@ cgp::StringTemplateError::StringTemplateError(const std::vector<std::string>& mi
     message = builder.str();
 }
 
-inline const char* cgp::StringTemplateError::what() const
+std::string StringTemplateError::get_message() const
 {
-    return message.c_str();
+    return message;
 }

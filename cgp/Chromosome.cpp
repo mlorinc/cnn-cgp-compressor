@@ -1,4 +1,5 @@
 #include "Chromosome.h"
+#include <algorithm>
 #include <iostream>
 #include <numeric>
 #include <sstream>
@@ -9,7 +10,7 @@ using namespace cgp;
 
 const std::string Chromosome::nan_chromosome_string = "null";
 
-Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies) :
+Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies) :
 	cgp_configuration(cgp_configuration),
 	minimum_output_indicies(minimum_output_indicies)
 {
@@ -18,7 +19,7 @@ Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::sha
 	setup_chromosome();
 }
 
-cgp::Chromosome::Chromosome(const CGPConfiguration& cgp_config, const std::shared_ptr<std::tuple<int, int>[]>& minimum_output_indicies, const std::string& serialized_chromosome) :
+cgp::Chromosome::Chromosome(const CGPConfiguration& cgp_config, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies, const std::string& serialized_chromosome) :
 	cgp_configuration(cgp_config),
 	minimum_output_indicies(minimum_output_indicies)
 {
@@ -45,7 +46,7 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 	estimated_largest_depth = that.estimated_largest_depth;
 	phenotype_node_count = that.phenotype_node_count;
 
-	if (!need_evaluation) [[likely]]
+	if (!need_evaluation) 
 		{
 			std::copy(that.output_pin_start, that.output_pin_end, output_pin_start);
 		}
@@ -159,14 +160,14 @@ void Chromosome::setup_maps()
 	setup_maps(nullptr);
 }
 
-void Chromosome::setup_maps(decltype(chromosome) chromosome)
+void Chromosome::setup_maps(const decltype(chromosome) &chromosome)
 {
-	if (chromosome == nullptr)
+	this->chromosome = std::make_unique<gene_t[]>(cgp_configuration.chromosome_size());
+	if (chromosome != nullptr)
 	{
-		chromosome = std::make_shared<gene_t[]>(cgp_configuration.chromosome_size());
+		std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), this->chromosome.get());
 	}
 
-	this->chromosome = chromosome;
 	pin_map = std::make_unique<weight_value_t[]>(cgp_configuration.pin_map_size());
 	gate_parameters_map = std::make_unique<gate_parameters_t[]>(cgp_configuration.row_count() * cgp_configuration.col_count());
 	gate_visit_map = std::make_unique<bool[]>(cgp_configuration.row_count() * cgp_configuration.col_count());
@@ -261,7 +262,7 @@ Chromosome::gene_t* Chromosome::get_block_function(size_t row, size_t column) co
 }
 
 
-std::shared_ptr<Chromosome::gene_t[]> Chromosome::get_chromosome() const
+const std::unique_ptr<Chromosome::gene_t[]>& Chromosome::get_chromosome() const
 {
 	return chromosome;
 }
@@ -304,9 +305,6 @@ void Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 std::shared_ptr<Chromosome> Chromosome::mutate() const
 {
 	auto chrom = std::make_shared<Chromosome>(*this);
-	chrom->chromosome = std::make_shared<Chromosome::gene_t[]>(cgp_configuration.chromosome_size());
-	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), chrom->chromosome.get());
-	chrom->setup_iterators();
 	mutate_genes(chrom);
 	chrom->input = nullptr;
 	return chrom;
@@ -324,7 +322,7 @@ std::shared_ptr<Chromosome> cgp::Chromosome::mutate(std::shared_ptr<Chromosome> 
 	return that;
 }
 
-void Chromosome::set_input(std::shared_ptr<weight_value_t[]> input)
+void Chromosome::set_input(const weight_input_t &input)
 {
 	if (this->input == input)
 	{
@@ -374,7 +372,7 @@ void Chromosome::evaluate(size_t selector)
 	auto output_pin = pin_map.get() + cgp_configuration.input_count();
 	auto input_pin = chromosome.get();
 	auto func = chromosome.get() + cgp_configuration.function_input_arity();
-	auto reference_costs = cgp_configuration.function_costs();
+	const auto &reference_costs = cgp_configuration.function_costs();
 	const auto expected_value_min = cgp_configuration.expected_value_min();
 	const auto expected_value_max = cgp_configuration.expected_value_max();
 	size_t used_pin = 0;
@@ -509,14 +507,14 @@ void Chromosome::evaluate(size_t selector)
 			break;
 		}
 
-		if (is_demux(*func)) [[unlikely]]
+		if (is_demux(*func)) 
 		{
 			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
 			{
 				set_value(block_output_pins[i], (i == used_pin) ? (block_output_pins[i]) : (0));
 			}
 		}
-		else [[likely]]
+		else 
 		{
 			// speed up evolution of operator + multiplexor; shortcircuit pins
 			for (size_t i = 0; i < cgp_configuration.function_output_arity(); i++)
@@ -789,22 +787,22 @@ decltype(Chromosome::bottom_row) Chromosome::get_bottom_row()
 	return bottom_row;
 }
 
-std::shared_ptr<Chromosome::weight_value_t[]> Chromosome::get_weights(const std::shared_ptr<weight_value_t[]> input, size_t selector)
+Chromosome::weight_output_t Chromosome::get_weights(const weight_input_t &input, size_t selector)
 {
 	set_input(input);
 	evaluate(selector);
-	auto weights = std::make_shared<weight_value_t[]>(cgp_configuration.output_count());
-	std::copy(begin_output(), end_output(), weights.get());
+	auto weights = new weight_value_t[cgp_configuration.output_count()];
+	std::copy(begin_output(), end_output(), weights);
 	return weights;
 }
 
-std::vector<std::shared_ptr<Chromosome::weight_value_t[]>> Chromosome::get_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& input)
+std::vector<Chromosome::weight_output_t> Chromosome::get_weights(const std::vector<weight_input_t>& input)
 {
-	std::vector<std::shared_ptr<Chromosome::weight_value_t[]>> weight_vector(input.size());
+	std::vector<weight_output_t> weight_vector(input.size());
 	size_t selector = 0;
-	for (const auto& in : input)
+	for (int i = 0; i < input.size(); i++)
 	{
-		weight_vector.push_back(get_weights(in, selector++));
+		weight_vector.push_back(get_weights(input[i], selector++));
 	}
 	return weight_vector;
 }

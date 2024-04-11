@@ -262,11 +262,10 @@ void CGPOutputStream::log_csv(
 	size_t run,
 	size_t generation,
 	std::shared_ptr<Chromosome> chromosome,
-	const std::vector<std::shared_ptr<weight_value_t[]>>& inputs,
-	const std::vector<std::shared_ptr<weight_value_t[]>>& outputs,
+	const dataset_t &dataset,
 	bool print_chromosome)
 {
-	auto solution = cgp_model->evaluate(inputs, outputs, chromosome);
+	auto solution = cgp_model->evaluate(dataset, chromosome);
 	*this
 		<< (run + 1)
 		<< "," << (generation + 1)
@@ -281,15 +280,15 @@ void CGPOutputStream::log_csv(
 		<< std::endl;
 }
 
-void CGPOutputStream::log_weights(const std::vector<std::shared_ptr<weight_value_t[]>>& inputs)
+void CGPOutputStream::log_weights(const std::vector<weight_input_t>& inputs)
 {
 	log_weights(cgp_model->get_best_chromosome(), inputs);
 }
 
-void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const std::vector<std::shared_ptr<weight_value_t[]>>& inputs)
+void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const std::vector<weight_input_t>& inputs)
 {
-	for (const auto& in : inputs) {
-		auto weights = chromosome->get_weights(in);
+	for (int i = 0; i < inputs.size(); i++) {
+		auto weights = chromosome->get_weights(inputs[i]);
 
 		for (size_t i = 0; i < cgp_model->output_count() - 1; i++)
 		{
@@ -313,6 +312,7 @@ void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const 
 			*this << weight_to_string(weights[cgp_model->output_count() - 1]);
 		}
 		*this << std::endl;
+		delete[] weights;
 	}
 }
 
@@ -366,11 +366,11 @@ CGPInputStream::CGPInputStream(std::shared_ptr<CGP> cgp_model, const std::string
 	this->cgp_model = cgp_model;
 }
 
-std::shared_ptr<weight_value_t[]> cgp::CGPInputStream::load_input()
+weight_input_t cgp::CGPInputStream::load_input()
 {
 	weight_repr_value_t weight;
 	std::string no_care;
-	std::shared_ptr<weight_value_t[]> input = std::make_shared<weight_value_t[]>(cgp_model->input_count());
+	auto input = new weight_value_t[cgp_model->input_count()];
 	for (size_t i = 0; i < cgp_model->input_count(); i++)
 	{
 		if (*stream >> weight)
@@ -406,11 +406,11 @@ std::shared_ptr<weight_value_t[]> cgp::CGPInputStream::load_input()
 	return input;
 }
 
-std::shared_ptr<weight_value_t[]> cgp::CGPInputStream::load_output()
+weight_output_t cgp::CGPInputStream::load_output()
 {
 	weight_repr_value_t weight;
 	std::string no_care;
-	std::shared_ptr<weight_value_t[]> output = std::make_shared<weight_value_t[]>(cgp_model->output_count());
+	auto output = new weight_value_t[cgp_model->output_count()];
 	for (size_t i = 0; i < cgp_model->output_count(); i++)
 	{
 		if (*stream >> weight)
@@ -446,9 +446,9 @@ std::shared_ptr<weight_value_t[]> cgp::CGPInputStream::load_output()
 	return output;
 }
 
-std::tuple<std::vector<std::shared_ptr<weight_value_t[]>>, std::vector<std::shared_ptr<weight_value_t[]>>> cgp::CGPInputStream::load_train_data()
+dataset_t cgp::CGPInputStream::load_train_data()
 {
-	std::vector<std::shared_ptr<weight_value_t[]>> inputs, outputs;
+	std::vector<weight_input_t> inputs, outputs;
 	
 	for (size_t i = 0; i < cgp_model->dataset_size(); i++)
 	{
@@ -459,7 +459,7 @@ std::tuple<std::vector<std::shared_ptr<weight_value_t[]>>, std::vector<std::shar
 	return std::make_tuple(inputs, outputs);
 }
 
-std::shared_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load_gate_parameters()
+std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load_gate_parameters()
 {
 	int bit_variant = cgp_model->max_multiplexer_bit_variant();
 	int function_count = cgp_model->function_count();
@@ -470,8 +470,7 @@ std::shared_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load
 		throw std::invalid_argument("multiplexer is unneccesary when dataset size is 1");
 	}
 
-	auto costs = std::make_shared<CGPConfiguration::gate_parameters_t[]>(cgp_model->function_count());
-	cgp_model->function_costs(costs);
+	auto costs = std::make_unique<CGPConfiguration::gate_parameters_t[]>(cgp_model->function_count());
 
 	int end = (has_mux) ? (function_count - 2) : (function_count);
 	std::string energy, area, delay;
@@ -510,14 +509,4 @@ std::shared_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load
 	}
 
 	return costs;
-}
-
-std::vector<std::shared_ptr<weight_value_t[]>> cgp::get_dataset_input(const dataset_t& dataset)
-{
-	return std::get<0>(dataset);
-}
-
-std::vector<std::shared_ptr<weight_value_t[]>> cgp::get_dataset_output(const dataset_t& dataset)
-{
-	return std::get<1>(dataset);
 }

@@ -1,6 +1,8 @@
 #include "Configuration.h"
 #include <cstdlib>
 #include <sstream>
+#include <cmath>
+#include <algorithm>
 
 namespace cgp {
 
@@ -347,7 +349,7 @@ namespace cgp {
 		return blocks_chromosome_size() + output_count();
 	}
 
-	decltype(CGPConfiguration::function_costs_value) CGPConfiguration::function_costs() const
+	const decltype(CGPConfiguration::function_costs_value)& CGPConfiguration::function_costs() const
 	{
 		return function_costs_value;
 	}
@@ -436,7 +438,7 @@ namespace cgp {
 		return mse_threshold_value;
 	}
 
-	inline decltype(CGPConfiguration::dataset_size_value) CGPConfiguration::dataset_size() const
+	decltype(CGPConfiguration::dataset_size_value) CGPConfiguration::dataset_size() const
 	{
 		return dataset_size_value;
 	}
@@ -570,9 +572,9 @@ namespace cgp {
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::function_costs(decltype(function_costs_value) value)
+	CGPConfiguration& CGPConfiguration::function_costs(decltype(function_costs_value)&& value)
 	{
-		function_costs_value = value;
+		function_costs_value = std::move(value);
 		return *this;
 	}
 
