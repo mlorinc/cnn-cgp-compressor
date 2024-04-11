@@ -1,6 +1,5 @@
-patience: 600000
+patience: 5000000
 number_of_runs: 30
-look_back_parameter: 50
 mutation_max: 0.15
 function_count: 28
 function_input_arity: 2
@@ -8,6 +7,7 @@ function_output_arity: 1
 dataset_size: 1
 input_count: 54
 output_count: 96
-population_max: 4
+population_max: 8
 generation_count: 90000000
-periodic_log_frequency: 50000
+periodic_log_frequency: 250000
+gate_parameters_file: C:\Users\Majo\source\repos\TorchCompresser\cmd\gate_info\data\parameters.txt

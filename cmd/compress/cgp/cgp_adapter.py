@@ -15,19 +15,19 @@ class CGPProcessError(Exception):
         return f"The CGP process exited with exit code {self.code}." + (f"Reason: {self.what}" if self.what else "")
 
 class CGP(object):
-    def __init__(self, binary: str, cgp_config: str = None, dtype=torch.int8) -> None:
-        self._binary = binary
-        self.config = CGPConfiguration(cgp_config)
-        self._input_size = self.config.get_input_count()
-        self._output_size = self.config.get_output_count()
+    def __init__(self, binary: str, dtype=torch.int8) -> None:
+        self._binary = Path(binary)
+        self.config = None
         self._dtype = dtype
-        self.reset()
 
-    def reset(self):
-        self._inputs = [torch.zeros(size=(self._input_size, ), dtype=self._dtype).detach() for _ in range(self.config.get_dataset_size())]
-        self._expected_values = [torch.zeros(size=(self._output_size, ), dtype=self._dtype).detach() for _ in range(self.config.get_dataset_size())]
-        self._input_wildcards = [0] * self.config.get_dataset_size()
-        self._output_wildcards = [0] * self.config.get_dataset_size()
+    def setup(self, config: CGPConfiguration):
+        self.config = config
+        input_size = self.config.get_input_count()
+        output_size = self.config.get_output_count()
+        self._inputs = [torch.zeros(size=(input_size, ), dtype=self._dtype).detach() for _ in range(config.get_dataset_size())]
+        self._expected_values = [torch.zeros(size=(output_size, ), dtype=self._dtype).detach() for _ in range(config.get_dataset_size())]
+        self._input_wildcards = [0] * config.get_dataset_size()
+        self._output_wildcards = [0] * config.get_dataset_size()
         self._input_position = 0
         self._output_position = 0
         self._item_index = 0        
@@ -49,7 +49,7 @@ class CGP(object):
         self._input_position = 0
         self._output_position = 0
 
-    def _prepare_cgp_algorithm(self, stream: TextIO):
+    def _dump_train_weights(self, stream: TextIO):
         for inputs, outputs, input_wildcard, output_wildcard in zip(self._inputs, self._expected_values, self._input_wildcards, self._output_wildcards):
             no_care_input_values = self.config.get_input_count() - input_wildcard
             no_care_output_values = self.config.get_output_count() - output_wildcard
@@ -71,40 +71,27 @@ class CGP(object):
         if file == "-":
             raise ValueError("cannot write train data to stdin")
         with open(file, "w") as f:
-            self._prepare_cgp_algorithm(f)
+            self._dump_train_weights(f)
 
-    def get_train_cli(self, new_configuration: CGPConfiguration):
-        args = [] if new_configuration is None or new_configuration.can_use_without_args else new_configuration.to_args()
-        path = Path(new_configuration._config_file or self.config._config_file)
-        return [self._binary, "train", str(path.absolute()), *args]
+    def get_train_cli(self, command: str = "train", other_args=[], cwd: str = None):
+        args = [] if self.config.can_use_without_args else self.config.to_args(cwd=cwd)
 
-    def train(self, new_configuration: CGPConfiguration):
-        args = self.get_train_cli(new_configuration)
+        return [str(self._binary), command, str(self.config.path), *other_args, *args]
 
-        file_mode = "a" if new_configuration.should_resume_evolution() else "w"
-        with open(new_configuration.get_stdout_file(), file_mode) as stdout, open(new_configuration.get_stderr_file(), file_mode) as stderr:
+    def _execute(self, command: str = "train", mode="w", other_args=[], cwd: str = None):
+        args = self.get_train_cli(command=command, other_args=other_args, cwd=cwd)
+
+        with self.config.open_stdout(mode) as stdout, self.config.open_stderr(mode) as stderr:
             process = subprocess.Popen(args, stdout=stdout, stderr=stderr, text=True)
-
             process.wait()
             print("Return code:", process.returncode)
             if process.returncode != 0:
                 raise CGPProcessError(process.returncode)
 
-    def evaluate(self, new_configration: CGPConfiguration = None, solution: str = None, config_file: str = None):
-        args = [] if new_configration is None else new_configration.to_args()
-        solution_arg = [solution] if solution is not None else []
-        process = subprocess.Popen([
-            self._binary,
-            "evaluate" if solution is None else "evaluate:inline",
-            config_file or self.config._config_file,
-            *solution_arg,
-            *args
-        ], stdin=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        for stdout_line in iter(process.stderr.readline, ""):
-            print("CGP:", stdout_line, end="")
+    def train(self):
+        file_mode = "a" if self.config.should_resume_evolution() else "w"
+        return self._execute(command="train", mode=file_mode)
 
-        # Wait for the subprocess to finish
-        process.wait()
-        print("Return code:", process.returncode)
-        if process.returncode != 0:
-            raise CGPProcessError(process.returncode)
+    def evaluate(self, solution: str = None):
+        solution_arg = [solution] if solution is not None else []
+        return self._execute(command="evaluate", other_args=solution_arg)

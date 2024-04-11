@@ -1,24 +1,27 @@
 from pathlib import Path
-from typing import Self
+from typing import TextIO, Optional, Union
+import contextlib
+import subprocess
+import os
 
 class CGPConfiguration:
     ignored_arguments = set(["stdout", "stderr"])
-    def __init__(self, config_file: str = None):
+    def __init__(self, config_file: Optional[Union[Path, str]] = None):
+        self._extra_attributes = {}
         self._attributes = {}
-        self._config_file = config_file
-        self.can_use_without_args = False
+        self.path = Path(config_file)
         if config_file:
             self.load(config_file)
-            self.can_use_without_args = True
 
     def clone(self, new_config_file: str = None):
         cloned_instance = CGPConfiguration()
-        cloned_instance._config_file = new_config_file or self._config_file
+        cloned_instance.path = new_config_file or self.path
         cloned_instance._attributes = self._attributes.copy()
+        cloned_instance._extra_attributes = self._extra_attributes.copy()
         return cloned_instance
 
     def load(self, config_file: str = None):
-        if config_file is None and self._config_file is None:
+        if config_file is None and self.path is None:
             raise ValueError(
                 "either config file must be passed to the load function or the class constructor must have been provided a configuration file as argument"
             )
@@ -32,19 +35,15 @@ class CGPConfiguration:
                     self._attributes[key.strip()] = self._parse_value(value.strip())
 
     def save(self, config_file: str = None):
-        if config_file is None and self._config_file is None:
+        if config_file is None and self.path is None:
             raise ValueError(
                 "either config file must be passed to the save function or the class constructor must have been provided a configuration file as argument"
             )
 
-        if (config_file == self._config_file and self.can_use_without_args) or (config_file is None and self.can_use_without_args):
-            return
-
-        with open(config_file or self._config_file, "w") as f:
+        with open(config_file or self.path, "w") as f:
             for key, value in self._attributes.items():
                 f.write(f"{key}: {value}\n")
-        self._config_file = config_file or self._config_file
-        self.can_use_without_args = True
+        self.path = config_file or self.path
 
     def __contains__(self, key):
         return key in self._attributes
@@ -58,106 +57,134 @@ class CGPConfiguration:
             except ValueError:
                 return value_str
 
-    def remove_redundant_attributes(self, other_config: Self):
-        for k in list(self._attributes.keys()):
-            if k in CGPConfiguration.ignored_arguments:
-                continue
-            v = self._attributes[k]
-            val = other_config._attributes.get(k, None)
-            if v == val:
-                del self._attributes[k]
-                self.can_use_without_args = False
+    def remove_extra_attributes(self):
+        self._extra_attributes = {}
+
+    def apply_extra_attributes(self):
+        self._attributes = {**self._attributes, **self._extra_attributes}
+        self._extra_attributes = {}
 
     def should_resume_evolution(self):
         resumed_run = (self.has_start_run() and self.get_start_run() != 0)
         resumed_generation = (self.has_start_generation() and self.get_start_generation() != 0)
         return resumed_run or resumed_generation
 
+    @contextlib.contextmanager
+    def open_stdout(self, mode="w"):
+        f_handle: TextIO = None 
+        try:
+            file = self.get_stdout_file() if self.has_stdout_file() else "-"
+
+            if file != "-":
+                f_handle = open(file, mode)
+                yield f_handle
+            else:
+                yield subprocess.PIPE
+        finally:
+            if f_handle is not None:
+                f_handle.close()
+
+    @contextlib.contextmanager
+    def open_stderr(self, mode="w"):
+        f_handle: TextIO = None 
+        try:
+            file = self.get_stderr_file() if self.has_stderr_file() else "-"
+
+            if file != "-":
+                f_handle = open(file, mode)
+                yield f_handle
+            else:
+                yield subprocess.PIPE
+        finally:
+            if f_handle is not None:
+                f_handle.close()
+
+    def get_attribute(self, name):
+        return self._attributes.get(name, None) or self._extra_attributes.get(name)
+
     def get_gate_parameters_file(self):
-        return self._attributes.get("gate_parameters_file")
+        return self.get_attribute("gate_parameters_file")
 
     def get_stderr_file(self):
-        return self._attributes.get("stderr")
+        return self.get_attribute("stderr")
 
     def get_stdout_file(self):
-        return self._attributes.get("stdout")
+        return self.get_attribute("stdout")
 
     def get_start_generation(self):
-        return self._attributes.get("start_generation")
+        return self.get_attribute("start_generation")
 
     def get_start_run(self):
-        return self._attributes.get("start_run")
+        return self.get_attribute("start_run")
 
     def get_energy_early_stop(self):
-        return self._attributes.get("energy_early_stop")
+        return self.get_attribute("energy_early_stop")
 
     def get_mse_early_stop(self):
-        return self._attributes.get("mse_early_stop")
+        return self.get_attribute("mse_early_stop")
 
     def get_patience(self):
-        return self._attributes.get("patience")
+        return self.get_attribute("patience")
 
     def get_starting_solution(self):
-        return self._attributes.get("starting_solution")
+        return self.get_attribute("starting_solution")
 
     def get_mse_threshold(self):
-        return self._attributes.get("mse_threshold")
+        return self.get_attribute("mse_threshold")
 
     def get_dataset_size(self):
-        return self._attributes.get("dataset_size")
+        return self.get_attribute("dataset_size")
 
     def get_col_count(self):
-        return self._attributes.get("col_count")
+        return self.get_attribute("col_count")
 
     def get_row_count(self):
-        return self._attributes.get("row_count")
+        return self.get_attribute("row_count")
 
     def get_number_of_runs(self):
-        return self._attributes.get("number_of_runs")
+        return self.get_attribute("number_of_runs")
 
     def get_look_back_parameter(self):
-        return self._attributes.get("look_back_parameter")
+        return self.get_attribute("look_back_parameter")
 
     def get_mutation_max(self):
-        return self._attributes.get("mutation_max")
+        return self.get_attribute("mutation_max")
 
     def get_function_count(self):
-        return self._attributes.get("function_count")
+        return self.get_attribute("function_count")
 
     def get_function_input_arity(self):
-        return self._attributes.get("function_input_arity")
+        return self.get_attribute("function_input_arity")
 
     def get_function_output_arity(self):
-        return self._attributes.get("function_output_arity")
+        return self.get_attribute("function_output_arity")
 
     def get_input_count(self):
-        return self._attributes.get("input_count")
+        return self.get_attribute("input_count")
 
     def get_output_count(self):
-        return self._attributes.get("output_count")
+        return self.get_attribute("output_count")
 
     def get_population_max(self):
-        return self._attributes.get("population_max")
+        return self.get_attribute("population_max")
 
     def get_generation_count(self):
-        return self._attributes.get("generation_count")
+        return self.get_attribute("generation_count")
 
     def get_periodic_log_frequency(self):
-        return self._attributes.get("periodic_log_frequency")
+        return self.get_attribute("periodic_log_frequency")
 
     def get_input_file(self):
-        return self._attributes.get("input_file")
+        return self.get_attribute("input_file")
 
     def get_output_file(self):
-        return self._attributes.get("output_file")
+        return self.get_attribute("output_file")
 
     def get_cgp_statistics_file(self):
-        return self._attributes.get("cgp_statistics_file")
+        return self.get_attribute("cgp_statistics_file")
 
     def set_attribute(self, attribute, value):
-        if attribute not in self._attributes or self._attributes[attribute] != value:
-            self._attributes[attribute] = value
-            self.can_use_without_args = False
+        self._extra_attributes[attribute] = value
 
     def set_gate_parameters_file(self, value):
         self.set_attribute("gate_parameters_file", value)
@@ -240,177 +267,189 @@ class CGPConfiguration:
     def set_cgp_statistics_file(self, value):
         self.set_attribute("cgp_statistics_file", value)
 
+    def delete_attribute(self, name):
+        if name in self._attributes:
+            del self._attributes[name]
+        if name in self._extra_attributes:
+            del self._extra_attributes[name]
+
     def delete_gate_parameters_file(self):
-        del self._attributes["gate_parameters_file"]
+        self.delete_attribute("gate_parameters_file")
 
     def delete_stderr_file(self):
-        del self._attributes["stderr"]
+        self.delete_attribute("stderr")
 
     def delete_stdout_file(self):
-        del self._attributes["stdout"]
+        self.delete_attribute("stdout")
 
     def delete_start_generation(self):
-        del self._attributes["start_generation"]
+        self.delete_attribute("start_generation")
 
     def delete_start_run(self):
-        del self._attributes["start_run"]
+        self.delete_attribute("start_run")
 
     def delete_energy_early_stop(self):
-        del self._attributes["energy_early_stop"]
+        self.delete_attribute("energy_early_stop")
 
     def delete_mse_early_stop(self):
-        del self._attributes["mse_early_stop"]
+        self.delete_attribute("mse_early_stop")
 
     def delete_patience(self):
-        del self._attributes["patience"]
+        self.delete_attribute("patience")
 
     def delete_starting_solution(self):
-        del self._attributes["starting_solution"]
+        self.delete_attribute("starting_solution")
 
     def delete_mse_threshold(self):
-        del self._attributes["mse_threshold"]
+        self.delete_attribute("mse_threshold")
 
     def delete_dataset_size(self):
-        del self._attributes["dataset_size"]
+        self.delete_attribute("dataset_size")
 
     def delete_col_count(self):
-        del self._attributes["col_count"]
+        self.delete_attribute("col_count")
 
     def delete_row_count(self):
-        del self._attributes["row_count"]
+        self.delete_attribute("row_count")
 
     def delete_number_of_runs(self):
-        del self._attributes["number_of_runs"]
+        self.delete_attribute("number_of_runs")
 
     def delete_look_back_parameter(self):
-        del self._attributes["look_back_parameter"]
+        self.delete_attribute("look_back_parameter")
 
     def delete_mutation_max(self):
-        del self._attributes["mutation_max"]
+        self.delete_attribute("mutation_max")
 
     def delete_function_count(self):
-        del self._attributes["function_count"]
+        self.delete_attribute("function_count")
 
     def delete_function_input_arity(self):
-        del self._attributes["function_input_arity"]
+        self.delete_attribute("function_input_arity")
 
     def delete_function_output_arity(self):
-        del self._attributes["function_output_arity"]
+        self.delete_attribute("function_output_arity")
 
     def delete_input_count(self):
-        del self._attributes["input_count"]
+        self.delete_attribute("input_count")
 
     def delete_output_count(self):
-        del self._attributes["output_count"]
+        self.delete_attribute("output_count")
 
     def delete_population_max(self):
-        del self._attributes["population_max"]
+        self.delete_attribute("population_max")
 
     def delete_generation_count(self):
-        del self._attributes["generation_count"]
+        self.delete_attribute("generation_count")
 
     def delete_periodic_log_frequency(self):
-        del self._attributes["periodic_log_frequency"]
+        self.delete_attribute("periodic_log_frequency")
 
     def delete_input_file(self):
-        del self._attributes["input_file"]
+        self.delete_attribute("input_file")
 
     def delete_output_file(self):
-        del self._attributes["output_file"]
+        self.delete_attribute("output_file")
 
     def delete_cgp_statistics_file(self):
-        del self._attributes["cgp_statistics_file"]
+        self.delete_attribute("cgp_statistics_file")
 
     def __str__(self):
         attributes = [f"{attr}: {value}" for attr, value in self._attributes.items()]
         return "\n".join(attributes)
 
+    def has_attribute(self, name):
+        return name in self._attributes or name in self._extra_attributes
+
     def has_gate_parameters_file(self):
-        "gate_parameters_file" in self._attributes
+        return self.has_attribute("gate_parameters_file")
 
     def has_stderr_file(self):
-        return "stderr" in self._attributes
+        return self.has_attribute("stderr")
 
     def has_stdout_file(self):
-        return "stdout" in self._attributes
+        return self.has_attribute("stdout")
 
     def has_start_generation(self):
-        return "start_generation" in self._attributes
+        return self.has_attribute("start_generation")
 
     def has_start_run(self):
-        return "start_run" in self._attributes
+        return self.has_attribute("start_run")
 
     def has_energy_early_stop(self):
-        return "energy_early_stop" in self._attributes
+        return self.has_attribute("energy_early_stop")
 
     def has_mse_early_stop(self):
-        return "mse_early_stop" in self._attributes
+        return self.has_attribute("mse_early_stop")
 
     def has_patience(self):
-        return "patience" in self._attributes
+        return self.has_attribute("patience")
 
     def has_starting_solution(self):
-        return "starting_solution" in self._attributes
+        return self.has_attribute("starting_solution")
 
     def has_mse_threshold(self):
-        return "mse_threshold" in self._attributes
+        return self.has_attribute("mse_threshold")
 
     def has_dataset_size(self):
-        return "dataset_size" in self._attributes
+        return self.has_attribute("dataset_size")
 
     def has_col_count(self):
-        return "col_count" in self._attributes
+        return self.has_attribute("col_count")
 
     def has_row_count(self):
-        return "row_count" in self._attributes
+        return self.has_attribute("row_count")
 
     def has_number_of_runs(self):
-        return "number_of_runs" in self._attributes
+        return self.has_attribute("number_of_runs")
 
     def has_look_back_parameter(self):
-        return "look_back_parameter" in self._attributes
+        return self.has_attribute("look_back_parameter")
 
     def has_mutation_max(self):
-        return "mutation_max" in self._attributes
+        return self.has_attribute("mutation_max")
 
     def has_function_count(self):
-        return "function_count" in self._attributes
+        return self.has_attribute("function_count")
 
     def has_function_input_arity(self):
-        return "function_input_arity" in self._attributes
+        return self.has_attribute("function_input_arity")
 
     def has_function_output_arity(self):
-        return "function_output_arity" in self._attributes
+        return self.has_attribute("function_output_arity")
 
     def has_input_count(self):
-        return "input_count" in self._attributes
+        return self.has_attribute("input_count")
 
     def has_output_count(self):
-        return "output_count" in self._attributes
+        return self.has_attribute("output_count")
 
     def has_population_max(self):
-        return "population_max" in self._attributes
+        return self.has_attribute("population_max")
 
     def has_generation_count(self):
-        return "generation_count" in self._attributes
+        return self.has_attribute("generation_count")
 
     def has_periodic_log_frequency(self):
-        return "periodic_log_frequency" in self._attributes
+        return self.has_attribute("periodic_log_frequency")
 
     def has_input_file(self):
-        return "input_file" in self._attributes
+        return self.has_attribute("input_file")
 
     def has_output_file(self):
-        return "output_file" in self._attributes
+        return self.has_attribute("output_file")
 
     def has_cgp_statistics_file(self):
-        return "cgp_statistics_file" in self._attributes   
+        return self.has_attribute("cgp_statistics_file")
 
     def to_args(self):
         arguments = []
-        for k, v in self._attributes.items():
+        for k, v in self._extra_attributes.items():
             if k in CGPConfiguration.ignored_arguments:
                 continue
+
+            if k.endswith("_file"):
+                v = os.path.normcase(os.path.normpath(str(v)))
 
             key = k.replace("_", "-")
             arguments.append(f"--{key}")
@@ -419,6 +458,6 @@ class CGPConfiguration:
 
     def get_debug_vector(self, command: str, config: str = None):
         args = self.to_args()
-        config = str(Path(config or self._config_file).absolute()).replace("\\", "/")
+        config = str(Path(config or self.path).absolute()).replace("\\", "/")
         return 'std::vector<std::string> arguments{"%s", "%s", ' % (command, config) + ",\n".join(f'"{x}"' for x in args) + '};\n'
     

@@ -1,55 +1,34 @@
-import glob
-from typing import Generator, Tuple
+from typing import List, Dict, Union, Optional
 import torch
-import contextlib
 import os
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
-from experiments.simple_experiment import BaseExperiment
+from experiments.experiment import Experiment, FilterSelector
 from models.base import BaseModel
 
-class MultiExperiment(BaseExperiment):
-    def __init__(self, experiment_folder: str, experiment_name: str, model: BaseModel, cgp: CGP, dtype=torch.int8) -> None:
-        super().__init__(experiment_folder, experiment_name, model, cgp, dtype)
-        self.experiments = set()
+class MultiExperiment(Experiment):
+    def __init__(self, config: CGPConfiguration, model: BaseModel, cgp: CGP, dtype=torch.int8) -> None:
+        super().__init__(config, model, cgp, dtype)
+        self.experiments: Dict[str, Experiment] = {}
 
-    def _set_experiment_name(self, experiment_name: str):
-        self.experiment_root_path = self.experiment_folder_path / experiment_name
-        self.configs = self.experiment_root_path / "cgp_configs"
-        self.weights = self.experiment_root_path / "weights"
-
-    def forward_filters(self):
+    def _clone(self, config: CGPConfiguration):
         raise NotImplementedError()
 
-    def forward_experiments(self):
-        raise NotImplementedError()
+    def create_experiment(self, experiment_name: str, filters: Union[List[FilterSelector], FilterSelector]) -> Experiment:
+        new_experiment = Experiment(self.config.clone(self.base_folder / experiment_name / self.config.path.name), self._model, self._cgp, self.dtype)
+        new_experiment.parent = self
+        filters = filters if isinstance(filters, list) else [filters]
 
-    @contextlib.contextmanager
-    def experiment_context(self, experiment_name: str) -> Generator[Tuple[str, CGPConfiguration], None, None]:
-        old_name = self.experiment_name
-        try:
-            self.reset()
-            self.forward_filters()
-            self._set_experiment_name(os.path.join(old_name, experiment_name))
-            self.experiments.add(experiment_name)
-            yield self.experiment_root_path.name, self._cgp.config.clone()
-        finally:
-            self.reset()
-            self._set_experiment_name(old_name)
+        for x in filters[:-1]:
+            new_experiment.add_filter_selector(x)
+            new_experiment.next_input_combination()
+        new_experiment.add_filter_selector(filters[-1])
 
-    def evaluate_runs(self, experiment_name: str = None):
-        experiments = [experiment_name] if experiment_name else self.forward_experiments()
-        stats_file = self._get_train_statistics_file()
-        for i, experiment in enumerate(experiments):
-            if os.path.exists(self.experiment_folder_path / experiment):
-                raise FileNotFoundError(self.experiment_folder_path / experiment_name)
-            with self.experiment_context(experiment) as (experiment_name, _):
-                df = super().evaluate_runs()
-                df["experiment"] = experiment_name
-                df.to_csv(stats_file, mode="a" if i == 0 else "w", header=i==0)
+        self.experiments[experiment_name] = new_experiment
+        return new_experiment
 
-    def get_number_of_experiment_results(self) -> int:
-        return len(glob.glob(f"{str(self._get_cgp_output_file())}.*"))
+    def get_experiment(self, experiment_name: str):
+        return self.experiments.get(experiment_name)
 
     def get_number_of_experiments(self) -> int:
         return sum([1 for obj in os.listdir(self.experiment_root_path) if os.path.isfile(self.experiment_root_path / obj)])

@@ -1,10 +1,12 @@
-from typing import List, Optional
+from typing import List, Optional, Generator
 from itertools import zip_longest
 import torch
 from models.mobilenet_v2 import MobileNetV2
 from models.base import BaseModel
 from cgp.cgp_adapter import CGP
-from experiments.simple_experiment import BaseExperiment
+from cgp.cgp_configuration import CGPConfiguration
+from experiments.experiment import Experiment
+from experiments.multi_experiment import MultiExperiment
 import importlib
 import argparse
 import pandas as pd
@@ -12,8 +14,8 @@ import pandas as pd
 def _get_model(model_name: str, model_path: Optional[str] = None) -> BaseModel:
     return importlib.import_module(f"models.{model_name}").init(model_path)
 
-def _get_experiment(experiment_base_name: str, model: BaseModel, cgp: CGP, dtype=torch.int8, results_folder: str = "cmd/compress/experiment_results", experiment_name=None) -> BaseExperiment:
-    return importlib.import_module(f"experiments.{experiment_base_name}.experiment").init(results_folder, model, cgp, dtype=dtype, experiment_name=experiment_name)
+def _get_experiment(experiment_base_name: str, config: CGPConfiguration, model: BaseModel, cgp: CGP, dtype=torch.int8, **args) -> Experiment:
+    return importlib.import_module(f"experiments.{experiment_base_name}.experiment").init(config, model, cgp, dtype=dtype, **args)
 
 def train_model(model_name: str, model_path: str, base: str):
     print(f"Training model: {model_name}")
@@ -41,30 +43,34 @@ def quantize_model(model_name, model_path, new_path):
     model.quantize(new_path)
     model.save(new_path)
 
-def prepare_experiment(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
+def prepare_experiment(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], **args) -> Generator[Experiment, None, None]:
     for experiment_name in experiment_names:
         model = _get_model(model_name, model_path)
         model = model.load(model_path)
         model.eval()
 
-        segments = experiment_name.split(":")
-        base = segments[0]
-        name = segments[0] if len(segments) == 1 else segments[1]
+        cgp = CGP(cgp_binary_path)
+        config = CGPConfiguration(f"cmd/compress/experiments/{experiment_name}/config.cgp")
+        experiment = _get_experiment(experiment_name, config, model, cgp, **args)
 
-        cgp = CGP(cgp_binary_path, f"cmd/compress/experiments/{base}/config.cgp")
-        experiment = _get_experiment(base, model, cgp, experiment_name=name)
-        yield experiment
+        if isinstance(experiment, MultiExperiment):
+            for x in experiment.experiments.values():
+                yield x
+        else:
+            yield experiment
 
-def optimize_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
-    for experiment in prepare_experiment(model_name, model_path, cgp_binary_path, experiment_names, args):
-        experiment.train()
+def optimize_model(cgp_binary_path: str, args):
+    for experiment in prepare_experiment(args.model_name, args.model_path, cgp_binary_path, args.experiment_names, **args):
+        experiment = experiment.setup_isolated_train_environment(args.experiment_env)
+        experiment.train(start_run=args.start_run, start_generation=args.start_generation)
 
-def optimize_prepare_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: List[str], args):
-    for experiment in prepare_experiment(model_name, model_path, cgp_binary_path, experiment_names, args):
-        experiment.prepare_train_files()
+def optimize_prepare_model(cgp_binary_path: str, args):
+    for experiment in prepare_experiment(args.model_name, args.model_path, cgp_binary_path, args.experiment_names, **args):
+        experiment.setup_isolated_train_environment(args.experiment_env)
 
-def evaluate_cgp_model(model_name: str, model_path: str, cgp_binary_path: str, experiment_names: str, args):
-    for experiment in prepare_experiment(model_name, model_path, cgp_binary_path, experiment_names, args):
+def evaluate_cgp_model(cgp_binary_path: str, args):
+    for experiment in prepare_experiment(args.model_name, args.model_path, cgp_binary_path, args.experiment_names, **args):
+        experiment = experiment.setup_eval_environment()
         experiment.evaluate_runs()
 
 def main():
@@ -95,6 +101,9 @@ def main():
     optimize_parser.add_argument("model_path", help="Path to the model to optimize")
     optimize_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
     optimize_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
+    optimize_parser.add_argument("--start_run", help="Continue in experimentation from given start run", nargs="?", default=None)
+    optimize_parser.add_argument("--start_generation", help="Continue in evolution from given start generation", nargs="?", default=None)
+    optimize_parser.add_argument("--experiment_env", help="Isolated experiment environment", nargs="?", default="cmd/compress/experiment_results")
 
     # cgp:optimize-prepare
     optimize_preapre_parser = subparsers.add_parser("cgp:optimize-prepare", help="Prepare experiments for optimisations")
@@ -102,6 +111,7 @@ def main():
     optimize_preapre_parser.add_argument("model_path", help="Path to the model to optimize")
     optimize_preapre_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
     optimize_preapre_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
+    optimize_preapre_parser.add_argument("--experiment_env", help="Isolated experiment environment", nargs="?", default="cmd/compress/experiment_results")
 
     # cgp:optimize
     evaluate_cgp_parser = subparsers.add_parser("cgp:evaluate", help="Evalaute a model")
@@ -111,6 +121,7 @@ def main():
     evaluate_cgp_parser.add_argument("experiment_name", nargs="+", help="Experiment to evaluate")
     evaluate_cgp_parser.add_argument("--run", nargs='+', type=int, help="List of runs to evaluate", required=False)
     evaluate_cgp_parser.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
+    evaluate_cgp_parser.add_argument("--experiment_env", help="Isolated experiment environment", nargs="?", default="cmd/compress/experiment_results")
 
     args = parser.parse_args()
 
