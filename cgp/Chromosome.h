@@ -127,7 +127,7 @@ namespace cgp {
 		/// <summary>
 		/// Shared pointer to the input array.
 		/// </summary>
-		weight_value_t *input = nullptr;
+		const weight_value_t* input = nullptr;
 
 		/// <summary>
 		/// Flag indicating whether the chromosome needs evaluation.
@@ -252,6 +252,8 @@ namespace cgp {
 		weight_value_t bit_shift(weight_value_t a);
 
 		void mutate_genes(std::shared_ptr<Chromosome> that) const;
+
+		weight_value_t get_pin_value(int index) const;
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -341,7 +343,7 @@ namespace cgp {
 		/// Method to set the input for the chromosome.
 		/// </summary>
 		/// <param name="input">Shared pointer to the input array.</param>
-		void set_input(const weight_input_t &input);
+		void set_input(const weight_value_t *input);
 
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.

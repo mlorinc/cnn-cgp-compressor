@@ -34,12 +34,12 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for dimension values, represented as unsigned 16-bit integers.
 		/// </summary>
-		using dimension_t = uint16_t;
+		using dimension_t = int;
 
 		/// <summary>
-		/// Type alias for error values, represented as double-precision floating-point numbers.
+		/// Type alias for error values.
 		/// </summary>
-		using error_t = double;
+		using error_t = unsigned long long;
 
 		/// <summary>
 		/// Type alias for energy values, represented as double-precision floating-point numbers.
@@ -59,7 +59,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for gate count values, represented as size_t.
 		/// </summary>
-		using gate_count_t = size_t;
+		using gate_count_t = int;
 
 		/// <summary>
 		/// Type alias for area values, represented as double-precision floating-point numbers.
@@ -260,6 +260,8 @@ namespace cgp {
 		static const std::string GATE_PARAMETERS_FILE_LONG;
 		static const std::string GATE_PARAMETERS_FILE_SHORT;
 
+		static const std::string TRAIN_WEIGHTS_FILE_LONG;
+
 		static const std::string MSE_THRESHOLD_LONG;
 		static const std::string MSE_THRESHOLD_SHORT;
 
@@ -278,12 +280,20 @@ namespace cgp {
 
 		static const std::string ENERGY_EARLY_STOP_LONG;
 
+		static const std::string DELAY_EARLY_STOP_LONG;
+
+		static const std::string DEPTH_EARLY_STOP_LONG;
+
+		static const std::string GATE_COUNT_EARLY_STOP_LONG;
+
+		static const std::string MSE_CHROMOSOME_LOGGING_THRESHOLD_LONG;
+
 #ifndef CNN_FP32_WEIGHTS
 		/// <summary>
-		/// Type alias for inferred weight used internally by the CGP, represented as a signed 16-bit integer
+		/// Type alias for inferred weight used internally by the CGP, represented as a signed integer
 		/// to prevent overflow when multiplying.
 		/// </summary>
-		using weight_value_t = int16_t;
+		using weight_value_t = int;
 
 		/// <summary>
 		/// Type alias for hardware inferred weight, represented as a signed 8-bit integer.
@@ -363,7 +373,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the maximum population size in the CGP algorithm.
 		/// </summary>
-		uint16_t population_max_value = 5;
+		int population_max_value = 0;
 
 		/// <summary>
 		/// Default value for the maximum mutation value in the CGP algorithm.
@@ -393,7 +403,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the maximum number of generations in the CGP algorithm.
 		/// </summary>
-		uint64_t generation_count_value = 5000;
+		uint64_t generation_count_value = std::numeric_limits<uint64_t>::max();
 
 		/// <summary>
 		/// Default value for the number of runs in the CGP algorithm.
@@ -436,6 +446,11 @@ namespace cgp {
 		std::string gate_parameters_input_file_value = "";
 
 		/// <summary>
+		/// A path where trained weights parameters will be stored.
+		/// </summary>
+		std::string train_weights_file_value = "#train_weights_file_value";
+
+		/// <summary>
 		/// Mean Squared Error threshold after optimisation is focused on minimising energy.
 		/// </summary>
 		error_t mse_threshold_value = 5;
@@ -466,16 +481,41 @@ namespace cgp {
 		size_t patience_value = 125000;
 
 		/// <summary>
-		/// Value indicating stop condition for parameter of approximation error. Defaultly
-		/// that stop condition is delegated to energy parameter.
+		/// Value indicating stop condition for parameter of approximation error. By default
+		/// perfect solution is assumed.
 		/// </summary>
 		error_t mse_early_stop_value = 0;
 
 		/// <summary>
 		/// Value indicating stop condition for parameter of energy usage. By default
-		/// it stops at 0.
+		/// perfect solution is assumed.
 		/// </summary>
 		energy_t energy_early_stop_value = 0;
+
+		/// <summary>
+		/// Value indicating stop condition for parameter of delay. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		delay_t delay_early_stop_value = 0;
+
+		/// <summary>
+		/// Value indicating stop condition for parameter of depth. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		depth_t depth_early_stop_value = 0;
+
+		/// <summary>
+		/// Value indicating stop condition for parameter of gate count. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		gate_count_t gate_count_early_stop_value = 0;
+
+		/// <summary>
+		/// Logging threshold when chromosomes with error less than value 
+		/// will start being printed in CSV logs as serialized strings.
+		/// By default every chromosome is serialized and logged.
+		/// </summary>
+		error_t mse_chromosome_logging_threshold_value = error_nan;
 
 		/// <summary>
 		/// Minimum expected value in the dataset.
@@ -602,7 +642,7 @@ namespace cgp {
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
 		/// </summary>
-		uint16_t pin_map_size() const;
+		size_t pin_map_size() const;
 
 		/// <summary>
 		/// Calculates the size of the chromosome blocks.
@@ -650,16 +690,34 @@ namespace cgp {
 		decltype(patience_value) patience() const;
 
 		/// <summary>
-		/// Get value indicating stop condition for parameter of approximation error. Defaultly
-		/// that stop condition is delegated to energy parameter.
+		/// Get value indicating stop condition for parameter of approximation error. By default
+		/// perfect solution is assumed.
 		/// </summary>
 		decltype(mse_early_stop_value) mse_early_stop() const;
 
 		/// <summary>
 		/// Get value indicating stop condition for parameter of energy usage. By default
-		/// it never stops until patience runs out.
+		/// perfect solution is assumed.
 		/// </summary>
 		decltype(energy_early_stop_value) energy_early_stop() const;
+
+		/// <summary>
+		/// Get value indicating stop condition for parameter of delay. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		decltype(delay_early_stop_value) delay_early_stop() const;
+
+		/// <summary>
+		/// Get value indicating stop condition for parameter of depth. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		decltype(depth_early_stop_value) depth_early_stop() const;
+
+		/// <summary>
+		/// Get value indicating stop condition for parameter of gate count. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		decltype(gate_count_early_stop_value) gate_count_early_stop() const;
 
 		/// <summary>
 		/// Get the minimum expected value in the dataset.
@@ -676,11 +734,22 @@ namespace cgp {
 		/// </summary>
 		decltype(gate_parameters_input_file_value) gate_parameters_input_file() const;
 
+		/// <summary>
+		/// A path where trained weights parameters will be stored.
+		/// </summary>
+		decltype(train_weights_file_value) train_weights_file() const;
 
 		/// <summary>
 		/// Maximum supported multiplexer bit variant.
 		/// </summary>
 		decltype(max_multiplexer_bit_variant_value) max_multiplexer_bit_variant() const;
+
+		/// <summary>
+		/// Get logging threshold when chromosomes with error less than value 
+		/// will start being printed in CSV logs as serialized strings.
+		/// By default every chromosome is serialized and logged.
+		/// </summary>
+		decltype(mse_chromosome_logging_threshold_value) mse_chromosome_logging_threshold() const;
 
 		/// <summary>
 		/// Sets the input arity of functions in the CGP configuration.
@@ -788,16 +857,34 @@ namespace cgp {
 		CGPConfiguration& patience(decltype(patience_value) value);
 
 		/// <summary>
-		/// Sets the value indicating the stop condition for the parameter of approximation error. 
-		/// By default, that stop condition is delegated to the energy parameter.
+		/// Sets value indicating stop condition for parameter of approximation error. By default
+		/// perfect solution is assumed.
 		/// </summary>
 		CGPConfiguration& mse_early_stop(decltype(mse_early_stop_value) value);
 
 		/// <summary>
-		/// Sets the value indicating the stop condition for the parameter of energy usage. 
-		/// By default, it never stops until patience runs out.
+		/// Sets value indicating stop condition for parameter of energy usage. By default
+		/// perfect solution is assumed.
 		/// </summary>
 		CGPConfiguration& energy_early_stop(decltype(energy_early_stop_value) value);
+
+		/// <summary>
+		/// Sets value indicating stop condition for parameter of delay. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		CGPConfiguration& delay_early_stop(decltype(delay_early_stop_value) value);
+
+		/// <summary>
+		/// Sets value indicating stop condition for parameter of depth. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		CGPConfiguration& depth_early_stop(decltype(depth_early_stop_value) value);
+
+		/// <summary>
+		/// Sets value indicating stop condition for parameter of gate count. By default
+		/// perfect solution is assumed.
+		/// </summary>
+		CGPConfiguration& gate_count_early_stop(decltype(gate_count_early_stop_value) value);
 
 		/// <summary>
 		/// Sets the minimum expected value in the dataset.
@@ -815,6 +902,18 @@ namespace cgp {
 		/// Sets a path where gate parameters are stored.
 		/// </summary>
 		CGPConfiguration& gate_parameters_input_file(decltype(gate_parameters_input_file_value) value);
+
+		/// <summary>
+		/// A path where trained weights parameters will be stored.
+		/// </summary>
+		CGPConfiguration& train_weights_file(decltype(train_weights_file_value) value);
+
+		/// <summary>
+		/// Set logging threshold when chromosomes with error less than value 
+		/// will start being printed in CSV logs as serialized strings.
+		/// By default every chromosome is serialized and logged.
+		/// </summary>
+		CGPConfiguration& mse_chromosome_logging_threshold(decltype(mse_chromosome_logging_threshold_value) value);
 
 		/// <summary>
 		/// Saves the configuration to a file.
@@ -835,4 +934,10 @@ namespace cgp {
 	std::string gate_count_to_string(CGPConfiguration::gate_count_t value);
 	std::string weight_to_string(CGPConfiguration::weight_value_t value);
 	std::string area_to_string(CGPConfiguration::area_t value);
+	CGPConfiguration::error_t string_to_error(const std::string& value);
+	CGPConfiguration::energy_t string_to_energy(const std::string& value);
+	CGPConfiguration::area_t string_to_area(const std::string& value);
+	CGPConfiguration::delay_t string_to_delay(const std::string& value);
+	CGPConfiguration::depth_t string_to_depth(const std::string& value);
+	CGPConfiguration::gate_count_t string_to_gate_count(const std::string& value);
 }

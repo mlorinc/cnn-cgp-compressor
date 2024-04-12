@@ -74,6 +74,11 @@ void cgp::InputStream::close()
 	stream.reset();
 }
 
+bool cgp::OutputStream::is_ignoring_output() const
+{
+	return stream == nullptr;
+}
+
 OutputStream::OutputStream(const std::string& out)
 	: OutputStream(out, nullptr, std::ios::out)
 {
@@ -119,6 +124,11 @@ OutputStream::OutputStream(const std::string& out, std::shared_ptr<std::ostream>
 	else if (out == "+")
 	{
 		stream.reset(&std::cerr, [](...) {});
+	}
+	else if (out[0] == '#')
+	{
+		std::cerr << "warning: ignoring output sent pointed by parameter " + out.substr(1) << std::endl;
+		stream = nullptr;
 	}
 	else if (out.empty())
 	{
@@ -190,6 +200,11 @@ CGPOutputStream::CGPOutputStream(std::shared_ptr<CGP> cgp_model, const std::stri
 
 void CGPOutputStream::log_human(size_t run, size_t generation)
 {
+	if (is_ignoring_output())
+	{
+		return;
+	}
+
 	*this
 		<< "[" << (run + 1)
 		<< ", " << (generation + 1) << "] MSE: "
@@ -209,6 +224,10 @@ void CGPOutputStream::log_human(size_t run, size_t generation)
 
 void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::solution_t& solution)
 {
+	if (is_ignoring_output())
+	{
+		return;
+	}
 	*this
 		<< "[" << (run + 1)
 		<< ", " << (generation + 1) << "] MSE: "
@@ -228,6 +247,10 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 
 void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& timestamp, bool print_chromosome)
 {
+	if (is_ignoring_output())
+	{
+		return;
+	}
 	*this
 		<< (run + 1)
 		<< "," << (generation + 1)
@@ -244,6 +267,10 @@ void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& 
 
 void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& timestamp, const CGP::solution_t &solution, bool print_chromosome)
 {
+	if (is_ignoring_output())
+	{
+		return;
+	}
 	*this
 		<< (run + 1)
 		<< "," << (generation + 1)
@@ -265,6 +292,11 @@ void CGPOutputStream::log_csv(
 	const dataset_t &dataset,
 	bool print_chromosome)
 {
+	if (is_ignoring_output())
+	{
+		return;
+	}
+
 	auto solution = cgp_model->evaluate(dataset, chromosome);
 	*this
 		<< (run + 1)
@@ -287,6 +319,11 @@ void CGPOutputStream::log_weights(const std::vector<weight_input_t>& inputs)
 
 void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const std::vector<weight_input_t>& inputs)
 {
+	if (is_ignoring_output())
+	{
+		return;
+	}
+
 	for (int i = 0; i < inputs.size(); i++) {
 		auto weights = chromosome->get_weights(inputs[i]);
 
@@ -312,6 +349,7 @@ void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const 
 			*this << weight_to_string(weights[cgp_model->output_count() - 1]);
 		}
 		*this << std::endl;
+		stream->flush();
 		delete[] weights;
 	}
 }

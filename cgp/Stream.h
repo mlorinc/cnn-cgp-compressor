@@ -54,12 +54,13 @@ namespace cgp
 		OutputStream(const std::string& out, std::shared_ptr<std::ostream> default_output, std::ios_base::openmode mode, const std::unordered_map<std::string, std::string> &variables);
 
 		void close();
+		bool is_ignoring_output() const;
 
 		// Overload the write operator
 		template <typename T>
 		friend OutputStream& operator<<(OutputStream& os, const T& value)
 		{
-			if (os.stream)
+			if (!os.is_ignoring_output())
 			{
 				(*os.stream) << value;
 			}
@@ -69,7 +70,7 @@ namespace cgp
 		// Overload for manipulators that don't require std::endl
 		friend OutputStream& operator<<(OutputStream& os, std::ostream& (*manip)(std::ostream&))
 		{
-			if (os.stream)
+			if (!os.is_ignoring_output())
 			{
 				(*manip)(*os.stream);
 			}

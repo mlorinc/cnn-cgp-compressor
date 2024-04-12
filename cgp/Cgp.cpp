@@ -12,23 +12,12 @@ const std::string CGP::default_solution_format = "error energy area delay depth 
 CGP::CGP(int population) :
 	best_solution(CGP::get_default_solution()),
 	generations_without_change(0),
-	evolution_steps_made(0),
-	best_solutions_size(population),
-	chromosomes(std::vector<std::shared_ptr<Chromosome>>(population, nullptr))
+	evolution_steps_made(0)
 {
-	population_max(population);
-	best_solutions = std::make_unique<solution_t[]>(best_solutions_size);
+	prepare_population_structures(population);
 }
 
-CGP::CGP() :
-	best_solution(CGP::get_default_solution()),
-	generations_without_change(0),
-	evolution_steps_made(0),
-	chromosomes(std::vector<std::shared_ptr<Chromosome>>(omp_get_max_threads(), nullptr))
-{
-	best_solutions_size = omp_get_max_threads();
-	best_solutions = std::make_unique<solution_t[]>(best_solutions_size);
-}
+CGP::CGP() : CGP(population_max()) {}
 
 CGP::CGP(std::istream& in, int population, const std::vector<std::string>& arguments) : CGP(population)
 {
@@ -38,17 +27,31 @@ CGP::CGP(std::istream& in, int population, const std::vector<std::string>& argum
 CGP::CGP(std::istream& in, const std::vector<std::string>& arguments) : CGP()
 {
 	load(in, arguments);
+	prepare_population_structures(population_max());
 }
 
 CGP::~CGP() {}
+
+void CGP::prepare_population_structures(int population)
+{
+	if (population == 0)
+	{
+		population_max(omp_get_max_threads());
+	}
+	else
+	{
+		population_max(std::min(population, omp_get_max_threads()));
+	}
+	chromosomes = std::vector<std::shared_ptr<Chromosome>>(population_max(), nullptr);;
+	best_solutions = std::make_unique<solution_t[]>(population_max());
+}
 
 void CGP::reset()
 {
 	best_solution = CGP::get_default_solution();
 	generations_without_change = 0;
 	evolution_steps_made = 0;
-	best_solutions_size = omp_get_max_threads();
-	best_solutions = std::make_unique<solution_t[]>(best_solutions_size);
+	best_solutions = std::make_unique<solution_t[]>(population_max());
 }
 
 void CGP::dump(std::ostream& out) const
@@ -229,27 +232,30 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	const auto& expected_output = get_dataset_output(dataset);
 	const auto end = input.size();
 	decltype(mse(nullptr, nullptr)) mse_accumulator = 0;
-	size_t selector = 0;
 
 	for (int i = 0; i < end; i++)
 	{
 		chrom->set_input(input[i]);
-		chrom->evaluate(selector++);
-		mse_accumulator += error_fitness(*chrom, expected_output[i]);
-		if (mse_accumulator < 0) 
+		chrom->evaluate(i);
+		const auto prev = mse_accumulator;
+		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i]);
+
+		// Detect overflow
+		if (mse_accumulator < prev)
 			{
 				mse_accumulator = error_nan;
 				break;
 			}
 	}
-	return CGP::create_solution(chrom, mse_accumulator /= input.size());
+
+	return CGP::create_solution(chrom, mse_accumulator);
 }
 
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t& input, const weight_output_t& expected_output, size_t selector)
 {
 	chrom->set_input(input);
 	chrom->evaluate(selector);
-	return CGP::create_solution(chrom, error_fitness(*chrom, expected_output));
+	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output));
 }
 
 CGP::energy_t CGP::get_energy_fitness(Chromosome& chrom)
@@ -335,29 +341,23 @@ CGP::solution_t CGP::create_solution(std::string solution, std::string format)
 	{
 		if (iss >> attribute_value)
 		{
-			if (attribute_name == "error")
-			{
-				error = (attribute_value == error_nan_string) ? (error_nan) : std::stold(attribute_value);
+			if (attribute_name == "error") {
+				error = string_to_error(attribute_value);
 			}
-			else if (attribute_name == "energy")
-			{
-				energy = (attribute_value == energy_nan_string) ? (energy_nan) : std::stold(attribute_value);
+			else if (attribute_name == "energy") {
+				energy = string_to_energy(attribute_value);
 			}
-			else if (attribute_name == "area")
-			{
-				area = (attribute_value == area_nan_string) ? (area_nan) : std::stold(attribute_value);
+			else if (attribute_name == "area") {
+				area = string_to_area(attribute_value);
 			}
-			else if (attribute_name == "delay")
-			{
-				delay = (attribute_value == delay_nan_string) ? (delay_nan) : std::stold(attribute_value);
+			else if (attribute_name == "delay") {
+				delay = string_to_delay(attribute_value);
 			}
-			else if (attribute_name == "depth")
-			{
-				depth = (attribute_value == depth_nan_string) ? (depth_nan) : std::stoull(attribute_value);
+			else if (attribute_name == "depth") {
+				depth = string_to_depth(attribute_value);
 			}
-			else if (attribute_name == "gate_count")
-			{
-				gate_count = (attribute_value == gate_count_nan_string) ? (gate_count_nan) : std::stoull(attribute_value);
+			else if (attribute_name == "gate_count") {
+				gate_count = string_to_gate_count(attribute_value);
 			}
 			else if (attribute_name == "chromosome")
 			{
@@ -546,7 +546,7 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 	const auto mse_t = mse_threshold();
 	const auto& a_error_fitness = CGP::get_error(a);
 	const auto& b_error_fitness = CGP::get_error(b);
-	if (mse_t < a_error_fitness)
+	if (mse_t < a_error_fitness || mse_t < b_error_fitness)
 	{
 		return std::make_tuple(a_error_fitness <= b_error_fitness, a_error_fitness == b_error_fitness);
 	}
@@ -555,50 +555,34 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 		const auto& a_energy_fitness = CGP::ensure_energy(a);
 		const auto& b_energy_fitness = CGP::ensure_energy(b);
 
-		if (a_energy_fitness < b_energy_fitness)
+		// Area is calculated with energy, so put area into to the solution too
+		ensure_area(a); ensure_area(b);
+
+		if (a_energy_fitness != b_energy_fitness)
 		{
-			return std::make_tuple(true, false);
+			return std::make_tuple(a_energy_fitness < b_energy_fitness, false);
 		}
 
-		if (a_energy_fitness > b_energy_fitness)
+		if (a_error_fitness != b_error_fitness)
 		{
-			return std::make_tuple(false, false);
+			return std::make_tuple(a_error_fitness < b_error_fitness, false);
 		}
 
-		if (a_error_fitness < b_error_fitness)
-		{
-			return std::make_tuple(true, false);
-		}
-
-		if (a_error_fitness > b_error_fitness)
-		{
-			return std::make_tuple(false, false);
-		}
 
 		const auto& a_delay = CGP::ensure_delay(a);
 		const auto& b_delay = CGP::ensure_delay(b);
 
-		if (a_delay < b_delay)
+		if (a_delay != b_delay)
 		{
-			return std::make_tuple(true, false);
-		}
-
-		if (a_delay > b_delay)
-		{
-			return std::make_tuple(false, false);
+			return std::make_tuple(a_delay < b_delay, false);
 		}
 
 		const auto& a_gate_count = CGP::ensure_gate_count(a);
 		const auto& b_gate_count = CGP::ensure_gate_count(b);
 
-		if (a_gate_count < b_gate_count)
+		if (a_gate_count != b_gate_count)
 		{
-			return std::make_tuple(true, false);
-		}
-
-		if (a_gate_count > b_gate_count)
-		{
-			return std::make_tuple(false, false);
+			return std::make_tuple(a_gate_count < b_gate_count, false);
 		}
 
 		const auto& a_depth = CGP::ensure_depth(a);
@@ -622,11 +606,8 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 		// to best_solutions map if the fitness is better than the best fitness
 		// known. Map collection was employed to make computation more efficient
 		// on CPU with multiple cores, and to avoid mutex blocking.
-		auto thread_id = omp_get_thread_num();
-		auto& best_thread_solution = best_solutions[thread_id];
-
-		if (std::get<0>(dominates(chromosome_result, best_thread_solution))) {
-			best_thread_solution = std::move(chromosome_result);
+		if (std::get<0>(dominates(chromosome_result, best_solution))) {
+			best_solutions[i] = chromosome_result;
 		}
 	}
 
@@ -635,15 +616,14 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 	// including its fitness.
 	for (int i = 0; i < end; i++)
 	{
-		auto& best_thread_solution = best_solutions[i];
-		auto result = dominates(best_thread_solution, best_solution);
+		auto result = dominates(best_solutions[i], best_solution);
 		// Allow neutral evolution for error
 		if (std::get<0>(result)) {
 			// check whether mutation was not neutral
 			if (!std::get<1>(result)) {
 				generations_without_change = 0;
 			}
-			best_solution = best_thread_solution;
+			best_solution = std::move(best_solutions[i]);
 		}
 	}
 

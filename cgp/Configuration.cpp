@@ -63,6 +63,8 @@ namespace cgp {
 	const std::string CGPConfiguration::GATE_PARAMETERS_FILE_LONG = "--gate-parameters-file";
 	const std::string CGPConfiguration::GATE_PARAMETERS_FILE_SHORT = "-fp";
 
+	const std::string CGPConfiguration::TRAIN_WEIGHTS_FILE_LONG = "--train-weights-file";
+
 	const std::string CGPConfiguration::MSE_THRESHOLD_LONG = "--mse-threshold";
 	const std::string CGPConfiguration::MSE_THRESHOLD_SHORT = "-mse";
 
@@ -80,6 +82,15 @@ namespace cgp {
 	const std::string CGPConfiguration::MSE_EARLY_STOP_LONG = "--mse-early-stop";
 
 	const std::string CGPConfiguration::ENERGY_EARLY_STOP_LONG = "--energy-early-stop";
+
+	const std::string CGPConfiguration::DELAY_EARLY_STOP_LONG = "--delay-early-stop";
+
+	const std::string CGPConfiguration::DEPTH_EARLY_STOP_LONG = "--depth-early-stop";
+
+	const std::string CGPConfiguration::GATE_COUNT_EARLY_STOP_LONG = "--gate-count-early-stop";
+
+	const std::string CGPConfiguration::MSE_CHROMOSOME_LOGGING_THRESHOLD_LONG = "--mse-chromosome-logging-threshold";
+
 
 	long long parse_integer_argument(const std::string& arg) {
 		try {
@@ -142,6 +153,30 @@ namespace cgp {
 	std::string area_to_string(CGPConfiguration::area_t value)
 	{
 		return (value != CGPConfiguration::area_nan) ? (std::to_string(value)) : (CGPConfiguration::area_nan_string);
+	}
+
+	CGPConfiguration::error_t string_to_error(const std::string& value) {
+		return (value == CGPConfiguration::error_nan_string) ? CGPConfiguration::error_nan : std::stoull(value);
+	}
+
+	CGPConfiguration::energy_t string_to_energy(const std::string& value) {
+		return (value == CGPConfiguration::energy_nan_string) ? CGPConfiguration::energy_nan : std::stold(value);
+	}
+
+	CGPConfiguration::area_t string_to_area(const std::string& value) {
+		return (value == CGPConfiguration::area_nan_string) ? CGPConfiguration::area_nan : std::stold(value);
+	}
+
+	CGPConfiguration::delay_t string_to_delay(const std::string& value) {
+		return (value == CGPConfiguration::delay_nan_string) ? CGPConfiguration::delay_nan : std::stold(value);
+	}
+
+	CGPConfiguration::depth_t string_to_depth(const std::string& value) {
+		return (value == CGPConfiguration::depth_nan_string) ? CGPConfiguration::depth_nan : std::stoull(value);
+	}
+
+	CGPConfiguration::gate_count_t string_to_gate_count(const std::string& value) {
+		return (value == CGPConfiguration::gate_count_nan_string) ? CGPConfiguration::gate_count_nan : std::stoull(value);
 	}
 
 	CGPConfiguration::gate_parameters_t CGPConfiguration::get_default_gate_parameters()
@@ -285,6 +320,10 @@ namespace cgp {
 					gate_parameters_input_file(arguments.at(i + 1));
 					i += 1;
 				}
+				else if (arguments[i] == TRAIN_WEIGHTS_FILE_LONG) {
+					train_weights_file(arguments.at(i + 1));
+					i += 1;
+				}
 				else if (arguments[i] == MSE_THRESHOLD_LONG || arguments[i] == MSE_THRESHOLD_SHORT) {
 					mse_threshold(parse_decimal_argument(arguments.at(i + 1)));
 					i += 1;
@@ -317,6 +356,22 @@ namespace cgp {
 					energy_early_stop(parse_decimal_argument(arguments.at(i + 1)));
 					i += 1;
 				}
+				else if (arguments[i] == DELAY_EARLY_STOP_LONG) {
+					delay_early_stop(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == DEPTH_EARLY_STOP_LONG) {
+					depth_early_stop(parse_integer_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == GATE_COUNT_EARLY_STOP_LONG) {
+					gate_count_early_stop(parse_integer_argument(arguments.at(i + 1)));
+					i += 1;
+				}
+				else if (arguments[i] == MSE_CHROMOSOME_LOGGING_THRESHOLD_LONG) {
+					mse_chromosome_logging_threshold(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
 				else if (arguments[i] == PERIODIC_LOG_FREQUENCY_LONG) {
 					periodic_log_frequency(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
@@ -337,8 +392,8 @@ namespace cgp {
 		return function_input_arity_value;
 	}
 
-	uint16_t CGPConfiguration::pin_map_size() const {
-		return static_cast<uint16_t>(row_count()) * col_count() * function_output_arity() + output_count() + input_count();
+	size_t CGPConfiguration::pin_map_size() const {
+		return row_count() * col_count() * function_output_arity() + output_count();
 	}
 
 	size_t CGPConfiguration::blocks_chromosome_size() const {
@@ -453,10 +508,6 @@ namespace cgp {
 		return patience_value;
 	}
 
-	decltype(CGPConfiguration::mse_early_stop_value) CGPConfiguration::mse_early_stop() const
-	{
-		return mse_early_stop_value;
-	}
 
 	decltype(CGPConfiguration::start_generation_value) CGPConfiguration::start_generation() const
 	{
@@ -468,9 +519,24 @@ namespace cgp {
 		return start_run_value;
 	}
 
-	decltype(CGPConfiguration::energy_early_stop_value) CGPConfiguration::energy_early_stop() const
-	{
+	decltype(CGPConfiguration::mse_early_stop_value) CGPConfiguration::mse_early_stop() const {
+		return mse_early_stop_value;
+	}
+
+	decltype(CGPConfiguration::energy_early_stop_value) CGPConfiguration::energy_early_stop() const {
 		return energy_early_stop_value;
+	}
+
+	decltype(CGPConfiguration::delay_early_stop_value) CGPConfiguration::delay_early_stop() const {
+		return delay_early_stop_value;
+	}
+
+	decltype(CGPConfiguration::depth_early_stop_value) CGPConfiguration::depth_early_stop() const {
+		return depth_early_stop_value;
+	}
+
+	decltype(CGPConfiguration::gate_count_early_stop_value) CGPConfiguration::gate_count_early_stop() const {
+		return gate_count_early_stop_value;
 	}
 
 	decltype(CGPConfiguration::expected_value_min_value) CGPConfiguration::expected_value_min() const
@@ -488,16 +554,25 @@ namespace cgp {
 		return gate_parameters_input_file_value;
 	}
 
+	decltype(CGPConfiguration::train_weights_file_value) CGPConfiguration::train_weights_file() const
+	{
+		return train_weights_file_value;
+	}
+
 	decltype(CGPConfiguration::max_multiplexer_bit_variant_value) CGPConfiguration::max_multiplexer_bit_variant() const
 	{
 		return max_multiplexer_bit_variant_value;
+	}
+
+	decltype(CGPConfiguration::mse_chromosome_logging_threshold_value) CGPConfiguration::mse_chromosome_logging_threshold() const
+	{
+		return mse_chromosome_logging_threshold_value;
 	}
 
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
 		function_input_arity_value = value;
 		return *this;
 	}
-
 
 	CGPConfiguration& CGPConfiguration::function_output_arity(decltype(function_output_arity_value) value) {
 		function_output_arity_value = value;
@@ -621,15 +696,28 @@ namespace cgp {
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::mse_early_stop(decltype(mse_early_stop_value) value)
-	{
+	CGPConfiguration& CGPConfiguration::mse_early_stop(decltype(mse_early_stop_value) value) {
 		mse_early_stop_value = value;
 		return *this;
 	}
 
-	CGPConfiguration& CGPConfiguration::energy_early_stop(decltype(energy_early_stop_value) value)
-	{
+	CGPConfiguration& CGPConfiguration::energy_early_stop(decltype(energy_early_stop_value) value) {
 		energy_early_stop_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::delay_early_stop(decltype(delay_early_stop_value) value) {
+		delay_early_stop_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::depth_early_stop(decltype(depth_early_stop_value) value) {
+		depth_early_stop_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::gate_count_early_stop(decltype(gate_count_early_stop_value) value) {
+		gate_count_early_stop_value = value;
 		return *this;
 	}
 
@@ -648,6 +736,18 @@ namespace cgp {
 	CGPConfiguration& CGPConfiguration::gate_parameters_input_file(decltype(gate_parameters_input_file_value) value)
 	{
 		gate_parameters_input_file_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::train_weights_file(decltype(train_weights_file_value) value)
+	{
+		train_weights_file_value = value;
+		return *this;
+	}
+
+	CGPConfiguration& CGPConfiguration::mse_chromosome_logging_threshold(decltype(mse_chromosome_logging_threshold_value) value)
+	{
+		mse_chromosome_logging_threshold_value = value;
 		return *this;
 	}
 
@@ -671,12 +771,17 @@ namespace cgp {
 		if (!output_file().empty()) out << "output_file: " << output_file() << std::endl;
 		if (!cgp_statistics_file().empty()) out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
 		if (!gate_parameters_input_file().empty()) out << "gate_parameters_file: " << gate_parameters_input_file() << std::endl;
+		if (!train_weights_file().empty() && train_weights_file()[0] != '#') out << "train_weights_file: " << train_weights_file() << std::endl;
 		if (!starting_solution().empty()) out << "starting_solution: " << starting_solution() << std::endl;
-		out << "mse_threshold: " << mse_threshold() << std::endl;
+		out << "mse_threshold: " << error_to_string(mse_threshold()) << std::endl;
+		out << "mse_chromosome_logging_threshold: " << error_to_string(mse_chromosome_logging_threshold()) << std::endl;
 		out << "dataset_size: " << dataset_size() << std::endl;
 		out << "patience: " << patience() << std::endl;
-		out << "mse_early_stop: " << mse_early_stop() << std::endl;
-		out << "energy_early_stop: " << energy_early_stop() << std::endl;
+		out << "mse_early_stop: " << error_to_string(mse_early_stop()) << std::endl;
+		out << "energy_early_stop: " << energy_to_string(energy_early_stop()) << std::endl;
+		out << "delay_early_stop: " << delay_to_string(delay_early_stop()) << std::endl;
+		out << "depth_early_stop: " << depth_to_string(depth_early_stop()) << std::endl;
+		out << "gate_count_early_stop: " << gate_count_to_string(gate_count_early_stop()) << std::endl;
 		out << "expected_value_min: " << weight_to_string(expected_value_min()) << std::endl;
 		out << "expected_value_max: " << weight_to_string(expected_value_max()) << std::endl;
 	}
@@ -716,15 +821,20 @@ namespace cgp {
 			else if (key == "output_file") output_file(value);
 			else if (key == "cgp_statistics_file") cgp_statistics_file(value);
 			else if (key == "gate_parameters_file") gate_parameters_input_file(value);
+			else if (key == "train_weights_file") train_weights_file(value);
 			else if (key == "starting_solution") starting_solution(value);
-			else if (key == "mse_threshold") mse_threshold(std::stod(value));
+			else if (key == "mse_threshold") mse_threshold(string_to_error(value));
+			else if (key == "mse_chromosome_logging_threshold") mse_chromosome_logging_threshold(string_to_error(value));
 			else if (key == "dataset_size") dataset_size(std::stoull(value));
 			else if (key == "patience") patience(std::stoull(value));
-			else if (key == "mse_early_stop") mse_early_stop(std::stold(value));
-			else if (key == "energy_early_stop") energy_early_stop(std::stold(value));
+			else if (key == "mse_early_stop") mse_early_stop(string_to_error(value));
+			else if (key == "energy_early_stop") energy_early_stop(string_to_energy(value));
+			else if (key == "delay_early_stop") delay_early_stop(string_to_delay(value));
+			else if (key == "depth_early_stop") depth_early_stop(string_to_depth(value));
+			else if (key == "gate_count_early_stop") gate_count_early_stop(string_to_gate_count(value));
 			else if (key == "expected_value_min") expected_value_min(std::stoul(value));
 			else if (key == "expected_value_max") expected_value_max(std::stoul(value));
-
+			
 			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{
 				remaining_data[key] = value;

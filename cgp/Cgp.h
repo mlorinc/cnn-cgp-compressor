@@ -60,35 +60,35 @@ namespace cgp {
 		static gate_count_t get_gate_count(const solution_t solution);
 
 		/// <summary>
-		/// Ensure that the energy value of the given solution is valid.
+		/// Ensure that the energy value of the given solution is calculated.
 		/// </summary>
 		/// <param name="solution">The solution to ensure the energy value for</param>
 		/// <returns>The ensured energy value of the solution</returns>
 		static decltype(CGP::get_energy(solution_t())) ensure_energy(solution_t& solution);
 
 		/// <summary>
-		/// Ensure that the area value of the given solution is valid.
+		/// Ensure that the area value of the given solution is calculated.
 		/// </summary>
 		/// <param name="solution">The solution to ensure the area value for</param>
 		/// <returns>The ensured area value of the solution</returns>
 		static decltype(CGP::get_area(solution_t())) ensure_area(solution_t& solution);
 
 		/// <summary>
-		/// Ensure that the delay value of the given solution is valid.
+		/// Ensure that the delay value of the given solution is calculated.
 		/// </summary>
 		/// <param name="solution">The solution to ensure the delay value for</param>
 		/// <returns>The ensured delay value of the solution</returns>
 		static decltype(CGP::get_delay(solution_t())) ensure_delay(solution_t& solution);
 
 		/// <summary>
-		/// Ensure that the depth value of the given solution is valid.
+		/// Ensure that the depth value of the given solution is calculated.
 		/// </summary>
 		/// <param name="solution">The solution to ensure the depth value for</param>
 		/// <returns>The ensured depth value of the solution</returns>
 		static decltype(CGP::get_depth(solution_t())) ensure_depth(solution_t& solution);
 
 		/// <summary>
-		/// Ensure that the gate count value of the given solution is valid.
+		/// Ensure that the gate count value of the given solution is calculated.
 		/// </summary>
 		/// <param name="solution">The solution to ensure the gate count value for</param>
 		/// <returns>The ensured gate count value of the solution</returns>
@@ -203,7 +203,6 @@ namespace cgp {
 		/// Best solutions found by each thread during parallel execution.
 		/// </summary>
 		std::unique_ptr<solution_t[]> best_solutions;
-		decltype(omp_get_max_threads()) best_solutions_size;
 
 		/// <summary>
 		/// Counter for the total evolution steps made during the process.
@@ -323,6 +322,7 @@ namespace cgp {
 		/// <returns>The created solution.</returns>
 		solution_t create_solution(std::string solution, std::string format);
 
+		void prepare_population_structures(int population);
 	public:
 		/// <summary>
 		/// Constructor for CGP class.

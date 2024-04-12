@@ -64,33 +64,40 @@ static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
 	return 0;
 }
 
+template<typename T>
+bool early_stop_check(const T value, T early_stop_value, T nan)
+{
+	return early_stop_value == nan || value <= early_stop_value;
+}
+
 static int perform_evolution(const double start_time, std::shared_ptr<cgp::CGP>& cgp_model, const cgp::dataset_t& dataset, cgp::CGPOutputStream& logger, const int& run, int i, cgp::CGPOutputStream& stats_out, int& log_counter, const int& generation_stop)
 {
 	auto now = omp_get_wtime();
 	const CGP::solution_t& solution = cgp_model->evaluate(dataset);
+	const bool log_chromosome = CGP::get_error(solution) <= cgp_model->mse_chromosome_logging_threshold();
+
 	if (cgp_model->get_generations_without_change() == 0)
 	{
 		logger.log_human(run, i, solution);
-		stats_out.log_csv(run, i, format_timestamp(now - start_time), solution, true);
+		stats_out.log_csv(run, i, format_timestamp(now - start_time), solution, log_chromosome);
 		log_counter = 0;
 	}
 	else if (log_counter >= cgp_model->periodic_log_frequency())
 	{
 		logger.log_human(run, i);
-		stats_out.log_csv(run, i, format_timestamp(now - start_time), true);
+		stats_out.log_csv(run, i, format_timestamp(now - start_time), log_chromosome);
 		log_counter = 0;
 	}
 	else
 	{
 		log_counter++;
 	}
-
-	if (
-		(CGP::get_error(solution) <= cgp_model->mse_early_stop() &&
-			CGP::get_energy(solution) <= cgp_model->energy_early_stop() &&
-			CGP::get_delay(solution) == 0 &&
-			CGP::get_depth(solution) <= 1 &&
-			CGP::get_gate_count(solution) <= 1) ||
+	if ((early_stop_check(CGP::get_error(solution), cgp_model->mse_early_stop(), cgp_model->error_nan) &&
+		early_stop_check(CGP::get_energy(solution), cgp_model->energy_early_stop(), cgp_model->energy_nan) &&
+		early_stop_check(CGP::get_delay(solution), cgp_model->delay_early_stop(), cgp_model->delay_nan) &&
+		early_stop_check(CGP::get_depth(solution), cgp_model->depth_early_stop(), cgp_model->depth_nan) &&
+		early_stop_check(CGP::get_gate_count(solution), cgp_model->gate_count_early_stop(), cgp_model->gate_count_nan))
+		||
 		(cgp_model->get_generations_without_change() > generation_stop))
 	{
 		logger.log_human(run, i);
@@ -117,16 +124,23 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 		double start_time = omp_get_wtime();
 		auto mode = (run == start_run && cgp_model->start_generation() == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
 		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, { {"run", std::to_string(run + 1)} });
+
 		std::cout << "performin run " << run + 1 << " and starting from generation " << (i+1) << std::endl;
 		for (int log_counter = cgp_model->periodic_log_frequency(), continue_evolution = 1; continue_evolution && i < cgp_model->generation_count(); i++)
 		{
 			continue_evolution = perform_evolution(start_time, cgp_model, dataset, logger, run, i, stats_out, log_counter, generation_stop);
 		}
-
 		std::cout << "finished evolution after " << (i + 1) << " generations" << std::endl;
+		stats_out.close();
 
 		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(run + 1)} });
 		out.dump_all();
+		out.close();
+
+		CGPOutputStream weights_out(cgp_model, cgp_model->train_weights_file(), { {"run", std::to_string(run + 1)} });
+		weights_out.log_weights(get_dataset_input(dataset));
+		weights_out.close();
+		
 		cgp_model->reset();
 		cgp_model->generate_population();
 		i = 0;
