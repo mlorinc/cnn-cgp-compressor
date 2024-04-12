@@ -196,7 +196,7 @@ class Experiment(object):
             "experiment": self.get_name()
         }
 
-        with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w") as pbs_f:
+        with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w", newline="\n") as pbs_f:
             copy_mode = False
             for line in template_pbs_f:
                 if not copy_mode and line.strip() == "# PYTHON TEMPLATE END":

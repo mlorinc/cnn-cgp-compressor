@@ -8,7 +8,8 @@
 /grpc
 /data
 /backups
-
+/experiment_results
+/single_channel_mega
 /cmd/compress/data
 /cmd/compress/trained_models
 /cmd/compress/experiment_results

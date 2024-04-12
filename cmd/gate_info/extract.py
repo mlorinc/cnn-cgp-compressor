@@ -72,7 +72,7 @@ class DataExtractor(object):
         template = "{energy} {area} {delay}"
 
         df_string: pd.Series = df.apply(lambda x: template.format(**x), 1)
-        with open(self.output_file_text, "w") as f:
+        with open(self.output_file_text, "w", newline="\n") as f:
             f.writelines(line + "\n" for line in df_string)
 
     def _extract_powers(self) -> pd.DataFrame:
