@@ -1,43 +1,15 @@
 import os
-import operator
 import torch
 import pandas as pd
 import shutil
-from functools import reduce
+from string import Template
 from pathlib import Path
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
-from typing import List, Tuple, Union, Iterable, Self, Dict, Optional
-from models.base import BaseModel
-
-
-class FilterSelector(object):
-    def __init__(self, layer_name: str, inp: List, out: List) -> None:
-        self.layer_name = layer_name
-        self.inp = inp
-        self.out = out
-
-class CGPPinPlanner(object):
-    def __init__(self) -> None:
-        self._plan: List[List[FilterSelector]] = []
-        self._preliminary_plan: List[FilterSelector] = []
-
-    def clone(self):
-        planner = CGPPinPlanner()
-        planner._plan = self._plan[:]
-        planner._preliminary_plan = self._preliminary_plan[:]
-        
-    def add_mapping(self, sel: FilterSelector):
-        self._preliminary_plan.append(sel)
-    def next_mapping(self):
-        self._plan.append(self._preliminary_plan[:])
-        self._preliminary_plan.clear()
-    def finish_mapping(self):
-        if self._preliminary_plan:
-            self._plan.append(self._preliminary_plan[:])
-            self._preliminary_plan.clear()
-    def get_plan(self):
-        return iter(self._plan)
+from typing import Union, Self, Dict, Optional
+from experiments.planner import CGPPinPlanner
+from models.adapters.model_adapter import ModelAdapter
+from models.selector import FilterSelector
 
 class Experiment(object):
     evolution_parameters = ["run", "generation", "timestamp"]
@@ -45,12 +17,13 @@ class Experiment(object):
     chromosome_parameters = ["chromosome"]
     columns = evolution_parameters + fitness_parameters + chromosome_parameters
 
-    def __init__(self, config: CGPConfiguration, model: BaseModel, cgp: CGP, dtype=torch.int8, parent: Optional[Self] = None) -> None:
+    def __init__(self, config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args,  dtype=torch.int8, parent: Optional[Self] = None) -> None:
         self.base_folder = config.path.parent
+        self.temporary_base_folder = None
         self.set_paths(self.base_folder)
-        self.parent: Self = None
+        self.parent: Self = parent
         self.config = config 
-        self._model = model
+        self._model_adapter = model_adapter
         self._cgp = cgp
         self.dtype = dtype
         self._to_number = int if self.dtype == torch.int8 else float
@@ -59,19 +32,15 @@ class Experiment(object):
         self.reset()
 
     def get_name(self, depth: Optional[int] = None):
-        parent = self.parent
-        prev_parent = None
-        while (parent is not None) and (depth is None or depth > 0):
-            prev_parent, parent = parent, parent.parent
+        current_item = self
+        names = []
+        while (current_item is not None) and (depth is None or depth > 0):
+            names.append(current_item.base_folder.name)
+            current_item = current_item.parent
             depth = depth - 1 if depth is not None else None
 
-        if prev_parent is None:
-            return self.base_folder.stem
-
-        raw_name = self.base_folder.relative_to(prev_parent)
-        experiment_name = raw_name.stem
-        final_name = raw_name.parent / experiment_name
-        return os.path.normpath(os.path.normcase(final_name))
+        names = names[::-1]
+        return "/".join(names)
 
 
     def set_paths(self, root: Union[Path, str]):
@@ -79,8 +48,8 @@ class Experiment(object):
         self.train_config = root / "train_cgp.config"
         self.eval_config = root / "eval_cgp.config"
         self.train_weights = root / "train.data"
-        self.train_pbs = root / "train.pbs"
-        self.eval_pbs = root / "eval.pbs"
+        self.train_pbs = root / "train.pbs.sh"
+        self.eval_pbs = root / "eval.pbs.sh"
         self.train_statistics = root / "train_statistics" / "statistics.{run}.csv"
         self.eval_statistics = root / "eval_statistics" / "statistics.csv"
         self.model_eval_statistics = root / "eval_statistics" / "model_statistics.csv"
@@ -92,10 +61,12 @@ class Experiment(object):
         self.train_stderr = root / "train_stderr.txt"
         self.eval_stdout = root / "eval_stdout.txt"
         self.eval_stderr = root / "eval_stderr.txt"
+        self.temporary_base_folder = root if root != self.base_folder else None
 
     def clean_train(self):
         shutil.rmtree(self.train_statistics.parent)
         shutil.rmtree(self.result_configs.parent)
+        shutil.rmtree(self.result_weights.parent)
         os.unlink(self.train_weights)
         os.unlink(self.train_stdout)
         os.unlink(self.train_stderr)
@@ -111,7 +82,7 @@ class Experiment(object):
         self.clean_eval()
 
     def _clone(self, config: CGPConfiguration) -> Self:
-        experiment = Experiment(config, self._model, self._cgp, self.dtype)
+        experiment = Experiment(config, self._model_adapter.clone(), self._cgp, self.dtype)
         experiment.model_acc = self.model_acc
         experiment.model_loss = self.model_loss
         experiment._cgp_prepared = self._cgp_prepared
@@ -119,41 +90,46 @@ class Experiment(object):
         experiment.parent = self.parent
         return experiment
 
-    def setup_train_environment(self, config: CGPConfiguration = None, clean=False) -> Self:
+    def _handle_path(self, path: Path, relative: bool):
+        return path if not relative else path.relative_to(self.temporary_base_folder or self.base_folder)
+
+    def setup_train_environment(self, config: CGPConfiguration = None, clean=False, relative_paths: bool = False) -> Self:
         if clean:
             self.clean_train()
 
         experiment = self._clone(config or self.config.clone())
-        experiment.result_folder.mkdir(exist_ok=False, parents=True)
-        experiment.result_configs.parent.mkdir(exist_ok=False, parents=True)
-        experiment.train_statistics.parent.mkdir(exist_ok=False, parents=True)
-        experiment.eval_statistics.mkdir(exist_ok=True, parents=True)
+        exists_ok = self.get_number_of_experiment_results() == 0
+        experiment.result_configs.parent.mkdir(exist_ok=exists_ok, parents=True)
+        experiment.result_weights.parent.mkdir(exist_ok=exists_ok, parents=True)
+        experiment.train_statistics.parent.mkdir(exist_ok=exists_ok, parents=True)
+        experiment.eval_statistics.parent.mkdir(exist_ok=True, parents=True)
 
         if not config.has_input_file():
             experiment._prepare_cgp(config)
             experiment._cgp.create_train_file(experiment.train_weights)
-            config.set_input_file(experiment.train_weights)
+            config.set_input_file(self._handle_path(experiment.train_weights, relative_paths))
         if not config.has_cgp_statistics_file():
-            config.set_cgp_statistics_file(experiment.train_statistics)
+            config.set_cgp_statistics_file(self._handle_path(experiment.train_statistics, relative_paths))
         if not config.has_output_file():
-            config.set_output_file(experiment.result_configs)
+            config.set_output_file(self._handle_path(experiment.result_configs, relative_paths))
         if not config.has_output_file():
-            config.set_output_file(experiment.result_configs)
+            config.set_output_file(self._handle_path(experiment.result_configs, relative_paths))
         if not config.has_gate_parameters_file():
-            config.set_gate_parameters_file(experiment.gate_parameters_file)
+            config.set_gate_parameters_file(self._handle_path(experiment.gate_parameters_file, relative_paths))
         if not config.has_stdout_file():
-            config.set_stdout_file(experiment.train_stdout)
+            config.set_stdout_file(self._handle_path(experiment.train_stdout, relative_paths))
         if not config.has_stderr_file():
-            config.set_stderr_file(experiment.train_stderr)
-
+            config.set_stderr_file(self._handle_path(experiment.train_stderr, relative_paths))
+        if not config.has_train_weights_file():
+            config.set_train_weights_file(self._handle_path(self.result_weights, relative_paths))
         return experiment
 
-    def setup_isolated_train_environment(self, experiment_path: str, clean=False) -> Self:
+    def setup_isolated_train_environment(self, experiment_path: str, clean=False, relative_paths: bool = False) -> Self:
         try:
-            parent_path = self.parent.base_folder
-            new_folder = Path(experiment_path) / (self.base_folder.relative_to(parent_path))
-            new_folder.mkdir(exist_ok=False, parents=True)
+            new_folder = Path(experiment_path) / (self.get_name())
+            new_folder.mkdir(exist_ok=True, parents=True)
             self.set_paths(new_folder)
+            print(f"creating new environment in {str(new_folder)}")
             config = self.config.clone(self.train_config)
             if clean:
                 if os.path.samefile(self.base_folder, experiment_path):
@@ -164,9 +140,9 @@ class Experiment(object):
                 raise ValueError("missing gate_parameters_file in the config")
             else:
                 shutil.copyfile(config.get_gate_parameters_file(), self.gate_parameters_file)
-                config.set_gate_parameters_file(self.gate_parameters_file)
+                config.set_gate_parameters_file(self.gate_parameters_file if not relative_paths else self.gate_parameters_file.name)
 
-            experiment = self.setup_train_environment(config)
+            experiment = self.setup_train_environment(config, relative_paths=relative_paths)
             experiment.config.apply_extra_attributes()
             experiment.config.save()
             return experiment
@@ -178,8 +154,8 @@ class Experiment(object):
         if clean:
             experiment.clean_eval()
 
-        experiment.eval_statistics.parent.mkdir(exist_ok=False, parents=True)
-        experiment.result_weights.parent.mkdir(exist_ok=False, parents=True)
+        experiment.eval_statistics.parent.mkdir(exist_ok=True, parents=True)
+        experiment.result_weights.parent.mkdir(exist_ok=True, parents=True)
         experiment.config.set_input_file(self.result_configs)
         experiment.config.set_output_file(self.result_weights)
         experiment.config.set_cgp_statistics_file(self.eval_statistics)
@@ -191,24 +167,24 @@ class Experiment(object):
 
     #  select=1:mem=16gb:scratch_local=10gb:ngpus=1:gpu_cap=cuda60:cuda_version=11.0 -q gpu -l walltime=4:00:00
     # select=1:ncpus={cpu}:mem={ram}:scratch_local={capacity}
-    def generate_pbs(self):
-        pass
-
     def setup_pbs_train_job(self,
-                            machine: str,
                             time_limit: str,
                             template_pbs_file: str,
-                            template_data: Dict[str, str],
                             experiments_folder: str = "experiments_folder",
                             results_folder: str = "results",
-                            cgp_folder: str = "cgp_cpp_project"):
+                            cgp_folder: str = "cgp_cpp_project",
+                            cpu=32,
+                            mem="2gb",
+                            scratch_capacity="1gb"):
+        args = self.config.to_args()
+        job_name = self.get_name().replace("/", "_")
         template_data = {
-            "machine": machine,
+            "machine": f"select=1:ncpus={cpu}:mem={mem}:scratch_local={scratch_capacity}",
             "time_limit": time_limit,
-            "job_name": self.get_name().replace("/", "_"),
+            "job_name": f"cgp_mlorinc_{job_name}",
             "server": os.environ.get("pbs_server"),
             "username": os.environ.get("pbs_username"),
-            "workspace": f"/storage/{os.environ.get("pbs_server")}/home/{os.environ.get("pbs_username")}/cgp_workspace",
+            "workspace": "/storage/$server/home/$username/cgp_workspace",
             "experiments_folder": experiments_folder,
             "results_folder": results_folder,
             "cgp_cpp_project": cgp_folder,
@@ -216,18 +192,29 @@ class Experiment(object):
             "cgp_binary": "cgp",
             "cgp_command": "train",
             "cgp_config": self.config.path.name,
-            "cgp_args": "todo",
+            "cgp_args": " ".join([str(arg) for arg in args]),
             "experiment": self.get_name()
         }
-# {os.path.normpath(os.path.normcase(self.base_folder))}
+
         with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w") as pbs_f:
+            copy_mode = False
             for line in template_pbs_f:
-                changed = True
-                while changed:
-                    old_line = line
-                    line = line.format(**template_data)
-                    changed = line != old_line
-                pbs_f.write(line)
+                if not copy_mode and line.strip() == "# PYTHON TEMPLATE END":
+                    copy_mode = True
+                    continue
+
+                if copy_mode:
+                    pbs_f.write(line)
+                else:
+                    # keep substituting until it is done
+                    changed = True
+                    while changed:
+                        old_line = line
+                        template = Template(line)
+                        line = template.safe_substitute(template_data)
+                        changed = line != old_line
+                    pbs_f.write(line)
+        print("saved pbs file to: " + str(self.train_pbs))
 
     def reset(self):
         self._planner = CGPPinPlanner() 
@@ -246,13 +233,14 @@ class Experiment(object):
         if self._cgp_prepared: 
             return
         self._cgp.setup(config)
+        original_training = self._model_adapter.model.training
         try:
-            self._model.eval()
+            self._model_adapter.eval()
             self._planner.finish_mapping()
             with torch.inference_mode():
                 for combinational_plans in self._planner.get_plan():
                     for plan in combinational_plans:
-                        weights = self._get_train_weights(plan.layer_name)
+                        weights = self._model_adapter.get_train_weights(plan.layer_name)
                         for in_selector in plan.inp:
                             self._cgp.add_inputs(weights[*in_selector])
                         for out_selector in plan.out:
@@ -260,10 +248,10 @@ class Experiment(object):
                         self._cgp.next_train_item()
             self._cgp_prepared = True
         finally:
-            self._model.train(True)
+            self._model_adapter.model.train(mode=original_training)
 
     def get_number_of_experiment_results(self) -> int:
-        return len(os.listdir(self.result_configs.parent))
+        return len(os.listdir(self.result_configs.parent)) if self.result_configs.parent.exists() else 0
 
     def train(self, start_run: int = None, start_generation: int = None):
         config = self.config.clone()
@@ -274,7 +262,7 @@ class Experiment(object):
         if start_generation is not None:
             config.set_start_generation(start_generation)
 
-        print(self._cgp.get_train_cli(config))
+        print(self._cgp.get_cli_arguments(config))
         self._cgp.train()
 
     def evaluate(self):
@@ -293,9 +281,10 @@ class Experiment(object):
         return after_acc, after_loss
 
     def evaluate_runs(self):
-        self.evaluate(self.config)
+        if self.get_number_of_experiment_results() != self.config.get_number_of_runs():
+            self.evaluate()
         if self.model_acc is None or self.model_loss is None:
-            self.model_acc, self.model_loss = self._model.evaluate()
+            self.model_acc, self.model_loss = self._model_adapter.evaluate()
         accuracies = []
         losses = []
         sources = []
@@ -316,66 +305,10 @@ class Experiment(object):
         df.to_csv(self.model_eval_statistics, index=False)
         df_model.to_csv(self.cached_model_attributes, index=False)
         return df
-
-    def _get_bias(self, layer_name: str):
-        if self.dtype == torch.int8:
-            return getattr(self._model, layer_name).bias()
-        else:
-            return getattr(self._model, layer_name).bias
-        
-    def _get_weights(self, layer_name: str):
-        if self.dtype == torch.int8:
-            return getattr(self._model, layer_name).weight().detach()
-        else:
-            return getattr(self._model, layer_name).weight.detach()
-
-    def _get_train_weights(self, layer_name: str):
-        if self.dtype == torch.int8:
-            return getattr(self._model, layer_name).weight().detach().int_repr()
-        else:
-            return getattr(self._model, layer_name).weight.detach()        
-
-    def _get_reconstruction_weights(self, layer_name: str):
-        if self.dtype == torch.int8:
-            return getattr(self._model, layer_name).weight().detach()
-        else:
-            return getattr(self._model, layer_name).weight.detach()    
-
-    def _inject_weights(self, weights_vector: List[torch.Tensor]):
-        model = self._model.clone()
-        model.eval()
-        with torch.inference_mode():
-            offset = 0
-            for weights, combination_plans in zip(weights_vector, self._planner.get_plan()):
-                for plan in combination_plans:
-                    bias = self._get_bias(plan.layer_name)
-                    fp32_weights = self._get_reconstruction_weights(plan.layer_name)
-
-                    for out_selector in plan.out:
-                        initial_output_tensor = fp32_weights[*out_selector]
-                        size = None
-                        if isinstance(out_selector[0], slice) and out_selector[0].start is None and out_selector[0].stop is None:
-                            for filter_i, filter_tensor in enumerate(initial_output_tensor):
-                                if isinstance(out_selector[1], slice) and out_selector[1].start is None and out_selector[1].stop is None:
-                                    for channel_tensor_i, channel_tensor in enumerate(filter_tensor):
-                                        w = fp32_weights[filter_i, channel_tensor_i, *out_selector[2:]]
-                                        size = reduce(operator.mul, w.shape)
-                                        fp32_weights[filter_i, channel_tensor_i, *out_selector[2:]] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
-                                else:
-                                    w = fp32_weights[filter_i, out_selector[1], *out_selector[2:]]
-                                    size = reduce(operator.mul, w.shape)
-                                    fp32_weights[filter_i, out_selector[1], *out_selector[2:]] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
-                        else:
-                            w = initial_output_tensor
-                            size = reduce(operator.mul, w.shape)
-                            fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
-                        offset += size
-                    self._set_weights_bias(getattr(model, plan.layer_name), fp32_weights, bias)
-            return model
-
+    
     def _inject_weights_from_file(self, file: str = None, run: int = 0):
         with torch.inference_mode():
-            file = file or self._get_cgp_evaluate_file(run=run)
+            file = file or str(self.result_configs).format(run=run)
             weights_vector = []
             with open(file) as f:
                 for line, _ in zip(f.readlines(), range(self._cgp.config.get_dataset_size())):
@@ -386,79 +319,4 @@ class Experiment(object):
 
                     weights = torch.Tensor([self._to_number(segment) for segment in segments if segment.strip() != ""])
                     weights_vector.append(weights)
-            return self._inject_weights(weights_vector)
-
-    def _set_weights_bias(self, layer, weights, biases):
-        if self.dtype == torch.int8:
-            layer.set_weight_bias(weights, biases)
-        else:
-            layer.weight = weights 
-            layer.bias = biases
-
-def conv2d_core_slices(kernel_size, core_size):
-    # Ensure the core size is valid
-    if core_size % 2 == 0 and kernel_size == core_size:
-        raise ValueError("Invalid core size. It should be an odd number and not exceed the array size.")
-
-    skip = (kernel_size - core_size) // 2
-    c = slice(skip, skip + core_size)
-    # Extract the core
-    return [c, c]
-
-def conv2d_outter_slices(kernel_size, core_size):
-    # Ensure the core size is valid
-    if core_size % 2 == 0 and kernel_size == core_size:
-        raise ValueError("Invalid core size. It should be an odd number and not exceed the array size.")
-    skip = (kernel_size - core_size) // 2
-
-    output_indices = []
-    row = 0
-    for _ in range(skip):
-        output_indices.append((row, slice(None)))
-        row += 1
-
-    for _ in range(core_size):
-        output_indices.append((row, slice(0, skip)))
-        output_indices.append((row, slice(skip+core_size, None)))
-        row += 1
-    
-    for _ in range(skip):
-        output_indices.append((row, slice(None)))
-        row += 1
-    return output_indices
-
-def conv2d_outter(selectors, kernel_size, core_size):
-    outter = conv2d_outter_slices(kernel_size, core_size)
-    slices = []
-    for out in outter:
-        slices.append((*selectors, *out))
-    return slices
-
-def conv2d_core(selectors, kernel_size, core_size):
-    core = conv2d_core_slices(kernel_size, core_size)
-    return [(*selectors, *core)]
-
-def conv2d_selector(layer_name: str, selectors, kernel_size, core_size):
-    return FilterSelector(layer_name, conv2d_core(selectors, kernel_size, core_size), conv2d_outter(selectors, kernel_size, core_size))
-
-def dequantize_per_channel(x: torch.Tensor, conv_layer: torch.Tensor):
-    zero_point = conv_layer.q_per_channel_zero_points()
-    scale = conv_layer.q_per_channel_scales()
-
-    dequantized = ((x - zero_point.view(-1, 1, 1)) * scale.view(-1, 1, 1)).float()
-    return torch.quantize_per_channel(
-        dequantized,
-        scale,
-        zero_point,
-        axis=0,
-        dtype=torch.qint8
-    )
-
-def dequantize_per_tensor(x: torch.Tensor, scale: torch.float32, zero_point: torch.float32):
-    dequantized = ((x - zero_point) * scale).float()
-    return torch.quantize_per_tensor(
-        dequantized,
-        scale,
-        zero_point,
-        dtype=torch.qint8
-    )
+            return self._model_adapter.inject_weights(weights_vector, self._planner.get_plan())    

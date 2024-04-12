@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import TextIO, Optional, Union
 import contextlib
 import subprocess
@@ -9,8 +9,9 @@ class CGPConfiguration:
     def __init__(self, config_file: Optional[Union[Path, str]] = None):
         self._extra_attributes = {}
         self._attributes = {}
-        self.path = Path(config_file)
+        self.path = None
         if config_file:
+            self.path = Path(config_file)
             self.load(config_file)
 
     def clone(self, new_config_file: str = None):
@@ -42,6 +43,8 @@ class CGPConfiguration:
 
         with open(config_file or self.path, "w") as f:
             for key, value in self._attributes.items():
+                if key.endswith("_file"):
+                    value = self._path_to_string(value)                
                 f.write(f"{key}: {value}\n")
         self.path = config_file or self.path
 
@@ -61,8 +64,19 @@ class CGPConfiguration:
         self._extra_attributes = {}
 
     def apply_extra_attributes(self):
+        start_run = self._extra_attributes.get("start_run", None)
+        start_generation = self._extra_attributes.get("start_generation", None)
+        new_extra_dict = dict()
+        if start_run is not None:
+            del self._extra_attributes["start_run"]
+            new_extra_dict["start_run"] = start_run
+
+        if start_generation is not None:
+            del self._extra_attributes["start_generation"]
+            new_extra_dict["start_generation"] = start_generation
+
         self._attributes = {**self._attributes, **self._extra_attributes}
-        self._extra_attributes = {}
+        self._extra_attributes = new_extra_dict
 
     def should_resume_evolution(self):
         resumed_run = (self.has_start_run() and self.get_start_run() != 0)
@@ -102,6 +116,12 @@ class CGPConfiguration:
     def get_attribute(self, name):
         return self._attributes.get(name, None) or self._extra_attributes.get(name)
 
+    def get_mse_chromosome_logging_threshold(self):
+        return self.get_attribute("mse_chromosome_logging_threshold")
+
+    def get_train_weights_file(self):
+        self.get_attribute("train_weights_file")
+
     def get_gate_parameters_file(self):
         return self.get_attribute("gate_parameters_file")
 
@@ -122,6 +142,15 @@ class CGPConfiguration:
 
     def get_mse_early_stop(self):
         return self.get_attribute("mse_early_stop")
+
+    def get_delay_early_stop(self):
+        return self.get_attribute("delay_early_stop")
+
+    def get_depth_early_stop(self):
+        return self.get_attribute("depth_early_stop")
+
+    def get_gate_count_early_stop(self):
+        return self.get_attribute("gate_count_early_stop")
 
     def get_patience(self):
         return self.get_attribute("patience")
@@ -184,7 +213,13 @@ class CGPConfiguration:
         return self.get_attribute("cgp_statistics_file")
 
     def set_attribute(self, attribute, value):
-        self._extra_attributes[attribute] = value
+        self._extra_attributes[attribute] = value if not attribute.endswith("_file") else PureWindowsPath(value)
+
+    def set_mse_chromosome_logging_threshold(self, value):
+        self.set_attribute("mse_chromosome_logging_threshold", value)
+
+    def set_train_weights_file(self, value):
+        self.set_attribute("train_weights_file", value)
 
     def set_gate_parameters_file(self, value):
         self.set_attribute("gate_parameters_file", value)
@@ -206,6 +241,15 @@ class CGPConfiguration:
 
     def set_mse_early_stop(self, value):
         self.set_attribute("mse_early_stop", value)
+
+    def set_delay_early_stop(self, value):
+        self.set_attribute("delay_early_stop", value)
+
+    def set_depth_early_stop(self, value):
+        self.set_attribute("depth_early_stop", value)
+
+    def set_gate_count_early_stop(self, value):
+        self.set_attribute("gate_count_early_stop", value)
 
     def set_patience(self, value):
         self.set_attribute("patience", value)
@@ -273,6 +317,12 @@ class CGPConfiguration:
         if name in self._extra_attributes:
             del self._extra_attributes[name]
 
+    def delete_mse_chromosome_logging_threshold(self):
+        self.delete_attribute("mse_chromosome_logging_threshold")
+
+    def delete_train_weights_file(self):
+        self.delete_attribute("train_weights_file")
+
     def delete_gate_parameters_file(self):
         self.delete_attribute("gate_parameters_file")
 
@@ -288,11 +338,20 @@ class CGPConfiguration:
     def delete_start_run(self):
         self.delete_attribute("start_run")
 
+    def delete_mse_early_stop(self):
+        self.delete_attribute("mse_early_stop")
+
     def delete_energy_early_stop(self):
         self.delete_attribute("energy_early_stop")
 
-    def delete_mse_early_stop(self):
-        self.delete_attribute("mse_early_stop")
+    def delete_delay_early_stop(self):
+        self.delete_attribute("delay_early_stop")
+
+    def delete_depth_early_stop(self):
+        self.delete_attribute("depth_early_stop")
+
+    def delete_gate_count_early_stop(self):
+        self.delete_attribute("gate_count_early_stop")
 
     def delete_patience(self):
         self.delete_attribute("patience")
@@ -361,6 +420,12 @@ class CGPConfiguration:
     def has_attribute(self, name):
         return name in self._attributes or name in self._extra_attributes
 
+    def has_mse_chromosome_logging_threshold(self):
+        return self.has_attribute("mse_chromosome_logging_threshold")
+
+    def has_train_weights_file(self):
+        return self.has_attribute("train_weights_file")
+
     def has_gate_parameters_file(self):
         return self.has_attribute("gate_parameters_file")
 
@@ -376,11 +441,20 @@ class CGPConfiguration:
     def has_start_run(self):
         return self.has_attribute("start_run")
 
+    def has_mse_early_stop(self):
+        return self.has_attribute("mse_early_stop")
+
     def has_energy_early_stop(self):
         return self.has_attribute("energy_early_stop")
 
-    def has_mse_early_stop(self):
-        return self.has_attribute("mse_early_stop")
+    def has_delay_early_stop(self):
+        return self.has_attribute("delay_early_stop")
+
+    def has_depth_early_stop(self):
+        return self.has_attribute("depth_early_stop")
+
+    def has_gate_count_early_stop(self):
+        return self.has_attribute("gate_count_early_stop")
 
     def has_patience(self):
         return self.has_attribute("patience")
@@ -442,6 +516,9 @@ class CGPConfiguration:
     def has_cgp_statistics_file(self):
         return self.has_attribute("cgp_statistics_file")
 
+    def _path_to_string(self, path: Path) -> str:
+        return os.path.normpath(os.path.normcase(path)).replace("\\", "/")
+
     def to_args(self):
         arguments = []
         for k, v in self._extra_attributes.items():
@@ -449,11 +526,11 @@ class CGPConfiguration:
                 continue
 
             if k.endswith("_file"):
-                v = os.path.normcase(os.path.normpath(str(v)))
+                v = self._path_to_string(v)
 
             key = k.replace("_", "-")
             arguments.append(f"--{key}")
-            arguments.append(str(v))
+            arguments.append(v)
         return arguments
 
     def get_debug_vector(self, command: str, config: str = None):

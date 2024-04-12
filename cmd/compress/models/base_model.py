@@ -8,7 +8,7 @@ from pathlib import Path
 import copy
 
 class BaseModel(nn.Module):
-    def __init__(self, model_path: str = None, model: nn.Module = None):
+    def __init__(self, model_path: str = None):
         super(BaseModel, self).__init__()
         self.model_path = model_path
 
@@ -45,7 +45,7 @@ class BaseModel(nn.Module):
         return clone
 
     def quantize(self, new_path: str = None):
-        torch.quantization.quantize_dynamic(self, {torch.nn.Conv2d, torch.nn.Linear}, dtype=torch.qint8, mapping=None, inplace=True)
+        raise NotImplementedError()
 
     def _fit_one_epoch(self, device: torch.device, train_loader: DataLoader, optimizer: optim.Optimizer, criterion: nn.modules.loss._WeightedLoss, batch_count: int = 1000):
         running_loss = 0.0
@@ -179,6 +179,6 @@ class BaseModel(nn.Module):
 
     def evaluate(self, batch_size: int = 32, max_batches: int = None, top: int=1):
         raise NotImplementedError()
-    
+
 def init(model_path: Optional[str]) -> BaseModel:
     return BaseModel(model_path)

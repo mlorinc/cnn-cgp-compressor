@@ -4,18 +4,18 @@ import os
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from experiments.experiment import Experiment, FilterSelector
-from models.base import BaseModel
+from models.adapters.model_adapter import ModelAdapter
 
 class MultiExperiment(Experiment):
-    def __init__(self, config: CGPConfiguration, model: BaseModel, cgp: CGP, dtype=torch.int8) -> None:
-        super().__init__(config, model, cgp, dtype)
+    def __init__(self, config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args,  dtype=torch.int8) -> None:
+        super().__init__(config, model_adapter, cgp, dtype)
         self.experiments: Dict[str, Experiment] = {}
 
     def _clone(self, config: CGPConfiguration):
         raise NotImplementedError()
 
     def create_experiment(self, experiment_name: str, filters: Union[List[FilterSelector], FilterSelector]) -> Experiment:
-        new_experiment = Experiment(self.config.clone(self.base_folder / experiment_name / self.config.path.name), self._model, self._cgp, self.dtype)
+        new_experiment = Experiment(self.config.clone(self.base_folder / experiment_name / self.config.path.name), self._model_adapter, self._cgp, self.dtype)
         new_experiment.parent = self
         filters = filters if isinstance(filters, list) else [filters]
 

@@ -73,13 +73,13 @@ class CGP(object):
         with open(file, "w") as f:
             self._dump_train_weights(f)
 
-    def get_train_cli(self, command: str = "train", other_args=[], cwd: str = None):
-        args = [] if self.config.can_use_without_args else self.config.to_args(cwd=cwd)
+    def get_cli_arguments(self, command: str = "train", other_args=[], cwd: str = None):
+        args = self.config.to_args()
 
         return [str(self._binary), command, str(self.config.path), *other_args, *args]
 
     def _execute(self, command: str = "train", mode="w", other_args=[], cwd: str = None):
-        args = self.get_train_cli(command=command, other_args=other_args, cwd=cwd)
+        args = self.get_cli_arguments(command=command, other_args=other_args, cwd=cwd)
 
         with self.config.open_stdout(mode) as stdout, self.config.open_stderr(mode) as stderr:
             process = subprocess.Popen(args, stdout=stdout, stderr=stderr, text=True)

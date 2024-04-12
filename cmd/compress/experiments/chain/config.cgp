@@ -10,7 +10,7 @@ function_output_arity: 1
 dataset_size: 1
 input_count: 153
 output_count: 272
-population_max: 8
+population_max: 32
 generation_count: 90000000
 periodic_log_frequency: 10000
 gate_parameters_file: C:\Users\Majo\source\repos\TorchCompresser\cmd\gate_info\data\parameters.txt

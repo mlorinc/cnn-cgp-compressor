@@ -1,7 +1,5 @@
 from typing import Optional
 from models.lenet import LeNet5
-from models.sensitivity import sensisitivy_analysis
-import torch.nn as nn
 import torch
 import copy
 
@@ -12,18 +10,6 @@ class PTQQuantizedLeNet5(LeNet5):
         super(PTQQuantizedLeNet5, self).__init__(model_path)
         self.quant = torch.quantization.QuantStub()
         self.dequant = torch.quantization.DeQuantStub()
-
-        self.conv1 = nn.Conv2d(1, 6, kernel_size=5)
-        self.max_pool1 = nn.MaxPool2d(2)
-        self.relu1 = nn.ReLU()
-
-        self.conv2 = nn.Conv2d(6, 16, kernel_size=5)
-        self.max_pool2 = nn.MaxPool2d(2)
-        self.relu2 = nn.ReLU()
-
-        self.fc1 = nn.Linear(16 * 4 * 4, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)  
         self.backend = "fbgemm"     
 
     def _prepare(self):

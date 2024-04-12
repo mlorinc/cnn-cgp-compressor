@@ -1,8 +1,5 @@
 mse_threshold: 0
-col_count: 50
-row_count: 30
-number_of_runs: 35
-look_back_parameter: 50
+number_of_runs: 30
 mutation_max: 0.15
 function_count: 28
 function_input_arity: 2
@@ -10,9 +7,7 @@ function_output_arity: 1
 dataset_size: 1
 input_count: 9
 output_count: 16
-population_max: 8
+population_max: 32
 generation_count: 90000000
-periodic_log_frequency: 10000
-chromosome_output_file: C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/single_filter/chromosome.chr
-input_file: C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/single_filter/train.data
-cgp_statistics_file: C:/Users/Majo/source/repos/TorchCompresser/cmd/compress/experiment_results/single_filter/statistics.csv
+periodic_log_frequency: 250000
+gate_parameters_file: C:\Users\Majo\source\repos\TorchCompresser\cmd\gate_info\data\parameters.txt

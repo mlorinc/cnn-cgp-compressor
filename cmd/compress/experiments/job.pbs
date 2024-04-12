@@ -1,0 +1,52 @@
+#!/bin/bash
+#PBS -N $job_name
+#PBS -l $machine
+#PBS -l walltime=$time_limit 
+
+# define a DATADIR variable: directory where the input files are taken from and where output will be copied to
+DATADIR=$workspace
+EXPERIMENTS_FOLDER=$experiments_folder
+RESULTS_FOLDER=$results_folder
+EXPERIMENT=$experiment
+CGP_CPP_PROJECT=$cgp_cpp_project
+CGP_BINARY_SRC=$cgp_binary_src
+CGP_BINARY=$cgp_binary
+CGP_COMMAND="$cgp_command"
+CGP_CONFIG="$cgp_config"
+CGP_ARGS="$cgp_args"
+
+# PYTHON TEMPLATE END
+
+echo "$PBS_JOBID is running on node `hostname -f` in a scratch directory $SCRATCHDIR" >> $DATADIR/jobs_info.txt
+# append a line to a file "jobs_info.txt" containing the ID of the job, the hostname of node it is run on and the path to a scratch directory
+# this information helps to find a scratch directory in case the job fails and you need to remove the scratch directory manually 
+echo "$PBS_JOBID is running on node `hostname -f` in a scratch directory $SCRATCHDIR" >> $DATADIR/$EXPERIMENTS_FOLDER/$EXPERIMENT/jobs_info.txt
+
+export OMP_NUM_THREADS=$PBS_NUM_PPN # set it equal to PBS variable PBS_NUM_PPN (number of CPUs in a chunk)
+
+ml add intelcdk
+# ml add intelcdk cmake python python36-modules
+#singularity shell --nv /cvmfs/singularity.metacentrum.cz/NGC/PyTorch\:21.03-py3.SIF
+
+# test if scratch directory is set
+# if scratch directory is not set, issue error message and exit
+test -n "$SCRATCHDIR" || { echo >&2 "Variable SCRATCHDIR is not set!"; exit 1; }
+
+mkdir -p $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT || { echo >&2 "Could not create experiments folder in $SCRATCHDIR!"; exit 1; }
+
+# if the copy operation fails, issue error message and exit
+cp -r $DATADIR/$EXPERIMENTS_FOLDER/$EXPERIMENT $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT || { echo >&2 "Error while copying experiment file(s)!"; exit 2; }
+cp $DATADIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $SCRATCHDIR/$CGP_BINARY || { echo >&2 "Error while copying C++ CGP file(s)!"; exit 2; }
+
+# move into scratch directory
+cd $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT || { echo >&2 "Error while moving to the experiment dir!"; exit 3; }
+
+$SCRATCHDIR/$CGP_BINARY $CGP_COMMAND $CGP_CONFIG $CGP_ARGS 2> stderr.log 1> stdout.log || { echo >&2 "Calculation ended up erroneously (with a code $?) !!"; exit 3; }
+
+rm -rf $DATADIR/$RESULTS_FOLDER/$EXPERIMENT
+# move the output to user's DATADIR or exit in case of failure
+mkdir -p $DATADIR/$RESULTS_FOLDER/$EXPERIMENT
+cp -r $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT $DATADIR/$RESULTS_FOLDER/$EXPERIMENT || { echo >&2 "Result file(s) copying failed (with a code $?) !!"; exit 4; }
+
+# clean the SCRATCH directory
+clean_scratch

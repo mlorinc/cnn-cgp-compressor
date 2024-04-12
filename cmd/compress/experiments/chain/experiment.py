@@ -1,6 +1,6 @@
 import torch
 from cgp.cgp_adapter import CGP
-from models.base import BaseModel
+from models.base_model import BaseModel
 from experiments.experiment import BaseExperiment, conv2d_core, conv2d_outter
 
 class ChainExperiment(BaseExperiment):

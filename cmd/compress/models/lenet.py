@@ -1,5 +1,5 @@
 from typing import Optional
-from models.base import BaseModel
+from models.base_model import BaseModel
 import torch.nn as nn
 import torch
 from torch.utils.data import random_split, DataLoader
