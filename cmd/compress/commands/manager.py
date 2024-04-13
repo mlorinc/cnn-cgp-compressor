@@ -11,6 +11,7 @@ from commands.evaluate_cgp_model import evaluate_cgp_model
 from commands.train_model import train_model
 from commands.evaluate_model import evaluate_model
 from commands.quantize_model import quantize_model
+from cgp.cgp_configuration import CGPConfiguration
 from typing import List
 
 experiments_classes = {
@@ -36,6 +37,7 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     evaluate_parser = subparsers.add_parser("model:evaluate", help="Evaluate a model")
     evaluate_parser.add_argument("model_name", help="Name of the model to evaluate")
     evaluate_parser.add_argument("model_path", help="Path to the model to evaluate")
+    evaluate_parser.add_argument("--weights", nargs="?", type=str, help="", default=[], required=False)
 
     # model:quantize
     quantize_parser = subparsers.add_parser("model:quantize", help="Quantize a model")
@@ -55,17 +57,21 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
             experiment_parser.add_argument("model_name", help="Name of the model to optimize")
             experiment_parser.add_argument("model_path", help="Path to the model to optimize")
             experiment_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
-            experiment_parser.add_argument("--start-run", nargs='?', type=int, default=0, help="From which run start evolution", required=False)
-            experiment_parser.add_argument("--start-generation", nargs='?', type=int, default=0, help="From which generation start evolution", required=False)
 
+            cgp_group = experiment_parser.add_argument_group("Cartesian Genetic Programming")
+            CGPConfiguration.get_cgp_arguments(cgp_group)
+
+            experiment_group = experiment_parser.add_argument_group("Experiment")
             if command != "evaluate":
-                experiment_parser.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
+                experiment_group.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
             else:
-                experiment_parser.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
+                experiment_group.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
 
-            experiment_parser = experiment_class.get_argument_parser(experiment_parser)
+            experiment_group = experiment_class.get_argument_parser(experiment_group)
+
+            pbs_group = experiment_parser.add_argument_group("PBS Metacentrum")
             if "pbs" in command:
-                experiment_parser = experiment_class.get_pbs_argument_parser(experiment_parser)                
+                pbs_group = experiment_class.get_pbs_argument_parser(pbs_group)                
 
             experiment_parser.set_defaults(factory=experiment_factories.get(experiment_name), experiment_name=experiment_name)
 
@@ -79,6 +85,9 @@ def dispatch(args):
         colon = args.command.index(":")
         experiment_name, command = args.command[:colon], args.command[colon+1:]
         print(experiment_name, command)
+        if experiment_name == "model":
+            raise ValueError(f"invalid experiment name {experiment_name}")
+
         if command == "train":
             return lambda: optimize_model(args)
         if command == "train-pbs":
@@ -91,7 +100,7 @@ def dispatch(args):
         if args.command == "model:train":
             return lambda: train_model(args.model_name, args.model_path, args.base)
         elif args.command == "model:evaluate":
-            return lambda: evaluate_model(args.model_name, args.model_path)
+            return lambda: evaluate_model(args.model_name, args.model_path, args.weights)
         elif args.command == "model:quantize":
             return lambda: quantize_model(args.model_name, args.model_path, args.new_path)
         else:
