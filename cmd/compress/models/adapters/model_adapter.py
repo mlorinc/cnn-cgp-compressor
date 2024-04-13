@@ -4,24 +4,29 @@ import operator
 import copy
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader, Dataset
-from typing import List, Union, Optional, Self
+from typing import List, Union, Self, Iterable, Optional
 from functools import reduce
+from models.base_model import BaseModel
 from models.quantization import dequantize_per_tensor
 from models.selector import FilterSelector
+from tqdm import tqdm
 
 class ModelAdapter(ABC):
-    def __init__(self, model: nn.Module, quantized: bool) -> None:
+    def __init__(self, model: nn.Module) -> None:
         self.model = model
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.quantized = quantized
         self.model.to(self.device)
 
     @abstractmethod
-    def load(self, path: str, quantized: Optional[bool] = False, inline: Optional[bool] = False) -> Self:
+    def load(self, path: str = None, inline: Optional[bool] = True) -> Self:
         raise NotImplementedError()
 
     @abstractmethod
-    def evaluate(self, batch_size: int = 32, max_batches: int = None, top: int=1):
+    def get_test_data(self, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_criterion(self, **kwargs):
         raise NotImplementedError()
 
     def get_layer(self, layer: str) -> nn.Module:
@@ -29,85 +34,100 @@ class ModelAdapter(ABC):
 
     def clone(self):
         cloned_adapter = copy.deepcopy(self)
-        cloned_adapter.quantized = self.quantized
         cloned_adapter.device = self.device
-        cloned_adapter.model.load_state_dict(self.model.state_dict())
+
+        if isinstance(cloned_adapter.model, BaseModel) and isinstance(self.model, BaseModel):
+            cloned_adapter.model.load_state(self.model.get_state())
+        else:
+            cloned_adapter.model.load_state(self.model.state_dict())
+
         cloned_adapter.model.to(self.device)
         return cloned_adapter
 
     def eval(self):
         self.model.eval()
 
-    def _evaluate(self,
-                 dataset: Dataset,
-                 criterion: nn.modules.loss._WeightedLoss,
+    def evaluate(self,
                  batch_size: int = 32,
                  max_batches: int = None,
-                 top: Union[List[int], int] = [1]
+                 top: Union[List[int], int] = 1,
+                 include_loss: bool =True,
+                 show_top_k: int = 2
                  ):
+        top = set([1] + top) if isinstance(top, Iterable) else set([1, top])
         original_train_mode = self.model.training
-        top = top if isinstance(top, list) else [top]
+        dataset = self.get_test_data()
+        criterion = self.get_criterion()
         try:
             self.model.eval()
             loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
             running_loss = 0
             total_samples = 0
-            running_correct = 0
+            running_topk_correct = dict([(k, 0) for k in top])
             with torch.inference_mode():
-                for batch_index, (x, y) in enumerate(loader):
-                    x.to(self.device)
-                    y_hat = self.model(x)
-                    loss = criterion(y_hat, y)
-                    running_loss += loss.item() * y.size(0)
+                with tqdm(enumerate(loader), unit="batch", total=len(loader), leave=True) as pbar:
+                    for batch_index, (x, y) in pbar:
+                        y_hat = self.model(x)
 
-                    for t in top:
-                        _, predicted = y_hat.topk(top, dim=1)
-                    correct = predicted.eq(y.view(-1, 1).expand_as(predicted))
-                    running_correct += correct.sum().item()
-                    total_samples += y.size(0)
+                        if include_loss:
+                            loss = criterion(y_hat, y)
+                            running_loss += loss.item() * y.size(0)
+                        
+                        for k in top:
+                            _, predicted = y_hat.topk(k, dim=1)
+                            correct = predicted.eq(y.view(-1, 1).expand_as(predicted))
+                            running_topk_correct[k] += correct[:, :k].sum().item()
+                        total_samples += y.size(0)
 
-                    if batch_index % 100 == 0:
-                        print(f"batch {batch_index} acc: {100 * correct / y.size(0):.12f}%, loss: {loss / y.size(0):.12f}")
-                    if max_batches is not None and batch_index >= max_batches:
-                        break
+                        top_k = {k: 100 * v / total_samples for k, v in running_topk_correct.items()}
+                        top_k_strings = [f"Top-{k}: {v:.6f}%" for k, v in running_topk_correct.items()[1:show_top_k]]
+                        top_k_strings = (", " + ", ".join(top_k_strings) if top_k_strings else "")
+                        if include_loss:
+                            pbar.set_description(f"Loss: {running_loss / total_samples:.4f}, Acc: {top_k[1]:.6f}" + top_k_strings)
+                        else:
+                            pbar.set_description(f"Acc: {top_k[1]:.6f}" + top_k_strings)
 
-            acc = 100 * running_correct / total_samples
+                        if max_batches is not None and batch_index >= max_batches:
+                            break
+                                
+
+            top_k = {k: 100 * v / total_samples for k, v in running_topk_correct.items()}      
             average_loss = running_loss / total_samples
-            return acc, average_loss
-        except Exception as e:
-            raise e
+
+            if len(top_k) == 1:
+                return top_k[1], average_loss
+            else:
+                return running_topk_correct, average_loss
         finally:
             self.model.train(mode=original_train_mode)
 
     def get_bias(self, layer: Union[nn.Module, str]):
         layer = getattr(self.model, layer) if isinstance(layer, str) else layer
-        if self.quantized:
+        try:
             return layer.bias()
-        else:
+        except:
             return layer.bias
         
     def get_weights(self, layer: Union[nn.Module, str]):
         layer = getattr(self.model, layer) if isinstance(layer, str) else layer
-        if self.quantized:
+        try:
             return layer.weight().detach()
-        else:
+        except:
             return layer.weight.detach()
 
     def get_train_weights(self, layer: Union[nn.Module, str]):
         layer = getattr(self.model, layer) if isinstance(layer, str) else layer
-        if self.quantized:
+        try:
             return layer.weight().detach().int_repr()
-        else:
-            print(self.quantized)
-            print(self.model.__class__.__name__)
+        except:
             return layer.weight.detach()        
 
     def set_weights_bias(self, layer: Union[nn.Module, str], weights: torch.Tensor, biases: torch.Tensor):
         layer = getattr(self.model, layer) if isinstance(layer, str) else layer
 
-        if self.quantized:
+        try:
             layer.set_weight_bias(weights, biases)
-        else:
+        except:
             layer.weight = weights 
             layer.bias = biases
 

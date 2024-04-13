@@ -42,7 +42,6 @@ class SingleFilterExperiment(Experiment):
         parser.add_argument("--channel", type=int, default=0, help="Channel index")
         parser.add_argument("--filter", type=int, default=0, help="Filter index")
         parser.add_argument("--grid-size", nargs=2, type=int, default=[5, 5], help="Grid size (rows, columns)")
-        parser.add_argument("--patience", type=int, default=100000, help="Patience value")
         return parser
 
     @staticmethod

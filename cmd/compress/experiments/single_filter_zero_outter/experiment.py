@@ -35,7 +35,7 @@ class SingleFilterZeroOutterExperiment(MultiExperiment):
         return conv2d_selector(layer_name, [filter_i, channel_i], 5, 3)
 
     def zero_outter(self, sel: FilterSelector):
-        bias = self._get_bias(sel.layer_name)
+        bias = self._model_adapter.get_bias(sel.layer_name)
         fp32_weights = self._model_adapter.get_weights(sel.layer_name)
         for output_selector in sel.out:
             w = fp32_weights[*output_selector]

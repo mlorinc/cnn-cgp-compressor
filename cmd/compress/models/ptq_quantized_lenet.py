@@ -1,9 +1,11 @@
 from typing import Optional
 from models.lenet import LeNet5
+from models.quantized_model import QuantizedBaseModel
+from tqdm import tqdm
 import torch
 import copy
 
-class PTQQuantizedLeNet5(LeNet5):
+class PTQQuantizedLeNet5(QuantizedBaseModel, LeNet5):
     name = "ptq_quantized_lenet"
 
     def __init__(self, model_path: str = None):
@@ -23,37 +25,9 @@ class PTQQuantizedLeNet5(LeNet5):
     def _convert(self):
         torch.quantization.convert(self, inplace=True)
 
-    def load(self, model_path: str, quantized: bool = True):
-        return super().load(model_path, quantized)
-
-    def quantize(self, new_path: str = None):
-        self.model_path = new_path or self.model_path
-        reference_model = copy.deepcopy(self)
-        self.eval()
-        self._prepare()
-
-        # Calibrate
-        with torch.inference_mode():
-            _, val_loader = self._get_train_validation_data()
-            for x, _ in val_loader:
-                self(x)
-    
-        self._convert()
-        
-        # # Sensitity analysis
-        # weight_sqnr_dict, activation_sqnr_dict = sensisitivy_analysis(reference_model, self, self._get_test_data())
-        
-        # print("Weight SQNR Dictionary:", weight_sqnr_dict)
-        # print("Activation SQNR Dictionary:", activation_sqnr_dict)
-
-        # 1 byte instead of 4 bytes for FP32
-        assert self.conv1.weight().element_size() == 1
-        assert self.conv2.weight().element_size() == 1
-        assert reference_model.conv1.weight.element_size() == 4
-
-    def _on_improve(self, average_validation_loss: float):
-        self.save(self.model_path)
-        print(f"Saved the best model with validation loss: {average_validation_loss:.6f}")
+    def quantize(self, new_path: str = None, inline=True):
+        self.ptq_quantization(new_path)
+        self.save(new_path, inline=inline)
 
     def forward(self, x):
         x = self.quant(x)

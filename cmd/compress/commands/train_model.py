@@ -12,6 +12,9 @@ def train_model(model_name: str, model_path: str, base: Optional[str] = None):
         model.load(base)
         print(f"Loaded from {base}")
 
-    model.fit()
+    for train_loss, val_loss in model.fit(yield_on_improve=True):
+        model.save()
+        print(f"Saved the best model with train loss {train_loss:.6f} and validation loss: {val_loss:.6f}")
+    
     model.save(model_path)
     return model

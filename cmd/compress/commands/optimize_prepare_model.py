@@ -5,7 +5,8 @@ from cgp.cgp_configuration import CGPConfiguration
 from experiments.experiment import Experiment
 from experiments.multi_experiment import MultiExperiment
 from models.adapters.model_adapter import ModelAdapter
-from typing import List, Generator
+from models.adapters.base import BaseAdapter
+from typing import Generator
 
 def get_experiment(config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args, dtype=torch.int8) -> Experiment:
     return args.factory(config=config, model_adapter=model_adapter, cgp=cgp, args=args)
@@ -15,12 +16,13 @@ def prepare_experiment(args) -> Generator[Experiment, None, None]:
     factories = factories if isinstance(factories, list) else [factories]
 
     for factory in factories:
-        model = get_model_adapter(args.model_name, args.model_path)
-        model = model.load(args.model_path, inline=True)
+        model = BaseAdapter.from_base_model(args.model_name, args.model_path)
+        model.load()
         model.eval()
 
         cgp = CGP(args.cgp_binary_path)
         config = CGPConfiguration(f"cmd/compress/experiments/{args.experiment_name}/config.cgp")
+        config.parse_arguments(args)
         experiment = factory(config=config, model_adapter=model, cgp=cgp, args=args)
 
         if isinstance(experiment, MultiExperiment):
