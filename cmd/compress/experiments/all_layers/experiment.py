@@ -9,20 +9,22 @@ from typing import List
 
 class AllLayersExperiment(MultiExperiment):
     name = "all_layers"
-    
+    thresholds = [250, 150, 100, 50, 25, 15, 10, 0]
     def __init__(self, 
                  config: CGPConfiguration, 
                  model_adapter: ModelAdapter, 
-                 cgp: CGP, 
+                 cgp: CGP,
+                 args,
                  dtype=torch.int8, 
                  layer_names=["conv1", "conv2"], 
+                 mse_thresholds=thresholds,
                  prefix="",
                  suffix="",
                  rows_per_filter=5,
                  cols_per_layer=15) -> None:
-        super().__init__(config, model_adapter, cgp, dtype)
+        super().__init__(config, model_adapter, cgp, args, dtype)
         
-        self.mse_thresholds = [250, 150, 100, 50, 25]
+        self.mse_thresholds = mse_thresholds
         self.prefix = prefix
         self.suffix = suffix
         self.layer_names = layer_names
@@ -49,20 +51,10 @@ class AllLayersExperiment(MultiExperiment):
         parser.add_argument("--layer-names", nargs="+", default=["conv1", "conv2"], help="List of CNN layer names")
         parser.add_argument("--prefix", default="", help="Prefix for experiment names")
         parser.add_argument("--suffix", default="", help="Suffix for experiment names")
+        parser.add_argument("--mse-thresholds", nargs="+", type=int, default=AllLayersExperiment.thresholds, help="List of MSE thresholds")
         parser.add_argument("--rows-per-filter", type=int, default=5, help="Number of rows per filter")
         parser.add_argument("--cols-per-layer", type=int, default=15, help="Number of columns per layer")
-        return parser
-
-    @staticmethod
-    def get_pbs_argument_parser(parser: argparse.ArgumentParser):
-        parser.add_argument("--time-limit", required=True, help="Time limit for the PBS job")
-        parser.add_argument("--template-pbs-file", required=True, help="Path to the template PBS file")
-        parser.add_argument("--experiments-folder", default="experiments_folder", help="Experiments folder")
-        parser.add_argument("--results-folder", default="results", help="Results folder")
-        parser.add_argument("--cgp-folder", default="cgp_cpp_project", help="CGP folder")
-        parser.add_argument("--cpu", type=int, default=32, help="Number of CPUs")
-        parser.add_argument("--mem", default="2gb", help="Memory")
-        parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
+        MultiExperiment.get_argument_parser(parser)
         return parser
 
     @staticmethod
@@ -71,5 +63,6 @@ class AllLayersExperiment(MultiExperiment):
                                    layer_names=args.layer_names,
                                    prefix=args.prefix,
                                    suffix=args.suffix,
+                                   mse_thresholds=args.mse_thresholds,
                                    rows_per_filter=args.rows_per_filter,
                                    cols_per_layer=args.cols_per_layer)

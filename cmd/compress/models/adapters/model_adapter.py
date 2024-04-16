@@ -3,7 +3,7 @@ import torch.nn as nn
 import operator
 import copy
 from abc import ABC, abstractmethod
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from typing import List, Union, Self, Iterable, Optional
 from functools import reduce
 from models.base_model import BaseModel
@@ -97,10 +97,10 @@ class ModelAdapter(ABC):
             if len(top_k) == 1:
                 return top_k[1], average_loss
             else:
-                return running_topk_correct, average_loss
+                return top_k, average_loss
         finally:
             self.model.train(mode=original_train_mode)
-
+        
     def get_bias(self, layer: Union[nn.Module, str]):
         layer = getattr(self.model, layer) if isinstance(layer, str) else layer
         try:
@@ -131,9 +131,9 @@ class ModelAdapter(ABC):
             layer.weight = weights 
             layer.bias = biases
 
-    def inject_weights(self, weights_vector: List[torch.Tensor], all_injection_plans: List[List[FilterSelector]]):
+    def inject_weights(self, weights_vector: List[torch.Tensor], all_injection_plans: List[List[FilterSelector]], inline=False):
         original_train_mode = self.model.training
-        model = self.clone()
+        model = self.clone() if not inline else self
         try:
             model.eval()
             with torch.inference_mode():
@@ -162,7 +162,7 @@ class ModelAdapter(ABC):
                                 size = reduce(operator.mul, w.shape)
                                 fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
                             offset += size
-                        self.set_weights_bias(getattr(model, plan.layer_name), fp32_weights, bias)
+                        self.set_weights_bias(plan.layer_name, fp32_weights, bias)
                 return model
         finally:
             model.train(mode=original_train_mode)

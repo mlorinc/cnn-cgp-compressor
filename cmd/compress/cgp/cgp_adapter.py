@@ -3,6 +3,7 @@ import subprocess
 from typing import TextIO
 from cgp.cgp_configuration import CGPConfiguration
 from pathlib import Path
+import os
 
 class CGPProcessError(Exception):
     def __init__(self, code: int, what: str = None) -> None:
@@ -80,9 +81,9 @@ class CGP(object):
 
     def _execute(self, command: str = "train", mode="w", other_args=[], cwd: str = None):
         args = self.get_cli_arguments(command=command, other_args=other_args, cwd=cwd)
-
+        print(args)
         with self.config.open_stdout(mode) as stdout, self.config.open_stderr(mode) as stderr:
-            process = subprocess.Popen(args, stdout=stdout, stderr=stderr, text=True)
+            process = subprocess.Popen(args, stdout=stdout, stderr=None, text=True, cwd=os.getcwd())
             process.wait()
             print("Return code:", process.returncode)
             if process.returncode != 0:
@@ -95,3 +96,6 @@ class CGP(object):
     def evaluate(self, solution: str = None):
         solution_arg = [solution] if solution is not None else []
         return self._execute(command="evaluate", other_args=solution_arg)
+
+    def evaluate_all(self):
+        return self._execute(command="evaluate:all")

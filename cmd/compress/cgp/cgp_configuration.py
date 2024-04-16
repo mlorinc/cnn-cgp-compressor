@@ -27,6 +27,8 @@ class CGPConfiguration:
     COMMAND_NUMBER_OF_RUNS = "number_of_runs"
     COMMAND_LOOK_BACK_PARAMETER = "look_back_parameter"
     COMMAND_MUTATION_MAX = "mutation_max"
+    COMMAND_LEARNING_RATE = "learning_rate"
+    COMMAND_LEARNING_RATE_FILE = "learning_rate_file"
     COMMAND_FUNCTION_COUNT = "function_count"
     COMMAND_FUNCTION_INPUT_ARITY = "function_input_arity"
     COMMAND_FUNCTION_OUTPUT_ARITY = "function_output_arity"
@@ -70,6 +72,8 @@ class CGPConfiguration:
         "depth-early-stop": {"help": "Value indicating stop condition for parameter of depth.", "type": int, "attribute": COMMAND_DEPTH_EARLY_STOP},
         "gate-count-early-stop": {"help": "Value indicating stop condition for parameter of gate count.", "type": int, "attribute": COMMAND_GATE_COUNT_EARLY_STOP},
         "mse-chromosome-logging-threshold": {"help": "Logging threshold when chromosomes with error less than value will start being printed in CSV logs as serialized strings.", "type": int, "attribute": COMMAND_MSE_CHROMOSOME_LOGGING_THRESHOLD},
+        "learning-rate": {"help": "Average learning rate for the CGP model. When average learning rate drops below the value, the whole process is termianted.", "type": float, "attribute": COMMAND_LEARNING_RATE},
+        "learning-rate-file": {"help": "Path to a file that will hold learning rate statistics.", "type": str, "attribute": COMMAND_LEARNING_RATE_FILE},
     }
 
     @staticmethod
@@ -87,10 +91,10 @@ class CGPConfiguration:
 
     def parse_arguments(self, args):
         for argument_name, metadata in self.ARGUMENTS.items():
-            if argument_name in args:
-                value = args[argument_name.replace("-", "_")]
+            if metadata["attribute"] in args:
+                value = getattr(args, metadata["attribute"])
                 if value is not None:
-                    self.set_attribute(metadata.attribute, value)
+                    self.set_attribute(metadata["attribute"], value)
 
     def clone(self, new_config_file: str = None):
         cloned_instance = CGPConfiguration()
@@ -121,6 +125,8 @@ class CGPConfiguration:
 
         with open(config_file or self.path, "w") as f:
             for key, value in self._attributes.items():
+                if value is None:
+                    continue
                 if key.endswith("_file"):
                     value = self._path_to_string(value)                
                 f.write(f"{key}: {value}\n")
@@ -142,16 +148,16 @@ class CGPConfiguration:
         self._extra_attributes = {}
 
     def apply_extra_attributes(self):
-        start_run = self._extra_attributes.get("start_run", None)
-        start_generation = self._extra_attributes.get("start_generation", None)
         new_extra_dict = dict()
-        if start_run is not None:
-            del self._extra_attributes["start_run"]
-            new_extra_dict["start_run"] = start_run
+        if self.COMMAND_START_RUN in self._extra_attributes:
+            if self._extra_attributes[self.COMMAND_START_RUN] is not None:
+                new_extra_dict[self.COMMAND_START_RUN] = self._extra_attributes[self.COMMAND_START_RUN]
+            del self._extra_attributes[self.COMMAND_START_RUN]
 
-        if start_generation is not None:
-            del self._extra_attributes["start_generation"]
-            new_extra_dict["start_generation"] = start_generation
+        if self.COMMAND_START_GENERATION in self._extra_attributes:
+            if self._extra_attributes[self.COMMAND_START_GENERATION] is not None:
+                new_extra_dict[self.COMMAND_START_GENERATION] = self._extra_attributes[self.COMMAND_START_GENERATION]
+            del self._extra_attributes[self.COMMAND_START_GENERATION]
 
         self._attributes = {**self._attributes, **self._extra_attributes}
         self._extra_attributes = new_extra_dict
@@ -193,6 +199,12 @@ class CGPConfiguration:
 
     def get_attribute(self, name):
         return self._attributes.get(name, None) or self._extra_attributes.get(name)
+
+    def get_learning_rate_file(self):
+        return self.get_attribute(self.COMMAND_LEARNING_RATE_FILE)
+
+    def get_learning_rate(self):
+        return self.get_attribute(self.COMMAND_LEARNING_RATE)
 
     def get_mse_chromosome_logging_threshold(self):
         return self.get_attribute(self.COMMAND_MSE_CHROMOSOME_LOGGING_THRESHOLD)
@@ -292,6 +304,12 @@ class CGPConfiguration:
 
     def set_attribute(self, attribute, value):
         self._extra_attributes[attribute] = value if not attribute.endswith("_file") else PureWindowsPath(value)
+
+    def set_learning_rate_file(self, value):
+        self.set_attribute(self.COMMAND_LEARNING_RATE_FILE, value)
+
+    def set_learning_rate(self, value):
+        self.set_attribute(self.COMMAND_LEARNING_RATE, value)
 
     def set_mse_chromosome_logging_threshold(self, value):
         self.set_attribute(self.COMMAND_MSE_CHROMOSOME_LOGGING_THRESHOLD, value)
@@ -395,6 +413,12 @@ class CGPConfiguration:
         if name in self._extra_attributes:
             del self._extra_attributes[name]
 
+    def delete_learning_rate_file(self):
+        self.delete_attribute(self.COMMAND_LEARNING_RATE_FILE)
+
+    def delete_learning_rate(self):
+        self.delete_attribute(self.COMMAND_LEARNING_RATE)
+
     def delete_mse_chromosome_logging_threshold(self):
         self.delete_attribute(self.COMMAND_MSE_CHROMOSOME_LOGGING_THRESHOLD)
 
@@ -497,6 +521,12 @@ class CGPConfiguration:
 
     def has_attribute(self, name):
         return name in self._attributes or name in self._extra_attributes
+
+    def has_learning_rate_file(self):
+        self.has_attribute(self.COMMAND_LEARNING_RATE_FILE)
+
+    def has_learning_rate(self):
+        self.has_attribute(self.COMMAND_LEARNING_RATE)
 
     def has_mse_chromosome_logging_threshold(self):
         return self.has_attribute(self.COMMAND_MSE_CHROMOSOME_LOGGING_THRESHOLD)
@@ -603,8 +633,15 @@ class CGPConfiguration:
             if k in CGPConfiguration.ignored_arguments:
                 continue
 
+            if v is None:
+                continue
+
             if k.endswith("_file"):
                 v = self._path_to_string(v)
+
+            if not isinstance(v, str):
+                v = str(v)
+
 
             key = k.replace("_", "-")
             arguments.append(f"--{key}")

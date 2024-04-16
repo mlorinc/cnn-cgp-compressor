@@ -12,6 +12,7 @@ class SingleFilterExperiment(Experiment):
                 config: CGPConfiguration,
                 model_adapter: ModelAdapter, 
                 cgp: CGP,
+                args,
                 grid_size=(5, 5),
                 layer_name="conv1",
                 channel=0,
@@ -20,7 +21,7 @@ class SingleFilterExperiment(Experiment):
                 prefix="",
                 suffix="",
                 dtype=torch.int8) -> None:
-        super().__init__(config, model_adapter, cgp, dtype)
+        super().__init__(config, model_adapter, cgp, args, dtype)
         self.set_paths(self.base_folder / (prefix + self.base_folder.name + suffix))
         self.grid_size = grid_size
         self.layer_name = layer_name
@@ -45,20 +46,8 @@ class SingleFilterExperiment(Experiment):
         return parser
 
     @staticmethod
-    def get_pbs_argument_parser(parser: argparse.ArgumentParser):
-        parser.add_argument("--time-limit", required=True, help="Time limit for the PBS job")
-        parser.add_argument("--template-pbs-file", required=True, help="Path to the template PBS file")
-        parser.add_argument("--experiments-folder", default="experiments_folder", help="Experiments folder")
-        parser.add_argument("--results-folder", default="results", help="Results folder")
-        parser.add_argument("--cgp-folder", default="cgp_cpp_project", help="CGP folder")
-        parser.add_argument("--cpu", type=int, default=32, help="Number of CPUs")
-        parser.add_argument("--mem", default="2gb", help="Memory")
-        parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
-        return parser
-
-    @staticmethod
     def new(config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args):
-        return SingleFilterExperiment(config, model_adapter, cgp,
+        return SingleFilterExperiment(config, model_adapter, cgp, args,
                                         grid_size=args.grid_size,
                                         layer_name=args.layer_name,
                                         channel=args.channel,

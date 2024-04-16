@@ -16,17 +16,23 @@ def prepare_experiment(args) -> Generator[Experiment, None, None]:
     factories = factories if isinstance(factories, list) else [factories]
 
     for factory in factories:
-        model = BaseAdapter.from_base_model(args.model_name, args.model_path)
-        model.load()
-        model.eval()
-
         cgp = CGP(args.cgp_binary_path)
-        config = CGPConfiguration(f"cmd/compress/experiments/{args.experiment_name}/config.cgp")
-        config.parse_arguments(args)
+        model = BaseAdapter.from_base_model(args.model_name, args.model_path) if "model_name" in args else None
+
+        if model is not None:
+            model.load()
+            model.eval()
+
+        if "experiment_root" not in args:
+            config = CGPConfiguration(f"cmd/compress/experiments/{args.experiment_name}/config.cgp")
+            config.parse_arguments(args)
+        else:
+            config = args.experiment_root
+
         experiment = factory(config=config, model_adapter=model, cgp=cgp, args=args)
 
         if isinstance(experiment, MultiExperiment):
-            for x in experiment.experiments.values():
+            for x in experiment.experiments.values() if "experiment_root" not in args else experiment.get_experiments():
                 yield x
         else:
             yield experiment
@@ -36,13 +42,23 @@ def optimize_prepare_model(args):
         experiment.config.set_start_run(args.start_run)
         experiment.config.set_start_generation(args.start_generation)
         experiment = experiment.setup_isolated_train_environment(args.experiment_env, relative_paths=True)
+        cpu = args.cpu
+        if not experiment.config.has_population_max() and cpu is None:
+            raise ValueError("population_max or cpu argument is needed in order to create pbs job")
+        elif not experiment.config.has_population_max() and cpu is not None:
+            experiment.config.set_population_max(args.cpu)
+        elif experiment.config.has_population_max() and cpu is None:
+            cpu = int(experiment.config.get_population_max())
+        elif experiment.config.has_population_max() and cpu is not None:
+            print("warn: population_max and cpu is set; leaving it as it is")
+        
         experiment.setup_pbs_train_job(
             args.time_limit,
             args.template_pbs_file,
             experiments_folder=args.experiments_folder,
             results_folder=args.results_folder,
             cgp_folder=args.cgp_folder,
-            cpu=args.cpu,
+            cpu=cpu,
             mem=args.mem,
             scratch_capacity=args.scratch_capacity)
                                        

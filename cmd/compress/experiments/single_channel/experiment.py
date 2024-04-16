@@ -24,7 +24,7 @@ class SingleChannelExperiment(MultiExperiment):
                  suffix="", 
                  mse_thresholds=thresholds,
                  rows_per_filter=rows_per_filter) -> None:
-        super().__init__(config, model_adapter, cgp, dtype)
+        super().__init__(config, model_adapter, cgp, args, dtype)
         
         self.mse_thresholds = mse_thresholds
         self.prefix = prefix
@@ -50,20 +50,9 @@ class SingleChannelExperiment(MultiExperiment):
         parser.add_argument("--channel", type=int, default=SingleChannelExperiment.channel, help="Channel index")
         parser.add_argument("--prefix", default="", help="Prefix for experiment names")
         parser.add_argument("--suffix", default="", help="Suffix for experiment names")
-        parser.add_argument("--mse-thresholds", nargs="+", type=float, default=SingleChannelExperiment.thresholds, help="List of MSE thresholds")
+        parser.add_argument("--mse-thresholds", nargs="+", type=int, default=SingleChannelExperiment.thresholds, help="List of MSE thresholds")
         parser.add_argument("--rows_per_filter", type=int, default=SingleChannelExperiment.rows_per_filter, help="CGP rows used per filter for circuit design")
-        return parser
-
-    @staticmethod
-    def get_pbs_argument_parser(parser: argparse.ArgumentParser):
-        parser.add_argument("--time-limit", required=True, help="Time limit for the PBS job")
-        parser.add_argument("--template-pbs-file", required=True, help="Path to the template PBS file")
-        parser.add_argument("--experiments-folder", default="experiments_folder", help="Experiments folder")
-        parser.add_argument("--results-folder", default="results", help="Results folder")
-        parser.add_argument("--cgp-folder", default="cgp_cpp_project", help="CGP folder")
-        parser.add_argument("--cpu", type=int, default=32, help="Number of CPUs")
-        parser.add_argument("--mem", default="2gb", help="Memory")
-        parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
+        MultiExperiment.get_argument_parser(parser)
         return parser
 
     @staticmethod

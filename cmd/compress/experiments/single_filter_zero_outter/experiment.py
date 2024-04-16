@@ -2,6 +2,7 @@ import argparse
 import torch
 import operator
 from functools import reduce
+import random
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from models.adapters.model_adapter import ModelAdapter
@@ -15,21 +16,40 @@ class SingleFilterZeroOutterExperiment(MultiExperiment):
     def __init__(self, 
                  config: CGPConfiguration, 
                  model_adapter: ModelAdapter, 
-                 cgp: CGP, 
+                 cgp: CGP,
+                 args,
                  dtype=torch.int8, 
                  layer_names=["conv1", "conv2"], 
                  prefix="",
                  suffix="") -> None:
-        super().__init__(config, model_adapter, cgp, dtype)        
+        super().__init__(config, model_adapter, cgp, args, dtype)
 
-        for layer_name in layer_names:
-            layer = self._model_adapter.get_layer(layer_name)
-            for i in range(layer.out_channels):
-                for j in range(layer.in_channels):
-                    sel = self._get_filter(layer_name, i, j)
-                    self.zero_outter(sel)
-                    experiment = self.create_experiment(f"{prefix}{layer_name}_{i}_{j}{suffix}", sel)
-                    experiment.config.set_gate_count_early_stop(0 if self.has_zero_in_input(sel) else 1);
+        zero_mse_experiments = []
+        other_mse_experiments = []
+
+        if model_adapter is not None:
+            for layer_name in layer_names:
+                layer = self._model_adapter.get_layer(layer_name)
+                for i in range(layer.out_channels):
+                    for j in range(layer.in_channels):
+                        sel = self._get_filter(layer_name, i, j)
+                        self.zero_outter(sel)
+                        has_zero = self.has_zero_in_input(sel)
+                        zero_suffix = "_zero" if has_zero else ""
+                        experiment = self.create_experiment(f"{prefix}{layer_name}_{i}_{j}{zero_suffix}{suffix}", sel, register=False)
+                        
+                        if has_zero:
+                            experiment.config.set_gate_count_early_stop(0)
+                            zero_mse_experiments.append(experiment)
+                        else:
+                            experiment.config.set_gate_count_early_stop(1)
+                            other_mse_experiments.append(experiment)
+                            
+        selecter_other_experiments = random.sample(other_mse_experiments, k=len(zero_mse_experiments))
+        
+        for a, b in zip(selecter_other_experiments, zero_mse_experiments):
+            self.register_experiment(a)
+            self.register_experiment(b)
 
     def _get_filter(self, layer_name: str, filter_i: int, channel_i: int):
         return conv2d_selector(layer_name, [filter_i, channel_i], 5, 3)
@@ -56,18 +76,7 @@ class SingleFilterZeroOutterExperiment(MultiExperiment):
         parser.add_argument("--layer-names", nargs="+", default=["conv1", "conv2"], help="List of CNN layer names")
         parser.add_argument("--prefix", default="", help="Prefix for experiment names")
         parser.add_argument("--suffix", default="", help="Suffix for experiment names")
-        return parser
-
-    @staticmethod
-    def get_pbs_argument_parser(parser: argparse.ArgumentParser):
-        parser.add_argument("--time-limit", required=True, help="Time limit for the PBS job")
-        parser.add_argument("--template-pbs-file", required=True, help="Path to the template PBS file")
-        parser.add_argument("--experiments-folder", default="experiments_folder", help="Experiments folder")
-        parser.add_argument("--results-folder", default="results", help="Results folder")
-        parser.add_argument("--cgp-folder", default="cgp_cpp_project", help="CGP folder")
-        parser.add_argument("--cpu", type=int, default=32, help="Number of CPUs")
-        parser.add_argument("--mem", default="2gb", help="Memory")
-        parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
+        MultiExperiment.get_argument_parser(parser)
         return parser
 
     @staticmethod

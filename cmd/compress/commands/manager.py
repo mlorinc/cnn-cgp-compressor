@@ -1,4 +1,5 @@
 import argparse
+from experiments.experiment import Experiment
 from experiments.all_layers.experiment import AllLayersExperiment
 from experiments.grid_size.experiment import GridSizeExperiment 
 from experiments.reversed_single_filter.experiment import ReversedSingleFilterExperiment
@@ -6,6 +7,7 @@ from experiments.single_channel.experiment import SingleChannelExperiment
 from experiments.single_filter_zero_outter.experiment import SingleFilterZeroOutterExperiment
 from experiments.single_filter.experiment import SingleFilterExperiment
 from commands.optimize_prepare_model import optimize_prepare_model
+from commands.fix_train_stats import fix_train_statistics
 from commands.optimize_model import optimize_model
 from commands.evaluate_cgp_model import evaluate_cgp_model
 from commands.train_model import train_model
@@ -24,7 +26,7 @@ experiments_classes = {
 }
 
 experiment_factories = dict([(name, clazz.new) for name, clazz in experiments_classes.items()])
-experiment_commands = ["train", "train-pbs", "evaluate"]
+experiment_commands = ["train", "train-pbs", "evaluate", "fix-train-stats"]
 
 def _register_model_commands(subparsers: argparse._SubParsersAction):
     # model:train
@@ -50,28 +52,33 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
     help_evaluate = "Evaluate CGP model perfomance such as MSE, Energy, Area, Delay, Depth, Gate count and CNN accuracy and loss. Weights are trained as they are defined by {experiment_name}."
     help_metacentrum = "Prepare file structure and a PBS file for training in Metacentrum. Dataset is generated according to {experiment_name}."
 
-    for command, help in zip(experiment_commands, [help_train, help_metacentrum, help_evaluate]):
+    for command, help in zip(experiment_commands, [help_train, help_metacentrum, help_evaluate, ""]):
         for experiment_name in experiment_names:
             experiment_parser = subparsers.add_parser(f"{experiment_name}:{command}", help=help.format(experiment_name=experiment_name))
             experiment_class = experiments_classes.get(experiment_name)
-            experiment_parser.add_argument("model_name", help="Name of the model to optimize")
-            experiment_parser.add_argument("model_path", help="Path to the model to optimize")
+
+            if command != "fix-train-stats":
+                experiment_parser.add_argument("model_name", help="Name of the model to optimize")
+                experiment_parser.add_argument("model_path", help="Path to the model to optimize")
+
             experiment_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
 
             cgp_group = experiment_parser.add_argument_group("Cartesian Genetic Programming")
             CGPConfiguration.get_cgp_arguments(cgp_group)
 
             experiment_group = experiment_parser.add_argument_group("Experiment")
-            if command != "evaluate":
+            if command in ["train", "train-pbs"]:
                 experiment_group.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
-            else:
+            elif command in ["evaluate"]:
                 experiment_group.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
+            elif command in ["fix-train-stats"]:
+                experiment_group.add_argument("--experiment-root", nargs='?', help="Experiment root", required=False)
 
             experiment_group = experiment_class.get_argument_parser(experiment_group)
 
             pbs_group = experiment_parser.add_argument_group("PBS Metacentrum")
             if "pbs" in command:
-                pbs_group = experiment_class.get_pbs_argument_parser(pbs_group)                
+                pbs_group = Experiment.get_train_pbs_argument_parser(pbs_group)                
 
             experiment_parser.set_defaults(factory=experiment_factories.get(experiment_name), experiment_name=experiment_name)
 
@@ -94,6 +101,8 @@ def dispatch(args):
             return lambda: optimize_prepare_model(args)
         if command == "evaluate":
             return lambda: evaluate_cgp_model(args)
+        if command == "fix-train-stats":
+            return lambda: fix_train_statistics(args)
         else:
             raise ValueError(f"unknown commmand {args.command}")
     except ValueError as e:
