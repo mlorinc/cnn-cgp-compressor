@@ -1,28 +1,52 @@
 ﻿// Cgp.cpp : Defines the entry point for the application.
 
 #include "Main.h"
-#include "StringTemplate.h"
+
+#ifdef __DISABLE_COUT
+constexpr auto LOGGER_OUTPUT_FILE = ("#");
+#else
+constexpr auto LOGGER_OUTPUT_FILE = ("-");
+#endif
+
 using namespace cgp;
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 
-static std::shared_ptr<CGP> init_cgp(const std::string& cgp_file, const std::vector<std::string>& arguments)
+static dataset_t init_dataset(const std::string& cgp_file, const std::vector<std::string>& arguments)
+{
+	std::ifstream config_in(cgp_file);
+	auto config = std::make_shared<CGPConfiguration>();
+
+	if (!config_in.is_open())
+	{
+		throw std::ios_base::failure("could not open file: " + cgp_file);
+	}
+
+	config->load(config_in);
+	config_in.close();
+	config->set_from_arguments(arguments);
+
+	CGPInputStream in(config, config->input_file());
+	dataset_t dataset = in.load_train_data();
+	in.close();
+	return dataset;
+}
+
+static std::shared_ptr<CGP> init_cgp(const std::string& cgp_file, const std::vector<std::string>& arguments, const dataset_t& dataset)
 {
 	std::ifstream cgp_in(cgp_file);
-
 	if (!cgp_in.is_open())
 	{
 		throw std::ios_base::failure("could not open file: " + cgp_file);
 	}
 
-	auto cgp_model = std::make_shared<CGP>(cgp_in, arguments);
+	auto cgp_model = std::make_shared<CGP>(cgp_in, arguments, dataset);
 	cgp_in.close();
 
 	if (cgp_model->gate_parameters_input_file().empty())
 	{
 		throw std::invalid_argument("missing " + CGPConfiguration::GATE_PARAMETERS_FILE_LONG + " in file or as CLI argument");
 	}
-
 	CGPInputStream gate_parameter_loader(cgp_model, cgp_model->gate_parameters_input_file());
 	auto parameters = gate_parameter_loader.load_gate_parameters();
 	cgp_model->function_costs(std::move(parameters));
@@ -33,32 +57,68 @@ static std::string format_timestamp(double t) {
 	return std::to_string(t);
 }
 
-static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, size_t run, size_t generation, std::string solution = "")
+static int evaluate_chromosome(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, std::string chromosome)
 {
-	CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(run + 1)}, {"generation", std::to_string(generation + 1)} });
-	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), { {"run", std::to_string(run + 1)}, {"generation", std::to_string(generation + 1)} });
-	CGPOutputStream logger(cgp_model, "-");
-	if (!solution.empty())
-	{
-		cgp_model->restore(solution);
-	}
-
-	logger.dump();
-	out.log_weights(get_dataset_input(dataset));
-	stats_out.log_csv(run, generation, cgp_model->get_best_chromosome(), dataset);
+	auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
+	auto solution = cgp_model->evaluate(dataset, chrom);
+	CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::trunc);
+	out.log_csv(0, 0, "");
 	return 0;
 }
 
-static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
+static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
 {
-	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::app);
-	CGPOutputStream logger(cgp_model, "-");
-	for (size_t i = cgp_model->start_run(); i < cgp_model->number_of_runs(); i++)
+	std::unordered_map<std::string, std::string> template_args{};
+	CGPInputStream in(cgp_model, cgp_model->cgp_statistics_file());
+	size_t counter = 1;
+	while (!in.eof() && !in.fail())
 	{
-		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(i + 1)} });
-		logger.dump();
-		out.log_weights(get_dataset_input(dataset));
-		stats_out.log_csv(i, cgp_model->get_evolution_steps_made(), cgp_model->get_best_chromosome(), dataset);
+		std::string chromosome;
+		std::getline(in.get_stream(), chromosome);
+
+		template_args["run"] = std::to_string(counter);
+		auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
+		auto solution = cgp_model->evaluate(dataset, chrom);
+
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
+		out.log_csv(counter, counter, "");
+		counter++;
+	}
+
+	return 0;
+}
+
+static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, std::function<bool(const CGPCSVRow&)> predicate = nullptr)
+{
+	for (int i = 0; i < cgp_model->number_of_runs(); i++)
+	{
+		std::unordered_map<std::string, std::string> template_args{ {"run", std::to_string(i + 1)} };
+		CGPInputStream in(cgp_model, cgp_model->cgp_statistics_file(), template_args);
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
+
+		while (!in.eof() && !in.fail())
+		{
+			auto row = in.read_csv_line();
+
+			if (!row.ok)
+			{
+				out << row.raw_line;
+				continue;
+			}
+
+			if (predicate == nullptr || predicate(row))
+			{
+				auto chrom = std::make_shared<Chromosome>(*cgp_model, row.chromosome);
+				auto solution = cgp_model->evaluate(dataset, chrom);
+
+				out.log_csv(
+					row.run,
+					row.generation,
+					row.timestamp,
+					solution,
+					true);
+			}
+		}
 	}
 
 	return 0;
@@ -70,9 +130,8 @@ bool early_stop_check(const T value, T early_stop_value, T nan)
 	return early_stop_value == nan || value <= early_stop_value;
 }
 
-static int perform_evolution(const double start_time, std::shared_ptr<cgp::CGP>& cgp_model, const cgp::dataset_t& dataset, cgp::CGPOutputStream& logger, const int& run, int i, cgp::CGPOutputStream& stats_out, int& log_counter, const int& generation_stop)
+static int perform_evolution(const double start_time, const double now, std::shared_ptr<cgp::CGP>& cgp_model, const cgp::dataset_t& dataset, cgp::CGPOutputStream& logger, const size_t run, size_t i, cgp::CGPOutputStream& stats_out, size_t& log_counter, size_t generation_stop)
 {
-	auto now = omp_get_wtime();
 	const CGP::solution_t& solution = cgp_model->evaluate(dataset);
 	const bool log_chromosome = CGP::get_error(solution) <= cgp_model->mse_chromosome_logging_threshold();
 
@@ -85,7 +144,6 @@ static int perform_evolution(const double start_time, std::shared_ptr<cgp::CGP>&
 	else if (log_counter >= cgp_model->periodic_log_frequency())
 	{
 		logger.log_human(run, i);
-		stats_out.log_csv(run, i, format_timestamp(now - start_time), log_chromosome);
 		log_counter = 0;
 	}
 	else
@@ -96,57 +154,148 @@ static int perform_evolution(const double start_time, std::shared_ptr<cgp::CGP>&
 		early_stop_check(CGP::get_energy(solution), cgp_model->energy_early_stop(), cgp_model->energy_nan) &&
 		early_stop_check(CGP::get_delay(solution), cgp_model->delay_early_stop(), cgp_model->delay_nan) &&
 		early_stop_check(CGP::get_depth(solution), cgp_model->depth_early_stop(), cgp_model->depth_nan) &&
-		early_stop_check(CGP::get_gate_count(solution), cgp_model->gate_count_early_stop(), cgp_model->gate_count_nan))
-		||
-		(cgp_model->get_generations_without_change() > generation_stop))
+		early_stop_check(CGP::get_gate_count(solution), cgp_model->gate_count_early_stop(), cgp_model->gate_count_nan)))
 	{
-		logger.log_human(run, i);
-		stats_out.log_csv(run, i, format_timestamp(now - start_time), true);
 		return 0;
 	}
-	cgp_model->mutate();
+
 	return 1;
+}
+
+static LearningRates get_learning_rate(const CGP::solution_t& start_epoch_solution, const CGP::solution_t& end_epoch_solution)
+{
+	LearningRates rates{};
+	if (CGP::get_chromosome(start_epoch_solution) == CGP::get_chromosome(end_epoch_solution))
+	{
+		return rates;
+	}
+
+	rates.error = CGP::get_error(end_epoch_solution) < CGP::get_error(start_epoch_solution) ? (CGP::get_error(start_epoch_solution) - CGP::get_error(end_epoch_solution)) : (0);
+	rates.energy = (CGP::get_quantized_energy(start_epoch_solution) - CGP::get_quantized_energy(end_epoch_solution)) / static_cast<double>(CGP::get_quantized_energy(start_epoch_solution));
+	rates.delay = (CGP::get_quantized_delay(start_epoch_solution) - CGP::get_quantized_delay(end_epoch_solution)) / static_cast<double>(CGP::get_quantized_delay(start_epoch_solution));
+	rates.gate_count = (CGP::get_gate_count(end_epoch_solution) < CGP::get_gate_count(start_epoch_solution)) ? (CGP::get_gate_count(start_epoch_solution) - CGP::get_gate_count(end_epoch_solution)) : 0;
+
+	return rates;
+}
+
+static bool is_stagnated(const LearningRates& rates, double LR)
+{
+	return rates.error == 0 && rates.gate_count == 0 && rates.energy < LR && rates.delay < LR;
 }
 
 static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run)
 {
-	int i = (cgp_model->start_run() == 0) ? (0) : (cgp_model->start_generation());
-	int generation_stop = cgp_model->patience();
-	int start_run = (run == -1) ? (cgp_model->start_run()) : (run);
-	int end_run = (run == -1) ? (cgp_model->number_of_runs()) : (run + 1);
-	CGPOutputStream logger(cgp_model, "-");
+#ifdef _MEASURE_LEARNING_RATE
+	const double LR = cgp_model->learning_rate();
+	const double LR_PERIOD = 0.001;
+#endif
+	size_t patience = cgp_model->patience();
+	if (patience == 0)
+	{
+		throw std::invalid_argument("patience cannot be 0");
+	}
+
+	size_t start_run = (run == -1) ? (cgp_model->start_run()) : (run);
+	size_t generation = cgp_model->start_generation();
+	size_t end_run = (run == -1) ? (cgp_model->number_of_runs()) : (run + 1);
+	auto mode = (generation == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
+	CGPOutputStream logger(cgp_model, LOGGER_OUTPUT_FILE);
+	CGPOutputStream event_logger(cgp_model, "-");
 
 	cgp_model->build_indices();
 	logger.dump();
 	cgp_model->generate_population();
-	for (int run = start_run; run < end_run; run++)
+	std::unordered_map<std::string, std::string> template_args{};
+	for (size_t run = start_run; run < end_run; run++)
 	{
 		double start_time = omp_get_wtime();
-		auto mode = (run == start_run && cgp_model->start_generation() == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
-		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, { {"run", std::to_string(run + 1)} });
+		std::unordered_map<std::string, std::string> template_args{ {"run",  std::to_string(run + 1)} };
+		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, template_args);
 
-		std::cout << "performin run " << run + 1 << " and starting from generation " << (i+1) << std::endl;
-		for (int log_counter = cgp_model->periodic_log_frequency(), continue_evolution = 1; continue_evolution && i < cgp_model->generation_count(); i++)
+#ifdef _MEASURE_LEARNING_RATE
+		OutputStream lr_stream(cgp_model->learning_rate_file(), mode, template_args);
+		OutputStream lr_period_stream(cgp_model->learning_rate_file() + ".period", mode, template_args);
+		if (cgp_model->start_generation() == 0)
 		{
-			continue_evolution = perform_evolution(start_time, cgp_model, dataset, logger, run, i, stats_out, log_counter, generation_stop);
+			stats_out.log_csv_header();
+			lr_stream << "lr_error,lr_energy,lr_delay,lr_gate_count" << std::endl;
+			lr_period_stream << "lr_error,lr_energy,lr_delay,lr_gate_count" << std::endl;
 		}
-		std::cout << "finished evolution after " << (i + 1) << " generations" << std::endl;
+		Learning lr(LR, patience, cgp_model->mse_threshold(), 5);
+#else
+		if (cgp_model->start_generation() == 0)
+		{
+			stats_out.log_csv_header();
+		}
+#endif
+
+		event_logger << "performin run " << run + 1 << " and starting from generation " << (generation + 1) << std::endl;
+		for (size_t log_counter = cgp_model->periodic_log_frequency(); generation < cgp_model->generation_count(); generation++)
+		{
+			auto now = omp_get_wtime();
+			int continue_evolution = perform_evolution(start_time, now, cgp_model, dataset, logger, run, generation, stats_out, log_counter, patience);
+
+			if (continue_evolution == 0)
+			{
+				event_logger << "early stopping because target fitness values were satisfied" << std::endl;
+				logger.log_human(run, generation);
+				stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
+				break;
+			}
+
+#ifdef _MEASURE_LEARNING_RATE
+			const CGP::solution_t best_solution = cgp_model->get_best_solution();
+			if (lr.tick(best_solution))
+			{
+				const LearningRates lr_rates = lr.get_average_learning_rates();
+				lr_stream << lr_rates.error << "," << lr_rates.energy << "," << lr_rates.delay << "," << lr_rates.gate_count << std::endl;
+				logger << "[GLOBAL] LR: " << LR << ", LR Error: " << lr_rates.error << ", LR Energy: " << lr_rates.energy << ", LR Delay: " << lr_rates.delay << ", LR Count: " << lr_rates.gate_count << std::endl;
+			}
+
+			if (lr.finished_period())
+			{
+				const LearningRates lr_rates = lr.get_average_period_learning_rates();
+				lr_period_stream << lr_rates.error << "," << lr_rates.energy << "," << lr_rates.delay << "," << lr_rates.gate_count << std::endl;
+				logger << "[AVERAGE PERIOD] LR: " << LR << ", LR Error: " << lr_rates.error << ", LR Energy: " << lr_rates.energy << ", LR Delay: " << lr_rates.delay << ", LR Count: " << lr_rates.gate_count << std::endl;
+
+				if (lr.is_stagnated() && lr.is_periodicaly_stagnated(LR_PERIOD))
+				{
+					event_logger << "no significant change made ... early stopping" << std::endl;
+					logger.log_human(run, generation);
+					stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
+					break;
+				}
+			}
+#else
+			if (cgp_model->get_generations_without_change() > patience)
+			{
+				event_logger << "early stopping because of no change between " << patience << " generations" << std::endl;
+				logger.log_human(run, generation);
+				stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
+				break;
+			}
+#endif
+			cgp_model->mutate();
+		}
+		event_logger << "finished evolution after " << (generation + 1) << " generations" << std::endl;
 		stats_out.close();
 
-		CGPOutputStream out(cgp_model, cgp_model->output_file(), { {"run", std::to_string(run + 1)} });
+
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), template_args);
 		out.dump_all();
 		out.close();
 
-		CGPOutputStream weights_out(cgp_model, cgp_model->train_weights_file(), { {"run", std::to_string(run + 1)} });
+		CGPOutputStream weights_out(cgp_model, cgp_model->train_weights_file(), template_args);
 		weights_out.log_weights(get_dataset_input(dataset));
 		weights_out.close();
-		
+
 		cgp_model->reset();
 		cgp_model->generate_population();
-		i = 0;
+		generation = 0;
+		mode = std::ios::out | std::ios::app;
 	}
 
-	std::cerr << std::endl << "exitting program" << std::endl;
+	event_logger << std::endl << "exitting program with code 0" << std::endl;
 	return 0;
 }
 
@@ -159,6 +308,10 @@ int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
+#if defined __DATE__ && defined __TIME__
+	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;
+#endif // _COMPILE_TIME
+
 
 	if (arguments.size() == 0)
 	{
@@ -176,29 +329,48 @@ int main(int argc, const char** args) {
 	int code = 0;
 	try
 	{
+		int consumed_arguments = 2;
 		std::string command = arguments[0];
 		std::string cgp_file = arguments[1];
-		arguments.erase(arguments.begin(), arguments.begin() + 2);
-		auto cgp_model_pointer = init_cgp(cgp_file, arguments);
+		std::string chromosome;
+
+		if (command == "evaluate:chromosome")
+		{
+			if (arguments.size() < 3)
+			{
+				std::cerr << "missing chromosome" << std::endl;
+				return 14;
+			}
+			chromosome = arguments[2];
+			consumed_arguments++;
+		}
+
+		arguments.erase(arguments.begin(), arguments.begin() + consumed_arguments);
+		auto train_dataset = init_dataset(cgp_file, arguments);
+		auto cgp_model = init_cgp(cgp_file, arguments, train_dataset);
 
 		// Read two values from the standard input
-		if (cgp_model_pointer->input_count() == 0 || cgp_model_pointer->output_count() == 0)
+		if (cgp_model->input_count() == 0 || cgp_model->output_count() == 0)
 		{
 			std::cerr << "invalid input size and output size" << std::endl;
 			return 2;
 		}
 
-		CGPInputStream in(cgp_model_pointer, cgp_model_pointer->input_file());
-		train_dataset = in.load_train_data();
-		in.close();
-
-		if (command == "evaluate")
+		if (command == "evaluate:chromosome")
 		{
-			code = evaluate(cgp_model_pointer, train_dataset);
+			code = evaluate_chromosome(cgp_model, train_dataset, chromosome);
+		}
+		else if (command == "evaluate:all")
+		{
+			code = evaluate(cgp_model, train_dataset);
+		}
+		else if (command == "evaluate:chrmosomes")
+		{
+			code = evaluate_chromosomes(cgp_model, train_dataset);
 		}
 		else if (command == "train")
 		{
-			code = train(cgp_model_pointer, train_dataset);
+			code = train(cgp_model, train_dataset);
 		}
 		else
 		{

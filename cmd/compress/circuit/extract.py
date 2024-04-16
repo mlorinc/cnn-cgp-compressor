@@ -4,7 +4,9 @@ import pandas as pd
 import csv
 import numpy as np
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple, Union
+from decimal import *
+import math
 
 key_order = {
     "noop": 0,
@@ -61,19 +63,19 @@ class DataExtractor(object):
     def _get_timing_files(self):
         return glob.glob(str(self.input_dir / "*_timing.txt"))
 
-    def save(self, df: pd.DataFrame):
-        df.to_csv(self.output_file, header=True, index=True)
+    def save(self, df: pd.DataFrame, output_csv: Union[str], output_txt: Union[str]):
+        df.to_csv(output_csv or self.output_file, header=True, index=True)
 
-        df = df[df.index.isin(key_order.keys())]
+        df = df.loc[df.index.isin(key_order.keys()), :].copy()
         df["order"] = df.index.map(key_order)
         df.sort_values("order", inplace=True)
         df.drop("order", axis=1, inplace=True)
-        print(df)
-        template = "{energy} {area} {delay}"
+        template = "{quantized_energy} {energy} {area} {quantized_delay} {delay}"
 
         df_string: pd.Series = df.apply(lambda x: template.format(**x), 1)
-        with open(self.output_file_text, "w", newline="\n") as f:
+        with open(output_txt or self.output_file_text, "w", newline="\n") as f:
             f.writelines(line + "\n" for line in df_string)
+        
 
     def _extract_powers(self) -> pd.DataFrame:
         power_values = []
@@ -94,12 +96,11 @@ class DataExtractor(object):
 
                 file_name = Path(file).name
                 name_stop = file_name.rfind("_")
-                power_values.append(segments[-2])
+                power_values.append(Decimal(segments[-2]))
                 power_units.append(segments[-1])
                 index.append(file_name[:name_stop])
 
         df = pd.DataFrame({"power": power_values, "power_unit": power_units}, index=index)
-        df["power"] = df["power"].astype("float")
         return df
 
     def _extract_delays(self) -> pd.DataFrame:
@@ -124,10 +125,10 @@ class DataExtractor(object):
                 if len(segments) != 4:
                     raise ValueError(f"[{file_name}] expected 4 segments; got: {len(segments)}")
 
-                values.append(segments[-1])
+                values.append(Decimal(segments[-1]))
                 index.append(file_name[:name_stop])
 
-        return pd.DataFrame(values, index=index, columns=["delay"], dtype="float")
+        return pd.DataFrame(values, index=index, columns=["delay"])
     
     def _extract_areas(self) -> pd.DataFrame:
         values = []
@@ -150,6 +151,7 @@ class DataExtractor(object):
         return pd.DataFrame(values, index=index, columns=["area"], dtype="float")
 
     def extract(self):
+        getcontext().prec = 32
         powers = self._extract_powers()
         delays = self._extract_delays()
         areas = self._extract_areas()
@@ -160,5 +162,58 @@ class DataExtractor(object):
 
         df["energy"] = df["power"] * df["delay"]
         df["energy_unit"] = "uJ"
-        return df
         
+        return df
+
+def default_value_estimator(grid: Tuple[int, int]) -> Decimal:
+    return Decimal(grid[0] * grid[1])
+
+def delay_value_estimator(grid: Tuple[int, int]) -> Decimal:
+    return Decimal(grid[1])
+
+def quantize_series(data: pd.Series, grid_size: Tuple[int, int], quant_bits: int=8, error_max: float = 1e-6, inclue_metrics: bool = False, largest_value_estimator = default_value_estimator):
+        getcontext().prec = 32
+        error_max = Decimal(error_max)
+        assert isinstance(data.iloc[0], Decimal)
+        e_min, e_max = Decimal(0) * largest_value_estimator(grid_size), Decimal(math.ceil(data.max() * largest_value_estimator(grid_size)))
+        # First -1 because of the zero and the second one to reserve space for nan value in the CGP
+        quant_max = int(Decimal(2**(quant_bits) - 1 - 1))
+        # print(e_min, e_max, quant_max, quant(e_max, e_min, e_max, quant_max))
+        quantized_series = data.apply(lambda x: quant(x, e_min, e_max, quant_max))
+        dequantized_series = quantized_series.apply(lambda x: dequant(x, e_min, e_max, quant_max))
+        errors = data - dequantized_series
+        # print(quantized_series)
+        if inclue_metrics:
+            # max_error = 0
+            # for num in drange(e_min, e_max, data.max()):
+            #     x = quant(num, e_min, e_max, quant_max)
+            #     dx = dequant(x, e_min, e_max, quant_max)
+            #     error = abs(num - dx)
+            #     max_error = error
+            #     if error > error_max:
+            #         print(num, error)
+            #         raise ValueError("no solution found")    
+            print("quant_bits:", quant_bits, "quant_error:", errors.max(), "max_error:", (e_max - e_min) / quant_max, "actual_max_error:", None)
+            return quantized_series, e_min, e_max, quant_max
+        else:
+            return quantized_series, e_min, e_max, quant_max
+
+def dequantize_series(data: pd.Series, grid_size: Tuple[int, int], quant_bits: int=8):
+        getcontext().prec = 32
+        grid_size = grid_size[0] * grid_size[1]
+        assert isinstance(data.iloc[0], Decimal)
+        e_min, e_max = data.min() * grid_size, data.max() * grid_size
+        quant_max = Decimal(2**(quant_bits) - 1)
+        return data.apply(lambda x: dequant(x, e_min, e_max, quant_max))
+
+def drange(x, y, jump):
+  while x < y:
+    yield Decimal(x)
+    x += Decimal(jump)    
+        
+def quant(x: Decimal, e_min: Decimal, e_max: Decimal, quant_max: Decimal) -> int:
+    result = int((Decimal(x) - e_min) / (e_max - e_min) * Decimal(quant_max))
+    return result
+
+def dequant(x: int, e_min: Decimal, e_max: Decimal, quant_max: Decimal) -> Decimal:
+    return (Decimal(x) / Decimal(quant_max)) * (e_max - e_min) + e_min

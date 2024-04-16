@@ -7,8 +7,6 @@
 
 using namespace cgp;
 
-const std::string CGP::default_solution_format = "error energy area delay depth gate_count chromosome";
-
 CGP::CGP(int population) :
 	best_solution(CGP::get_default_solution()),
 	generations_without_change(0),
@@ -24,9 +22,18 @@ CGP::CGP(std::istream& in, int population, const std::vector<std::string>& argum
 	load(in, arguments);
 }
 
-CGP::CGP(std::istream& in, const std::vector<std::string>& arguments) : CGP()
+CGP::CGP(std::istream& in, const std::vector<std::string>& arguments) : CGP(in, arguments, {})
 {
 	load(in, arguments);
+	prepare_population_structures(population_max());
+}
+
+CGP::CGP(std::istream& in, const std::vector<std::string>& arguments, const dataset_t& dataset) :
+	best_solution(CGP::get_default_solution()),
+	generations_without_change(0),
+	evolution_steps_made(0)
+{
+	load(in, arguments, dataset);
 	prepare_population_structures(population_max());
 }
 
@@ -42,7 +49,7 @@ void CGP::prepare_population_structures(int population)
 	{
 		population_max(std::min(population, omp_get_max_threads()));
 	}
-	chromosomes = std::vector<std::shared_ptr<Chromosome>>(population_max(), nullptr);;
+	chromosomes = std::vector<std::shared_ptr<Chromosome>>(population_max(), nullptr);
 	best_solutions = std::make_unique<solution_t[]>(population_max());
 }
 
@@ -58,17 +65,18 @@ void CGP::dump(std::ostream& out) const
 {
 	CGPConfiguration::dump(out);
 	const auto& chrom = CGP::get_chromosome(best_solution);
-	std::string chromosome = (chrom) ? (chrom->to_string()) : ("non-existent");
+	std::string chromosome = (chrom) ? (chrom->to_string()) : (Chromosome::nan_chromosome_string);
 
-	out << "best_solution_format: error energy area delay depth gate_count chromosome" << std::endl;
-	out << "best_solution: "
-		<< error_to_string(get_error(best_solution)) << " "
-		<< energy_to_string(get_energy(best_solution)) << " "
-		<< area_to_string(get_area(best_solution)) << " "
-		<< delay_to_string(get_delay(best_solution)) << " "
-		<< depth_to_string(get_depth(best_solution)) << " "
-		<< gate_count_to_string(get_gate_count(best_solution)) << " "
-		<< chromosome << std::endl;
+	out << "best_solution: error:"
+		<< error_to_string(get_error(best_solution))
+		<< " quantized_energy:" << quantized_energy_to_string(get_quantized_energy(best_solution))
+		<< " energy:" << energy_to_string(get_energy(best_solution))
+		<< " area:" << area_to_string(get_area(best_solution))
+		<< " quantized_delay:" << quantized_delay_to_string(get_quantized_delay(best_solution))
+		<< " delay:" << delay_to_string(get_delay(best_solution))
+		<< " depth:" << depth_to_string(get_depth(best_solution))
+		<< " gate_count:" << gate_count_to_string(get_gate_count(best_solution))
+		<< " chromosome:" << chromosome << std::endl;
 	out << "evolution_steps_made: " << evolution_steps_made << std::endl;
 	for (auto it = other_config_attribitues.cbegin(), end = other_config_attribitues.cend(); it != end; it++)
 	{
@@ -88,41 +96,40 @@ void CGP::dump_all(std::ostream& out)
 
 std::map<std::string, std::string> CGP::load(std::istream& in, const std::vector<std::string>& arguments)
 {
+	return load(in, arguments, {});
+}
+
+std::map<std::string, std::string> CGP::load(std::istream& in, const std::vector<std::string>& arguments, const dataset_t& dataset)
+{
 	auto remaining_data = CGPConfiguration::load(in);
-	std::string best_solution_string;
-	std::string best_solution_format = default_solution_format;
 
 	other_config_attribitues.clear();
 	for (auto it = remaining_data.cbegin(), end = remaining_data.cend(); it != end;) {
 		const std::string& key = it->first;
 		const std::string& value = it->second;
 
-		if (key == "best_solution") {
-			best_solution_string = value;
-			remaining_data.erase(it++);
-		}
-		else if (key == "evolution_steps_made") {
+		if (key == "evolution_steps_made") {
 			evolution_steps_made = std::stoull(value);
 			remaining_data.erase(it++);
 		}
-		else if (key == "best_solution_format") {
-			best_solution_format = value;
+		else if (key == "")
+		{
+
 		}
 		else {
 			++it;
 		}
 	}
+
 	set_from_arguments(arguments);
 	build_indices();
-	if (!starting_solution().empty())
+	std::string chrom = starting_solution();
+	
+	if (!chrom.empty())
 	{
-		set_best_solution(starting_solution(), best_solution_format);
+		set_best_chromosome(chrom, dataset);
 	}
-	else if (!best_solution_string.empty())
-	{
-		set_best_solution(best_solution_string, best_solution_format);
-	}
-	other_config_attribitues = remaining_data;
+
 	return remaining_data;
 }
 
@@ -137,7 +144,7 @@ void CGP::build_indices()
 
 	// Calculate pin available according to defined L parameter.
 	// Skip input pins (+1) and include output pins (+1)
-	for (int col = 1; col < col_count + 2; col++) {
+	for (auto col = 1; col < col_count + 2; col++) {
 		int first_col = std::max(0, col - l_back);
 		decltype(this->row_count()) min_pin, max_pin;
 
@@ -197,9 +204,15 @@ CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const 
 	return sum;
 }
 
-void CGP::set_best_solution(const std::string& solution, std::string format_string)
+void CGP::set_best_chromosome(const std::string& solution, const dataset_t& dataset)
 {
-	best_solution = create_solution(solution, format_string);
+	if (minimum_output_indicies == nullptr)
+	{
+		build_indices();
+	}
+
+	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, solution);
+	best_solution = evaluate(dataset, chromosome);
 }
 
 // MSE loss function implementation;
@@ -258,9 +271,9 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output));
 }
 
-CGP::energy_t CGP::get_energy_fitness(Chromosome& chrom)
+CGP::quantized_energy_t CGP::get_energy_fitness(Chromosome& chrom)
 {
-	return chrom.get_estimated_energy_usage();
+	return chrom.get_estimated_quantized_energy_usage();
 }
 
 CGP::area_t CGP::get_area_fitness(Chromosome& chrom)
@@ -268,14 +281,14 @@ CGP::area_t CGP::get_area_fitness(Chromosome& chrom)
 	return chrom.get_estimated_area_usage();
 }
 
-CGP::delay_t CGP::get_delay_fitness(Chromosome& chrom)
+CGP::quantized_delay_t CGP::get_delay_fitness(Chromosome& chrom)
 {
-	return chrom.get_estimated_largest_delay();
+	return chrom.get_estimated_quantized_delay();
 }
 
 CGP::depth_t CGP::get_depth_fitness(Chromosome& chrom)
 {
-	return chrom.get_estimated_largest_depth();
+	return chrom.get_estimated_depth();
 }
 
 CGP::gate_count_t CGP::get_gate_count(Chromosome& chrom)
@@ -295,8 +308,10 @@ CGP::solution_t CGP::get_default_solution()
 {
 	return std::make_tuple(
 		error_nan,
+		quantized_energy_nan,
 		energy_nan,
 		area_nan,
+		quantized_delay_nan,
 		delay_nan,
 		depth_nan,
 		gate_count_nan,
@@ -307,92 +322,24 @@ CGP::solution_t CGP::get_default_solution()
 CGP::solution_t CGP::create_solution(
 	std::shared_ptr<Chromosome> chromosome,
 	error_t error,
+	quantized_energy_t quantized_energy,
 	energy_t energy,
 	area_t area,
+	quantized_delay_t quantized_delay,
 	delay_t delay,
 	depth_t depth,
 	gate_count_t gate_count)
 {
 	return std::make_tuple(
 		error,
+		quantized_energy,
 		energy,
 		area,
+		quantized_delay,
 		delay,
 		depth,
 		gate_count,
 		chromosome
-	);
-}
-
-CGP::solution_t CGP::create_solution(std::string solution, std::string format)
-{
-	std::istringstream iss(solution), format_stream(format);
-	std::string attribute_name, attribute_value;
-
-	std::string chrom;
-	error_t error = error_nan;
-	area_t area = area_nan;
-	energy_t energy = energy_nan;
-	delay_t delay = delay_nan;
-	depth_t depth = depth_nan;
-	gate_count_t gate_count = gate_count_nan;
-
-	while (format_stream >> attribute_name)
-	{
-		if (iss >> attribute_value)
-		{
-			if (attribute_name == "error") {
-				error = string_to_error(attribute_value);
-			}
-			else if (attribute_name == "energy") {
-				energy = string_to_energy(attribute_value);
-			}
-			else if (attribute_name == "area") {
-				area = string_to_area(attribute_value);
-			}
-			else if (attribute_name == "delay") {
-				delay = string_to_delay(attribute_value);
-			}
-			else if (attribute_name == "depth") {
-				depth = string_to_depth(attribute_value);
-			}
-			else if (attribute_name == "gate_count") {
-				gate_count = string_to_gate_count(attribute_value);
-			}
-			else if (attribute_name == "chromosome")
-			{
-				chrom = attribute_value;
-			}
-			else
-			{
-				throw std::invalid_argument("unknown fitness parameter " + attribute_name);
-			}
-		}
-		else
-		{
-			throw std::invalid_argument("missing value for " + attribute_name);
-		}
-	}
-
-	if (!format_stream.eof())
-	{
-		throw std::invalid_argument("all attributes were not consumed: " + format_stream.str());
-	}
-
-	if ((iss >> attribute_value) || !iss.eof())
-	{
-		throw std::invalid_argument("all attribute values were not consumed: " + attribute_value);
-	}
-
-	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, chrom);
-	return CGP::create_solution(
-		chromosome,
-		error,
-		energy,
-		area,
-		delay,
-		depth,
-		gate_count
 	);
 }
 
@@ -401,34 +348,48 @@ CGP::error_t CGP::get_error(const solution_t solution)
 	return std::get<0>(solution);
 }
 
-CGP::energy_t CGP::get_energy(const solution_t solution)
+CGP::quantized_energy_t CGP::get_quantized_energy(const solution_t solution)
 {
 	return std::get<1>(solution);
 }
 
-CGP::area_t CGP::get_area(const solution_t solution)
+CGP::energy_t CGP::get_energy(const solution_t solution)
 {
 	return std::get<2>(solution);
 }
 
-CGP::delay_t CGP::get_delay(const solution_t solution)
+CGP::area_t CGP::get_area(const solution_t solution)
 {
 	return std::get<3>(solution);
 }
 
-CGP::depth_t CGP::get_depth(const solution_t solution)
+CGP::quantized_delay_t CGP::get_quantized_delay(const solution_t solution)
 {
 	return std::get<4>(solution);
 }
 
-CGP::gate_count_t CGP::get_gate_count(const solution_t solution)
+CGP::delay_t CGP::get_delay(const solution_t solution)
 {
 	return std::get<5>(solution);
 }
 
-std::shared_ptr<Chromosome> CGP::get_chromosome(const solution_t solution)
+CGP::depth_t CGP::get_depth(const solution_t solution)
 {
 	return std::get<6>(solution);
+}
+
+CGP::gate_count_t CGP::get_gate_count(const solution_t solution)
+{
+	return std::get<7>(solution);
+}
+
+std::shared_ptr<Chromosome> CGP::get_chromosome(const solution_t solution)
+{
+	return std::get<8>(solution);
+}
+
+std::shared_ptr<Chromosome> CGP::get_best_chromosome() const {
+	return std::get<8>(best_solution);
 }
 
 decltype(CGP::get_error(CGP::solution_t())) CGP::set_error(solution_t& solution, decltype(CGP::get_error(solution_t())) value)
@@ -437,34 +398,56 @@ decltype(CGP::get_error(CGP::solution_t())) CGP::set_error(solution_t& solution,
 	return value;
 }
 
-decltype(CGP::get_energy(CGP::solution_t())) CGP::set_energy(solution_t& solution, decltype(CGP::get_energy(solution_t())) value)
+decltype(CGP::get_quantized_energy(CGP::solution_t())) CGP::set_quantized_energy(solution_t& solution, decltype(CGP::get_quantized_energy(solution_t())) value)
 {
 	std::get<1>(solution) = value;
 	return value;
 }
 
-decltype(CGP::get_area(CGP::solution_t())) CGP::set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value)
+decltype(CGP::get_energy(CGP::solution_t())) CGP::set_energy(solution_t& solution, decltype(CGP::get_energy(solution_t())) value)
 {
 	std::get<2>(solution) = value;
 	return value;
 }
 
-decltype(CGP::get_delay(CGP::solution_t())) CGP::set_delay(solution_t& solution, decltype(CGP::get_delay(solution_t())) value)
+decltype(CGP::get_area(CGP::solution_t())) CGP::set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value)
 {
 	std::get<3>(solution) = value;
 	return value;
 }
 
-decltype(CGP::get_depth(CGP::solution_t())) CGP::set_depth(solution_t& solution, decltype(CGP::get_depth(solution_t())) value)
+decltype(CGP::get_quantized_delay(CGP::solution_t())) CGP::set_quantized_delay(solution_t& solution, decltype(CGP::get_quantized_delay(solution_t())) value)
 {
 	std::get<4>(solution) = value;
 	return value;
 }
 
-decltype(CGP::get_gate_count(CGP::solution_t())) CGP::set_gate_count(solution_t& solution, decltype(CGP::get_gate_count(solution_t())) value)
+decltype(CGP::get_delay(CGP::solution_t())) CGP::set_delay(solution_t& solution, decltype(CGP::get_delay(solution_t())) value)
 {
 	std::get<5>(solution) = value;
 	return value;
+}
+
+decltype(CGP::get_depth(CGP::solution_t())) CGP::set_depth(solution_t& solution, decltype(CGP::get_depth(solution_t())) value)
+{
+	std::get<6>(solution) = value;
+	return value;
+}
+
+decltype(CGP::get_gate_count(CGP::solution_t())) CGP::set_gate_count(solution_t& solution, decltype(CGP::get_gate_count(solution_t())) value)
+{
+	std::get<7>(solution) = value;
+	return value;
+}
+
+decltype(CGP::get_quantized_energy(CGP::solution_t())) CGP::ensure_quantized_energy(solution_t& solution)
+{
+	if (CGP::get_quantized_energy(solution) == quantized_energy_nan)
+	{
+		CGP::set_quantized_energy(solution, CGP::get_chromosome(solution)->get_estimated_quantized_energy_usage());
+	}
+
+	return CGP::get_quantized_energy(solution);
 }
 
 decltype(CGP::get_energy(CGP::solution_t())) CGP::ensure_energy(solution_t& solution)
@@ -487,11 +470,21 @@ decltype(CGP::get_area(CGP::solution_t())) CGP::ensure_area(solution_t& solution
 	return CGP::get_area(solution);
 }
 
+decltype(CGP::get_quantized_delay(CGP::solution_t())) CGP::ensure_quantized_delay(solution_t& solution)
+{
+	if (CGP::get_quantized_delay(solution) == quantized_delay_nan)
+	{
+		CGP::set_quantized_delay(solution, CGP::get_chromosome(solution)->get_estimated_quantized_delay());
+	}
+
+	return CGP::get_quantized_delay(solution);
+}
+
 decltype(CGP::get_delay(CGP::solution_t())) CGP::ensure_delay(solution_t& solution)
 {
 	if (CGP::get_delay(solution) == delay_nan)
 	{
-		CGP::set_delay(solution, CGP::get_chromosome(solution)->get_estimated_largest_delay());
+		CGP::set_delay(solution, CGP::get_chromosome(solution)->get_estimated_delay());
 	}
 
 	return CGP::get_delay(solution);
@@ -501,7 +494,7 @@ decltype(CGP::get_depth(CGP::solution_t())) CGP::ensure_depth(solution_t& soluti
 {
 	if (CGP::get_depth(solution) == depth_nan)
 	{
-		CGP::set_depth(solution, CGP::get_chromosome(solution)->get_estimated_largest_depth());
+		CGP::set_depth(solution, CGP::get_chromosome(solution)->get_estimated_depth());
 	}
 
 	return CGP::get_depth(solution);
@@ -552,11 +545,13 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 	}
 	else
 	{
-		const auto& a_energy_fitness = CGP::ensure_energy(a);
-		const auto& b_energy_fitness = CGP::ensure_energy(b);
+		const auto& a_energy_fitness = CGP::ensure_quantized_energy(a);
+		const auto& b_energy_fitness = CGP::ensure_quantized_energy(b);
 
 		// Area is calculated with energy, so put area into to the solution too
 		ensure_area(a); ensure_area(b);
+		// Real energy detto
+		ensure_energy(a); ensure_energy(b);
 
 		if (a_energy_fitness != b_energy_fitness)
 		{
@@ -568,10 +563,11 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 			return std::make_tuple(a_error_fitness < b_error_fitness, false);
 		}
 
+		const auto& a_delay = CGP::ensure_quantized_delay(a);
+		const auto& b_delay = CGP::ensure_quantized_delay(b);
 
-		const auto& a_delay = CGP::ensure_delay(a);
-		const auto& b_delay = CGP::ensure_delay(b);
-
+		// Load real delays too
+		ensure_delay(a); ensure_delay(b);
 		if (a_delay != b_delay)
 		{
 			return std::make_tuple(a_delay < b_delay, false);
@@ -585,13 +581,14 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 			return std::make_tuple(a_gate_count < b_gate_count, false);
 		}
 
+		#ifdef _DEPTH_ENABLED
 		const auto& a_depth = CGP::ensure_depth(a);
-		const auto& b_deptht = CGP::ensure_depth(b);
-
-		return std::make_tuple(a_depth <= b_deptht, a_depth == b_deptht);
+		const auto& b_depth = CGP::ensure_depth(b);
+		return std::make_tuple(a_depth <= b_depth, a_depth == b_depth);
+		#else
+		return std::make_tuple(false, true);
+		#endif
 	}
-
-	return std::make_tuple(false, true);
 }
 
 CGP::solution_t CGP::evaluate(const dataset_t &dataset)
@@ -611,7 +608,9 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 		}
 	}
 
+	std::shared_ptr<Chromosome> last_chromosome = CGP::get_chromosome(best_solution);
 	generations_without_change++;
+	best_solution_changed = false;
 	// Find the best chromosome accros threads and save it to the best chromosome variable
 	// including its fitness.
 	for (int i = 0; i < end; i++)
@@ -624,7 +623,19 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 				generations_without_change = 0;
 			}
 			best_solution = std::move(best_solutions[i]);
+			best_solution_changed = true;
 		}
+	}
+
+	if (last_chromosome != CGP::get_chromosome(best_solution))
+	{
+		CGP::ensure_quantized_energy(best_solution);
+		CGP::ensure_energy(best_solution);
+		CGP::ensure_area(best_solution);
+		CGP::ensure_quantized_delay(best_solution);
+		CGP::ensure_delay(best_solution);
+		CGP::ensure_depth(best_solution);
+		CGP::ensure_gate_count(best_solution);
 	}
 
 	return best_solution;
@@ -635,9 +646,12 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset, std::shared_ptr<Chromoso
 	auto solution = analyse_chromosome(chromosome, dataset);
 
 	return CGP::create_solution(
-		CGP::get_chromosome(solution),
+		chromosome,
 		CGP::get_error(solution),
+		CGP::ensure_quantized_energy(solution),
 		CGP::ensure_energy(solution),
+		CGP::ensure_area(solution),
+		CGP::ensure_quantized_delay(solution),
 		CGP::ensure_delay(solution),
 		CGP::ensure_depth(solution),
 		CGP::ensure_gate_count(solution)
@@ -648,17 +662,17 @@ CGP::error_t CGP::get_best_error_fitness() const {
 	return get_error(best_solution);
 }
 
-CGP::energy_t CGP::get_best_energy_fitness() {
-	return ensure_energy(best_solution);
+CGP::quantized_energy_t CGP::get_best_energy_fitness() {
+	return ensure_quantized_energy(best_solution);
 }
 
 CGP::area_t CGP::get_best_area_fitness() {
 	return ensure_area(best_solution);
 }
 
-CGP::delay_t CGP::get_best_delay_fitness()
+CGP::quantized_delay_t CGP::get_best_delay_fitness()
 {
-	return ensure_delay(best_solution);
+	return ensure_quantized_delay(best_solution);
 }
 
 decltype(CGP::evolution_steps_made) cgp::CGP::get_evolution_steps_made() const
@@ -676,41 +690,34 @@ CGP::gate_count_t CGP::get_best_gate_count()
 	return ensure_gate_count(best_solution);
 }
 
-std::shared_ptr<Chromosome> CGP::get_best_chromosome() const {
-	return std::get<6>(best_solution);
+CGP::solution_t cgp::CGP::get_best_solution() const
+{
+	return CGP::create_solution(
+		std::make_shared<Chromosome>(*CGP::get_chromosome(best_solution)),
+		CGP::get_error(best_solution),
+		CGP::get_quantized_energy(best_solution),
+		CGP::get_energy(best_solution),
+		CGP::get_area(best_solution),
+		CGP::get_quantized_delay(best_solution),
+		CGP::get_delay(best_solution),
+		CGP::get_depth(best_solution),
+		CGP::get_gate_count(best_solution)
+	);
 }
 
 decltype(CGP::generations_without_change) CGP::get_generations_without_change() const {
 	return generations_without_change;
 }
 
+decltype(CGP::best_solution_changed) CGP::has_best_solution_changed() const
+{
+	return best_solution_changed;
+}
+
 size_t CGP::get_serialized_chromosome_size() const
 {
 	// chromosome size + input information + output information
 	return chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);
-}
-
-void CGP::restore(
-	const std::string& solution,
-	const std::string& solution_format,
-	const size_t mutations_made
-)
-{
-	generations_without_change = 0;
-	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
-	set_best_solution(solution, solution_format);
-}
-
-void CGP::restore(
-	std::shared_ptr<Chromosome> chromosome,
-	const weight_input_t& input,
-	const weight_output_t& expected_output,
-	const size_t mutations_made
-)
-{
-	generations_without_change = 0;
-	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
-	best_solution = analyse_chromosome(chromosome, input, expected_output);
 }
 
 void CGP::restore(std::shared_ptr<Chromosome> chromosome,
@@ -720,5 +727,5 @@ void CGP::restore(std::shared_ptr<Chromosome> chromosome,
 {
 	generations_without_change = 0;
 	evolution_steps_made = (mutations_made != std::numeric_limits<size_t>::max()) ? (mutations_made) : (evolution_steps_made);
-	best_solution = analyse_chromosome(chromosome, dataset);
+	best_solution = evaluate(dataset, chromosome);
 }

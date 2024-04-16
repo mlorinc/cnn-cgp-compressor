@@ -5,6 +5,10 @@
 
 #include <iostream>
 #include <chrono>
-#include "Stream.h"
+#include <functional>
+#include <unordered_map>
+#include "StringTemplate.h"
+#include "CGPStream.h"
 #include "Cgp.h"
+#include "Learning.h"
 

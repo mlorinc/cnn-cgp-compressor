@@ -10,11 +10,16 @@
 /backups
 /experiment_results
 /single_channel_mega
+/zero_outter
 /cmd/compress/data
 /cmd/compress/trained_models
 /cmd/compress/experiment_results
+/data_store
+/local_experiments
+/experiment-pbs
+/mse_test
 
-/cmd/gate_info/data
+/cmd/compress/circuit/data
 
 # User-specific files
 *.rsuser

@@ -8,17 +8,14 @@ add_executable (CGP
     "Cgp.cpp" "Cgp.h"
     "Chromosome.cpp" "Chromosome.h"
     "Configuration.cpp" "Configuration.h"
+    "CGPStream.h" "CGPStream.cpp"
     "Stream.cpp" "Stream.h"
-    "StringTemplate.h" "StringTemplate.cpp" "Dataset.h" "Dataset.cpp")
+    "StringTemplate.h" "StringTemplate.cpp" "Dataset.h" "Dataset.cpp" "Learning.h" "Learning.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CGP PROPERTY CXX_STANDARD 20)
 endif()
 
-# find_package(Torch REQUIRED)
-# find_package(gRPC CONFIG REQUIRED)
-# find_package(Protobuf REQUIRED)
-# find_package(gRPC CONFIG REQUIRED)
 find_package(OpenMP REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-target_link_libraries(CGP OpenMP::OpenMP_CXX) # gRPC::grpc++
+target_link_libraries(CGP OpenMP::OpenMP_CXX)

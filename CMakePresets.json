@@ -54,7 +54,8 @@
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CGP_DEBUG": true  
       }
     },
     {
@@ -62,7 +63,8 @@
       "displayName": "x64 Release",
       "inherits": "x64-debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "CGP_DEBUG": false
       }
     },
     {
@@ -74,7 +76,8 @@
         "strategy": "external"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CGP_DEBUG": true
       }
     },
     {
@@ -82,7 +85,8 @@
       "displayName": "x86 Release",
       "inherits": "x86-debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "CGP_DEBUG": false
       }
     }
   ]

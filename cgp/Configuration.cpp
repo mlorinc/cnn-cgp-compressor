@@ -7,7 +7,9 @@
 namespace cgp {
 
 	const std::string CGPConfiguration::error_nan_string = "inf";
+	const std::string CGPConfiguration::quantized_energy_nan_string = "inf";
 	const std::string CGPConfiguration::energy_nan_string = "inf";
+	const std::string CGPConfiguration::quantized_delay_nan_string = "inf";
 	const std::string CGPConfiguration::delay_nan_string = "inf";
 	const std::string CGPConfiguration::depth_nan_string = "nan";
 	const std::string CGPConfiguration::gate_count_nan_string = "nan";
@@ -91,6 +93,9 @@ namespace cgp {
 
 	const std::string CGPConfiguration::MSE_CHROMOSOME_LOGGING_THRESHOLD_LONG = "--mse-chromosome-logging-threshold";
 
+	const std::string CGPConfiguration::LEARNING_RATE_FILE_LONG = "--learning-rate-file";
+
+	const std::string CGPConfiguration::LEARNING_RATE_LONG = "--learning-rate";
 
 	long long parse_integer_argument(const std::string& arg) {
 		try {
@@ -125,9 +130,19 @@ namespace cgp {
 		return (value != CGPConfiguration::error_nan) ? (std::to_string(value)) : (CGPConfiguration::error_nan_string);
 	}
 
+	std::string quantized_energy_to_string(CGPConfiguration::quantized_energy_t value)
+	{
+		return (value != CGPConfiguration::quantized_energy_nan) ? (std::to_string(value)) : (CGPConfiguration::quantized_energy_nan_string);
+	}
+
 	std::string energy_to_string(CGPConfiguration::energy_t value)
 	{
 		return (value != CGPConfiguration::energy_nan) ? (std::to_string(value)) : (CGPConfiguration::energy_nan_string);
+	}
+
+	std::string quantized_delay_to_string(CGPConfiguration::quantized_delay_t value)
+	{
+		return (value != CGPConfiguration::quantized_delay_nan) ? (std::to_string(value)) : (CGPConfiguration::quantized_delay_nan_string);
 	}
 
 	std::string delay_to_string(CGPConfiguration::delay_t value)
@@ -159,6 +174,10 @@ namespace cgp {
 		return (value == CGPConfiguration::error_nan_string) ? CGPConfiguration::error_nan : std::stoull(value);
 	}
 
+	CGPConfiguration::quantized_energy_t string_to_quantized_energy(const std::string& value) {
+		return (value == CGPConfiguration::quantized_energy_nan_string) ? CGPConfiguration::quantized_energy_nan : std::stoull(value);
+	}
+
 	CGPConfiguration::energy_t string_to_energy(const std::string& value) {
 		return (value == CGPConfiguration::energy_nan_string) ? CGPConfiguration::energy_nan : std::stold(value);
 	}
@@ -167,12 +186,16 @@ namespace cgp {
 		return (value == CGPConfiguration::area_nan_string) ? CGPConfiguration::area_nan : std::stold(value);
 	}
 
+	CGPConfiguration::quantized_delay_t string_to_quantized_delay(const std::string& value) {
+		return (value == CGPConfiguration::quantized_delay_nan_string) ? CGPConfiguration::quantized_delay_nan : std::stoull(value);
+	}
+
 	CGPConfiguration::delay_t string_to_delay(const std::string& value) {
 		return (value == CGPConfiguration::delay_nan_string) ? CGPConfiguration::delay_nan : std::stold(value);
 	}
 
 	CGPConfiguration::depth_t string_to_depth(const std::string& value) {
-		return (value == CGPConfiguration::depth_nan_string) ? CGPConfiguration::depth_nan : std::stoull(value);
+		return (value == CGPConfiguration::depth_nan_string) ? CGPConfiguration::depth_nan : std::stoul(value);
 	}
 
 	CGPConfiguration::gate_count_t string_to_gate_count(const std::string& value) {
@@ -181,42 +204,72 @@ namespace cgp {
 
 	CGPConfiguration::gate_parameters_t CGPConfiguration::get_default_gate_parameters()
 	{
-		return std::make_tuple(std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity());
+		return std::make_tuple(quantized_energy_nan, energy_nan, area_nan, quantized_delay_nan, delay_nan);
 	}
 
-	CGPConfiguration::energy_t CGPConfiguration::get_energy_parameter(const gate_parameters_t& params)
+	CGPConfiguration::quantized_energy_t CGPConfiguration::get_quantized_energy_parameter(const gate_parameters_t& params)
 	{
 		return std::get<0>(params);
 	}
 
-	CGPConfiguration::delay_t CGPConfiguration::get_delay_parameter(const gate_parameters_t& params)
-	{
-		return std::get<2>(params);
-	}
-
-	CGPConfiguration::area_t CGPConfiguration::get_area_parameter(const gate_parameters_t& params)
+	CGPConfiguration::energy_t CGPConfiguration::get_energy_parameter(const gate_parameters_t& params)
 	{
 		return std::get<1>(params);
 	}
 
-	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, energy_t energy)
+	CGPConfiguration::area_t CGPConfiguration::get_area_parameter(const gate_parameters_t& params)
+	{
+		return std::get<2>(params);
+	}
+
+	CGPConfiguration::quantized_delay_t CGPConfiguration::get_quantized_delay_parameter(const gate_parameters_t& params)
+	{
+		return std::get<3>(params);
+	}
+
+	CGPConfiguration::delay_t CGPConfiguration::get_delay_parameter(const gate_parameters_t& params)
+	{
+		return std::get<4>(params);
+	}
+
+	void CGPConfiguration::set_quantized_energy_parameter(gate_parameters_t& params, quantized_energy_t energy)
 	{
 		std::get<0>(params) = energy;
 	}
 
-	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, delay_t delay)
+	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, energy_t energy)
 	{
-		std::get<2>(params) = delay;
+		std::get<1>(params) = energy;
 	}
 
 	void CGPConfiguration::set_area_parameter(gate_parameters_t& params, area_t area)
 	{
-		std::get<1>(params) = area;
+		std::get<2>(params) = area;
+	}
+
+	void CGPConfiguration::set_quantized_delay_parameter(gate_parameters_t& params, quantized_delay_t delay)
+	{
+		std::get<3>(params) = delay;
+	}
+
+	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, delay_t delay)
+	{
+		std::get<4>(params) = delay;
+	}
+
+	void CGPConfiguration::set_quantized_energy_parameter(gate_parameters_t& params, const std::string& energy)
+	{
+		set_quantized_energy_parameter(params, (energy == quantized_energy_nan_string) ? (quantized_energy_nan) : (std::stoull(energy)));
 	}
 
 	void CGPConfiguration::set_energy_parameter(gate_parameters_t& params, const std::string& energy)
 	{
 		set_energy_parameter(params, (energy == energy_nan_string) ? (energy_nan) : (std::stold(energy)));
+	}
+
+	void CGPConfiguration::set_quantized_delay_parameter(gate_parameters_t& params, const std::string& delay)
+	{
+		set_quantized_delay_parameter(params, (delay == quantized_delay_nan_string) ? (quantized_delay_nan) : (std::stoull(delay)));
 	}
 
 	void CGPConfiguration::set_delay_parameter(gate_parameters_t& params, const std::string& delay)
@@ -280,6 +333,10 @@ namespace cgp {
 					mutation_max(parse_decimal_argument(arguments.at(i + 1)));
 					i += 1;
 				}
+				else if (arguments[i] == LEARNING_RATE_LONG) {
+					learning_rate(parse_decimal_argument(arguments.at(i + 1)));
+					i += 1;
+				}
 				else if (arguments[i] == ROW_COUNT_LONG || arguments[i] == ROW_COUNT_SHORT) {
 					row_count(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
@@ -316,6 +373,10 @@ namespace cgp {
 					cgp_statistics_file(arguments.at(i + 1));
 					i += 1;
 				}
+				else if (arguments[i] == LEARNING_RATE_FILE_LONG) {
+					learning_rate_file(arguments.at(i + 1));
+					i += 1;
+				}
 				else if (arguments[i] == GATE_PARAMETERS_FILE_LONG || arguments[i] == GATE_PARAMETERS_FILE_SHORT) {
 					gate_parameters_input_file(arguments.at(i + 1));
 					i += 1;
@@ -325,7 +386,7 @@ namespace cgp {
 					i += 1;
 				}
 				else if (arguments[i] == MSE_THRESHOLD_LONG || arguments[i] == MSE_THRESHOLD_SHORT) {
-					mse_threshold(parse_decimal_argument(arguments.at(i + 1)));
+					mse_threshold(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
 				}
 				else if (arguments[i] == DATASET_SIZE_LONG || arguments[i] == DATASET_SIZE_SHORT) {
@@ -349,7 +410,7 @@ namespace cgp {
 					i += 1;
 				}
 				else if (arguments[i] == MSE_EARLY_STOP_LONG) {
-					mse_early_stop(parse_decimal_argument(arguments.at(i + 1)));
+					mse_early_stop(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
 				}
 				else if (arguments[i] == ENERGY_EARLY_STOP_LONG) {
@@ -369,7 +430,7 @@ namespace cgp {
 					i += 1;
 				}
 				else if (arguments[i] == MSE_CHROMOSOME_LOGGING_THRESHOLD_LONG) {
-					mse_chromosome_logging_threshold(parse_decimal_argument(arguments.at(i + 1)));
+					mse_chromosome_logging_threshold(parse_integer_argument(arguments.at(i + 1)));
 					i += 1;
 				}
 				else if (arguments[i] == PERIODIC_LOG_FREQUENCY_LONG) {
@@ -488,6 +549,11 @@ namespace cgp {
 		return cgp_statistics_file_value;
 	}
 
+	decltype(CGPConfiguration::learning_rate_file_value) CGPConfiguration::learning_rate_file() const
+	{
+		return learning_rate_file_value;
+	}
+
 	decltype(CGPConfiguration::mse_threshold_value) CGPConfiguration::mse_threshold() const
 	{
 		return mse_threshold_value;
@@ -508,6 +574,10 @@ namespace cgp {
 		return patience_value;
 	}
 
+	decltype(CGPConfiguration::learning_rate_value) CGPConfiguration::learning_rate() const
+	{
+		return learning_rate_value;
+	}
 
 	decltype(CGPConfiguration::start_generation_value) CGPConfiguration::start_generation() const
 	{
@@ -567,6 +637,12 @@ namespace cgp {
 	decltype(CGPConfiguration::mse_chromosome_logging_threshold_value) CGPConfiguration::mse_chromosome_logging_threshold() const
 	{
 		return mse_chromosome_logging_threshold_value;
+	}
+
+	CGPConfiguration& CGPConfiguration::learning_rate_file(decltype(learning_rate_file_value) value)
+	{
+		learning_rate_file_value = value;
+		return *this;
 	}
 
 	CGPConfiguration& CGPConfiguration::function_input_arity(decltype(function_input_arity_value) value) {
@@ -751,6 +827,12 @@ namespace cgp {
 		return *this;
 	}
 
+	CGPConfiguration& CGPConfiguration::learning_rate(decltype(learning_rate_value) value)
+	{
+		learning_rate_value = value;
+		return *this;
+	}
+
 	void CGPConfiguration::dump(std::ostream& out) const
 	{
 		// Serialize each variable to the file
@@ -760,6 +842,7 @@ namespace cgp {
 		out << "input_count: " << input_count() << std::endl;
 		out << "population_max: " << population_max() << std::endl;
 		out << "mutation_max: " << mutation_max() << std::endl;
+		out << "learning_rate: " << learning_rate() << std::endl;
 		out << "row_count: " << row_count() << std::endl;
 		out << "col_count: " << col_count() << std::endl;
 		out << "look_back_parameter: " << look_back_parameter() << std::endl;
@@ -770,6 +853,7 @@ namespace cgp {
 		if (!input_file().empty()) out << "input_file: " << input_file() << std::endl;
 		if (!output_file().empty()) out << "output_file: " << output_file() << std::endl;
 		if (!cgp_statistics_file().empty()) out << "cgp_statistics_file: " << cgp_statistics_file() << std::endl;
+		if (!learning_rate_file().empty()) out << "learning_rate_file: " << learning_rate_file() << std::endl;
 		if (!gate_parameters_input_file().empty()) out << "gate_parameters_file: " << gate_parameters_input_file() << std::endl;
 		if (!train_weights_file().empty() && train_weights_file()[0] != '#') out << "train_weights_file: " << train_weights_file() << std::endl;
 		if (!starting_solution().empty()) out << "starting_solution: " << starting_solution() << std::endl;
@@ -810,6 +894,7 @@ namespace cgp {
 			else if (key == "input_count") input_count(std::stoull(value));
 			else if (key == "population_max") population_max(std::stoi(value));
 			else if (key == "mutation_max") mutation_max(std::stod(value));
+			else if (key == "learning_rate") learning_rate(std::stod(value));
 			else if (key == "row_count") row_count(std::stoi(value));
 			else if (key == "col_count") col_count(std::stoi(value));
 			else if (key == "look_back_parameter") look_back_parameter(std::stoi(value));
@@ -820,6 +905,7 @@ namespace cgp {
 			else if (key == "input_file") input_file(value);
 			else if (key == "output_file") output_file(value);
 			else if (key == "cgp_statistics_file") cgp_statistics_file(value);
+			else if (key == "learning_rate_file") learning_rate_file(value);
 			else if (key == "gate_parameters_file") gate_parameters_input_file(value);
 			else if (key == "train_weights_file") train_weights_file(value);
 			else if (key == "starting_solution") starting_solution(value);
@@ -832,8 +918,8 @@ namespace cgp {
 			else if (key == "delay_early_stop") delay_early_stop(string_to_delay(value));
 			else if (key == "depth_early_stop") depth_early_stop(string_to_depth(value));
 			else if (key == "gate_count_early_stop") gate_count_early_stop(string_to_gate_count(value));
-			else if (key == "expected_value_min") expected_value_min(std::stoul(value));
-			else if (key == "expected_value_max") expected_value_max(std::stoul(value));
+			else if (key == "expected_value_min") expected_value_min(std::stoi(value));
+			else if (key == "expected_value_max") expected_value_max(std::stoi(value));
 			
 			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{

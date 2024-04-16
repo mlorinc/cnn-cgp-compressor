@@ -34,7 +34,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for energy values, represented as double-precision floating-point numbers.
 		/// </summary>
-		using energy_t = CGPConfiguration::energy_t;
+		using quantized_energy_t = CGPConfiguration::quantized_energy_t; using energy_t = CGPConfiguration::energy_t;
 
 		/// <summary>
 		/// Type alias for area values, represented as double-precision floating-point numbers.
@@ -44,7 +44,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for delay values, represented as double-precision floating-point numbers.
 		/// </summary>
-		using delay_t = CGPConfiguration::delay_t;
+		using quantized_delay_t = CGPConfiguration::quantized_delay_t; using delay_t = CGPConfiguration::delay_t;
 
 		/// <summary>
 		/// Type alias for depth values, represented as dimension_t.
@@ -152,6 +152,11 @@ namespace cgp {
 		/// <summary>
 		/// Cached energy consumption value.
 		/// </summary>
+		quantized_energy_t estimated_quantized_energy_consumption = CGPConfiguration::quantized_energy_nan;
+
+		/// <summary>
+		/// Cached energy consumption value.
+		/// </summary>
 		energy_t estimated_energy_consumption = CGPConfiguration::energy_nan;
 
 		/// <summary>
@@ -162,12 +167,17 @@ namespace cgp {
 		/// <summary>
 		/// Cached delay value.
 		/// </summary>
-		delay_t estimated_largest_delay = CGPConfiguration::delay_nan;
+		quantized_delay_t estimated_quantized_delay = CGPConfiguration::quantized_delay_nan;
+
+		/// <summary>
+		/// Cached delay value.
+		/// </summary>
+		delay_t estimated_delay = CGPConfiguration::delay_nan;
 
 		/// <summary>
 		/// Cached depth value.
 		/// </summary>
-		depth_t estimated_largest_depth = CGPConfiguration::depth_nan;
+		depth_t estimated_depth = CGPConfiguration::depth_nan;
 
 		/// <summary>
 		/// Cached phenotype node count value. By node, it is understood as one digital gate.
@@ -246,10 +256,16 @@ namespace cgp {
 		/// <param name="that">The chromosome to be transferred.</param>
 		void setup_iterators(Chromosome&& that);
 
-		weight_value_t plus(weight_value_t a, weight_value_t b);
-		weight_value_t minus(weight_value_t a, weight_value_t b);
-		weight_value_t mul(weight_value_t a, weight_value_t b);
-		weight_value_t bit_shift(weight_value_t a);
+		weight_value_t plus(int a, int b);
+		weight_value_t minus(int a, int b);
+		weight_value_t mul(int a, int b);
+		weight_value_t bit_rshift(weight_value_t a, weight_value_t b);
+		weight_value_t bit_lshift(weight_value_t a, weight_value_t b);
+		weight_value_t bit_and(weight_value_t a, weight_value_t b);
+		weight_value_t bit_or(weight_value_t a, weight_value_t b);
+		weight_value_t bit_xor(weight_value_t a, weight_value_t b);
+		weight_value_t bit_neg(weight_value_t a);
+		weight_value_t neg(weight_value_t a);
 
 		void mutate_genes(std::shared_ptr<Chromosome> that) const;
 
@@ -381,22 +397,34 @@ namespace cgp {
 		decltype(estimated_energy_consumption) get_estimated_energy_usage();
 
 		/// <summary>
+		/// Estimate energy used by phenotype digital circuit.
+		/// </summary>
+		/// <returns>Energy estimation.</returns>
+		decltype(estimated_quantized_energy_consumption) get_estimated_quantized_energy_usage();
+
+		/// <summary>
 		/// Estimate area used by phenotype digital circuit.
 		/// </summary>
 		/// <returns>Area estimation.</returns>
-		decltype(estimated_energy_consumption) get_estimated_area_usage();
+		decltype(estimated_area_utilisation) get_estimated_area_usage();
 
 		/// <summary>
 		/// Estimate largest delay by phenotype digital circuit.
 		/// </summary>
 		/// <returns>Largest delay.</returns>
-		decltype(estimated_largest_delay) get_estimated_largest_delay();
+		decltype(estimated_quantized_delay) get_estimated_quantized_delay();
+
+		/// <summary>
+		/// Estimate largest delay by phenotype digital circuit.
+		/// </summary>
+		/// <returns>Largest delay.</returns>
+		decltype(estimated_delay) get_estimated_delay();
 
 		/// <summary>
 		/// Estimate largest depth by phenotype digital circuit.
 		/// </summary>
 		/// <returns>Largest depth.</returns>
-		decltype(estimated_largest_depth) get_estimated_largest_depth();
+		decltype(estimated_depth) get_estimated_depth();
 
 		/// <summary>
 		/// Get quantity of used digital gates used by phenotype.

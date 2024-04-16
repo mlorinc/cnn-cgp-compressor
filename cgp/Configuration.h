@@ -34,20 +34,30 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for dimension values, represented as unsigned 16-bit integers.
 		/// </summary>
-		using dimension_t = int;
+		using dimension_t = uint_fast32_t;
 
 		/// <summary>
 		/// Type alias for error values.
 		/// </summary>
-		using error_t = unsigned long long;
+		using error_t = uint_fast64_t;
 
 		/// <summary>
-		/// Type alias for energy values, represented as double-precision floating-point numbers.
+		/// Type alias for energy values which are primary use for computation.
+		/// </summary>
+		using quantized_energy_t = uint_fast64_t;
+
+		/// <summary>
+		/// Type alias for real energy values.
 		/// </summary>
 		using energy_t = double;
 
 		/// <summary>
 		/// Type alias for delay values, represented as double-precision floating-point numbers.
+		/// </summary>
+		using quantized_delay_t = uint_fast64_t;
+
+		/// <summary>
+		/// Type alias for real delay values.
 		/// </summary>
 		using delay_t = double;
 
@@ -59,7 +69,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for gate count values, represented as size_t.
 		/// </summary>
-		using gate_count_t = int;
+		using gate_count_t = uint_fast64_t;
 
 		/// <summary>
 		/// Type alias for area values, represented as double-precision floating-point numbers.
@@ -69,7 +79,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for gate parameters, represented as a tuple of energy and delay values.
 		/// </summary>
-		using gate_parameters_t = std::tuple<energy_t, area_t, delay_t>;
+		using gate_parameters_t = std::tuple<quantized_energy_t, energy_t, area_t, quantized_delay_t, delay_t>;
 
 		/// <summary>
 		/// Type alias for gene values, represented as unsigned 16-bit integers.
@@ -82,9 +92,19 @@ namespace cgp {
 		static constexpr error_t error_nan = (std::numeric_limits<error_t>::has_infinity) ? (std::numeric_limits<error_t>::infinity()) : (std::numeric_limits<error_t>::max());
 
 		/// <summary>
+		/// Value representing NaN for quantized_energy_t.
+		/// </summary>
+		static constexpr quantized_energy_t quantized_energy_nan = (std::numeric_limits<quantized_energy_t>::has_infinity) ? (std::numeric_limits<quantized_energy_t>::infinity()) : (std::numeric_limits<quantized_energy_t>::max());
+
+		/// <summary>
 		/// Value representing NaN for energy_t.
 		/// </summary>
 		static constexpr energy_t energy_nan = (std::numeric_limits<energy_t>::has_infinity) ? (std::numeric_limits<energy_t>::infinity()) : (std::numeric_limits<energy_t>::max());
+
+		/// <summary>
+		/// Value representing NaN for quantized_delay_t.
+		/// </summary>
+		static constexpr quantized_delay_t quantized_delay_nan = (std::numeric_limits<quantized_delay_t>::has_infinity) ? (std::numeric_limits<quantized_delay_t>::infinity()) : (std::numeric_limits<quantized_delay_t>::max());
 
 		/// <summary>
 		/// Value representing NaN for delay_t.
@@ -104,7 +124,7 @@ namespace cgp {
 		/// <summary>
 		/// Value representing NaN for area_t.
 		/// </summary>
-		static constexpr area_t area_nan = (std::numeric_limits<error_t>::has_infinity) ? (std::numeric_limits<error_t>::infinity()) : (std::numeric_limits<error_t>::max());
+		static constexpr area_t area_nan = (std::numeric_limits<area_t>::has_infinity) ? (std::numeric_limits<area_t>::infinity()) : (std::numeric_limits<area_t>::max());
 
 		/// <summary>
 		/// The biggest possible multiplexer bit variant.
@@ -122,10 +142,24 @@ namespace cgp {
 		/// </summary>
 		/// <param name="params">The gate parameters tuple.</param>
 		/// <returns>The energy parameter.</returns>
-		static energy_t get_energy_parameter(const gate_parameters_t& params);
+		static quantized_energy_t get_quantized_energy_parameter(const gate_parameters_t& params);
 
 		/// <summary>
 		/// Get the delay parameter from the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <returns>The delay parameter.</returns>
+		static quantized_delay_t get_quantized_delay_parameter(const gate_parameters_t& params);
+
+		/// <summary>
+		/// Get the real energy parameter from the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <returns>The energy parameter.</returns>
+		static energy_t get_energy_parameter(const gate_parameters_t& params);
+
+		/// <summary>
+		/// Get the real delay parameter from the given gate parameters.
 		/// </summary>
 		/// <param name="params">The gate parameters tuple.</param>
 		/// <returns>The delay parameter.</returns>
@@ -143,10 +177,24 @@ namespace cgp {
 		/// </summary>
 		/// <param name="params">The gate parameters tuple.</param>
 		/// <param name="energy">The energy parameter to set.</param>
-		static void set_energy_parameter(gate_parameters_t& params, energy_t energy);
+		static void set_quantized_energy_parameter(gate_parameters_t& params, quantized_energy_t energy);
 
 		/// <summary>
 		/// Set the delay parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="delay">The delay parameter to set.</param>
+		static void set_quantized_delay_parameter(gate_parameters_t& params, quantized_delay_t delay);
+
+		/// <summary>
+		/// Set the real energy parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="energy">The energy parameter to set.</param>
+		static void set_energy_parameter(gate_parameters_t& params, energy_t energy);
+
+		/// <summary>
+		/// Set the real delay parameter in the given gate parameters.
 		/// </summary>
 		/// <param name="params">The gate parameters tuple.</param>
 		/// <param name="delay">The delay parameter to set.</param>
@@ -167,11 +215,25 @@ namespace cgp {
 		static void set_energy_parameter(gate_parameters_t& params, const std::string &energy);
 
 		/// <summary>
+		/// Set the real energy parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="energy">The energy parameter to set.</param>
+		static void set_quantized_energy_parameter(gate_parameters_t& params, const std::string& energy);
+
+		/// <summary>
 		/// Set the delay parameter in the given gate parameters.
 		/// </summary>
 		/// <param name="params">The gate parameters tuple.</param>
 		/// <param name="delay">The delay parameter to set.</param>
-		static void set_delay_parameter(gate_parameters_t& params, const std::string &delay);
+		static void set_quantized_delay_parameter(gate_parameters_t& params, const std::string &delay);
+
+		/// <summary>
+		/// Set the real delay parameter in the given gate parameters.
+		/// </summary>
+		/// <param name="params">The gate parameters tuple.</param>
+		/// <param name="energy">The energy parameter to set.</param>
+		static void set_delay_parameter(gate_parameters_t& params, const std::string& delay);
 
 		/// <summary>
 		/// Set the area parameter in the given gate parameters.
@@ -186,9 +248,19 @@ namespace cgp {
 		static const std::string error_nan_string;
 
 		/// <summary>
+		/// String representation of quantized_energy_nan.
+		/// </summary>
+		static const std::string quantized_energy_nan_string;
+
+		/// <summary>
 		/// String representation of energy_nan.
 		/// </summary>
 		static const std::string energy_nan_string;
+
+		/// <summary>
+		/// String representation of quantized_delay_nan.
+		/// </summary>
+		static const std::string quantized_delay_nan_string;
 
 		/// <summary>
 		/// String representation of delay_nan.
@@ -288,12 +360,16 @@ namespace cgp {
 
 		static const std::string MSE_CHROMOSOME_LOGGING_THRESHOLD_LONG;
 
+		static const std::string LEARNING_RATE_FILE_LONG;
+
+		static const std::string LEARNING_RATE_LONG;
+
 #ifndef CNN_FP32_WEIGHTS
 		/// <summary>
 		/// Type alias for inferred weight used internally by the CGP, represented as a signed integer
 		/// to prevent overflow when multiplying.
 		/// </summary>
-		using weight_value_t = int;
+		using weight_value_t = int8_t;
 
 		/// <summary>
 		/// Type alias for hardware inferred weight, represented as a signed 8-bit integer.
@@ -316,11 +392,6 @@ namespace cgp {
 		/// Value representing a weight that is not considered during error evaluation.
 		/// </summary>
 		static constexpr weight_value_t no_care_value = std::numeric_limits<weight_value_t>::min();
-
-		/// <summary>
-		/// Value representing a weight that is not considered during error evaluation.
-		/// </summary>
-		static constexpr uint8_t bit_shift_mask = std::numeric_limits<uint8_t>::max();
 #else
 		/// <summary>
 		/// Type alias for inferred weight, represented as a double-precision floating-point number.
@@ -408,7 +479,7 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the number of runs in the CGP algorithm.
 		/// </summary>
-		uint32_t number_of_runs_value = 10;
+		int number_of_runs_value = 10;
 
 		/// <summary>
 		/// Default value for the number of functions in the CGP algorithm.
@@ -439,6 +510,11 @@ namespace cgp {
 		/// A path where CGP statistics will be saved.
 		/// </summary>
 		std::string cgp_statistics_file_value = "+";
+
+		/// <summary>
+		/// A path where CGP learning will be saved.
+		/// </summary>
+		std::string learning_rate_file_value = "";
 
 		/// <summary>
 		/// A path where gate parameters are stored.
@@ -494,21 +570,21 @@ namespace cgp {
 
 		/// <summary>
 		/// Value indicating stop condition for parameter of delay. By default
-		/// perfect solution is assumed.
+		/// it is ignored.
 		/// </summary>
-		delay_t delay_early_stop_value = 0;
+		delay_t delay_early_stop_value = delay_nan;
 
 		/// <summary>
 		/// Value indicating stop condition for parameter of depth. By default
-		/// perfect solution is assumed.
+		/// it is ignored.
 		/// </summary>
-		depth_t depth_early_stop_value = 0;
+		depth_t depth_early_stop_value = depth_nan;
 
 		/// <summary>
 		/// Value indicating stop condition for parameter of gate count. By default
-		/// perfect solution is assumed.
+		/// it is ignored.
 		/// </summary>
-		gate_count_t gate_count_early_stop_value = 0;
+		gate_count_t gate_count_early_stop_value = gate_count_nan;
 
 		/// <summary>
 		/// Logging threshold when chromosomes with error less than value 
@@ -533,6 +609,11 @@ namespace cgp {
 		int max_multiplexer_bit_variant_value = 0;
 
 		/// <summary>
+		/// Learning rate threshold after which the training process is terminated.
+		/// </summary>
+		double learning_rate_value = 0.05;
+
+		/// <summary>
 		/// Sets the starting generation value for Cartesian Genetic Programming (CGP) configuration.
 		/// </summary>
 		/// <param name="value">The starting generation value to set.</param>
@@ -553,6 +634,16 @@ namespace cgp {
 		/// Sets configuration parameters according to given command line arguments.
 		/// </summary>
 		void set_from_arguments(const std::vector<std::string>& arguments);
+
+		/// <summary>
+		/// Learning rate threshold after which the training process is terminated.
+		/// </summary>
+		decltype(learning_rate_value) learning_rate() const;
+
+		/// <summary>
+		/// A path where CGP learning will be saved.
+		/// </summary>
+		decltype(learning_rate_file_value) learning_rate_file() const;
 
 		/// <summary>
 		/// Gets the input arity of functions.
@@ -703,19 +794,19 @@ namespace cgp {
 
 		/// <summary>
 		/// Get value indicating stop condition for parameter of delay. By default
-		/// perfect solution is assumed.
+		/// it is ignored
 		/// </summary>
 		decltype(delay_early_stop_value) delay_early_stop() const;
 
 		/// <summary>
 		/// Get value indicating stop condition for parameter of depth. By default
-		/// perfect solution is assumed.
+		/// it is ignored
 		/// </summary>
 		decltype(depth_early_stop_value) depth_early_stop() const;
 
 		/// <summary>
 		/// Get value indicating stop condition for parameter of gate count. By default
-		/// perfect solution is assumed.
+		/// it is ignored
 		/// </summary>
 		decltype(gate_count_early_stop_value) gate_count_early_stop() const;
 
@@ -750,6 +841,16 @@ namespace cgp {
 		/// By default every chromosome is serialized and logged.
 		/// </summary>
 		decltype(mse_chromosome_logging_threshold_value) mse_chromosome_logging_threshold() const;
+
+		/// <summary>
+		/// Sets learning rate threshold after which the training process is terminated.
+		/// </summary>
+		CGPConfiguration& learning_rate(decltype(learning_rate_value) value);
+
+		/// <summary>
+		/// Sets a path where CGP learning will be saved.
+		/// </summary>
+		CGPConfiguration& learning_rate_file(decltype(learning_rate_file_value));
 
 		/// <summary>
 		/// Sets the input arity of functions in the CGP configuration.
@@ -928,15 +1029,19 @@ namespace cgp {
 	};
 
 	std::string error_to_string(CGPConfiguration::error_t value);
+	std::string quantized_energy_to_string(CGPConfiguration::quantized_energy_t value);
 	std::string energy_to_string(CGPConfiguration::energy_t value);
+	std::string quantized_delay_to_string(CGPConfiguration::quantized_delay_t value);
 	std::string delay_to_string(CGPConfiguration::delay_t value);
 	std::string depth_to_string(CGPConfiguration::depth_t value);
 	std::string gate_count_to_string(CGPConfiguration::gate_count_t value);
 	std::string weight_to_string(CGPConfiguration::weight_value_t value);
 	std::string area_to_string(CGPConfiguration::area_t value);
 	CGPConfiguration::error_t string_to_error(const std::string& value);
+	CGPConfiguration::quantized_energy_t string_to_quantized_energy(const std::string& value);
 	CGPConfiguration::energy_t string_to_energy(const std::string& value);
 	CGPConfiguration::area_t string_to_area(const std::string& value);
+	CGPConfiguration::quantized_delay_t string_to_quantized_delay(const std::string& value);
 	CGPConfiguration::delay_t string_to_delay(const std::string& value);
 	CGPConfiguration::depth_t string_to_depth(const std::string& value);
 	CGPConfiguration::gate_count_t string_to_gate_count(const std::string& value);

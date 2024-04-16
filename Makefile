@@ -3,9 +3,10 @@
 CC :=icc 
 CXX := icpc #icpc
 CFLAGS := -pedantic -Wall -O3 -qopenmp
-CXXFLAGS := -pedantic -Wall -O3 -qopenmp -std=c++17 -msse4.2 -axAVX,CORE-AVX2 # -Wall -O3 -fopenmp -std=c++17
+CXXFLAGS := -pedantic -Wall -O3 -qopenmp -std=c++17 -msse4.2 -axAVX,CORE-AVX2 -D__DISABLE_COUT # -Wall -O3 -fopenmp -std=c++17
 DBGFLAGS := -g
 COBJFLAGS := $(CFLAGS) -c
+
 
 # path macros
 BIN_PATH := bin
@@ -18,8 +19,8 @@ TARGET := $(BIN_PATH)/$(TARGET_NAME)
 TARGET_DEBUG := $(DBG_PATH)/$(TARGET_NAME)
 
 # src files & obj files
-SRC := $(SRC_PATH)/StringTemplate.cpp $(SRC_PATH)/Configuration.cpp $(SRC_PATH)/Dataset.cpp $(SRC_PATH)/Stream.cpp $(SRC_PATH)/Chromosome.cpp $(SRC_PATH)/Cgp.cpp $(SRC_PATH)/Main.cpp
-OBJ := $(OBJ_PATH)/StringTemplate.o $(OBJ_PATH)/Configuration.o $(OBJ_PATH)/Dataset.o $(OBJ_PATH)/Stream.o $(OBJ_PATH)/Chromosome.o $(OBJ_PATH)/Cgp.o $(OBJ_PATH)/Main.o
+SRC := $(SRC_PATH)/StringTemplate.cpp $(SRC_PATH)/Configuration.cpp $(SRC_PATH)/Dataset.cpp $(SRC_PATH)/Stream.cpp $(SRC_PATH)/Chromosome.cpp $(SRC_PATH)/Cgp.cpp $(SRC_PATH)/CGPStream.cpp $(SRC_PATH)/Learning.cpp $(SRC_PATH)/Main.cpp
+OBJ := $(OBJ_PATH)/StringTemplate.o $(OBJ_PATH)/Configuration.o $(OBJ_PATH)/Dataset.o $(OBJ_PATH)/Stream.o $(OBJ_PATH)/Chromosome.o $(OBJ_PATH)/Cgp.o $(SRC_PATH)/CGPStream.o $(SRC_PATH)/Learning.o $(OBJ_PATH)/Main.o
 
 # clean files list
 DISTCLEAN_LIST := $(OBJ) 

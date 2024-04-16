@@ -15,7 +15,7 @@ namespace cgp {
 	class CGP : public CGPConfiguration {
 	public:
 		// A candidate solution tuple in format: error fitness, (energy fitness, largest delay), depth, and the genotype.
-		using solution_t = std::tuple<error_t, energy_t, area_t, delay_t, depth_t, gate_count_t, std::shared_ptr<Chromosome>>;
+		using solution_t = std::tuple<error_t, quantized_energy_t, energy_t, area_t, quantized_delay_t, delay_t, depth_t, gate_count_t, std::shared_ptr<Chromosome>>;
 
 		/// <summary>
 		/// Get the error value of the given solution.
@@ -23,6 +23,13 @@ namespace cgp {
 		/// <param name="solution">The solution to retrieve the error value from</param>
 		/// <returns>The error value of the solution</returns>
 		static error_t get_error(const solution_t solution);
+
+		/// <summary>
+		/// Get the energy value of the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to retrieve the energy value from</param>
+		/// <returns>The energy value of the solution</returns>
+		static quantized_energy_t get_quantized_energy(const solution_t solution);
 
 		/// <summary>
 		/// Get the energy value of the given solution.
@@ -37,6 +44,13 @@ namespace cgp {
 		/// <param name="solution">The solution to retrieve the area value from</param>
 		/// <returns>The area value of the solution</returns>
 		static area_t get_area(const solution_t solution);
+
+		/// <summary>
+		/// Get the delay value of the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to retrieve the delay value from</param>
+		/// <returns>The delay value of the solution</returns>
+		static quantized_delay_t get_quantized_delay(const solution_t solution);
 
 		/// <summary>
 		/// Get the delay value of the given solution.
@@ -64,6 +78,13 @@ namespace cgp {
 		/// </summary>
 		/// <param name="solution">The solution to ensure the energy value for</param>
 		/// <returns>The ensured energy value of the solution</returns>
+		static decltype(CGP::get_quantized_energy(solution_t())) ensure_quantized_energy(solution_t& solution);
+
+		/// <summary>
+		/// Ensure that the energy value of the given solution is calculated.
+		/// </summary>
+		/// <param name="solution">The solution to ensure the energy value for</param>
+		/// <returns>The ensured energy value of the solution</returns>
 		static decltype(CGP::get_energy(solution_t())) ensure_energy(solution_t& solution);
 
 		/// <summary>
@@ -72,6 +93,13 @@ namespace cgp {
 		/// <param name="solution">The solution to ensure the area value for</param>
 		/// <returns>The ensured area value of the solution</returns>
 		static decltype(CGP::get_area(solution_t())) ensure_area(solution_t& solution);
+
+		/// <summary>
+		/// Ensure that the delay value of the given solution is calculated.
+		/// </summary>
+		/// <param name="solution">The solution to ensure the delay value for</param>
+		/// <returns>The ensured delay value of the solution</returns>
+		static decltype(CGP::get_quantized_delay(solution_t())) ensure_quantized_delay(solution_t& solution);
 
 		/// <summary>
 		/// Ensure that the delay value of the given solution is calculated.
@@ -100,19 +128,20 @@ namespace cgp {
 		/// <param name="solution">The solution to retrieve the chromosome from</param>
 		/// <returns>The chromosome associated with the solution</returns>
 		static std::shared_ptr<Chromosome> get_chromosome(const solution_t solution);
-	protected:
 		/// <summary>
 		/// Get default solution with invalid values.
 		/// </summary>
 		/// <returns>A new invalid solution.</returns>
 		static solution_t get_default_solution();
-
+	protected:
 		/// <summary>
 		/// Create a new solution with assigned values.
 		/// </summary>
 		/// <param name="chromosome">The chromosome associated with the solution</param>
 		/// <param name="error">The error value of the solution</param>
+		/// <param name="quantized_energy">The quantized energy value of the solution (default: quantized_energy_nan)</param>
 		/// <param name="energy">The energy value of the solution (default: energy_nan)</param>
+		/// <param name="quantized_delay">The quantized delay value of the solution (default: quantized_delay_nan)</param>
 		/// <param name="delay">The delay value of the solution (default: delay_nan)</param>
 		/// <param name="depth">The depth value of the solution (default: Chromosome::depth_nan)</param>
 		/// <param name="gate_count">The gate count value of the solution (default: Chromosome::gate_count_nan)</param>
@@ -120,8 +149,10 @@ namespace cgp {
 		static solution_t create_solution(
 			std::shared_ptr<Chromosome> chromosome,
 			error_t error,
+			quantized_energy_t quantized_energy = quantized_energy_nan,
 			energy_t energy = energy_nan,
 			area_t area = area_nan,
+			quantized_delay_t quantized_delay = quantized_delay_nan,
 			delay_t delay = delay_nan,
 			depth_t depth = depth_nan,
 			gate_count_t gate_count = gate_count_nan);
@@ -140,6 +171,14 @@ namespace cgp {
 		/// <param name="solution">The solution to set the energy value for</param>
 		/// <param name="value">The value to set as the energy value</param>
 		/// <returns>The updated energy value of the solution</returns>
+		static decltype(CGP::get_quantized_energy(solution_t())) set_quantized_energy(solution_t& solution, decltype(CGP::get_quantized_energy(solution_t())) value);
+
+		/// <summary>
+		/// Set the energy value of the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to set the energy value for</param>
+		/// <param name="value">The value to set as the energy value</param>
+		/// <returns>The updated energy value of the solution</returns>
 		static decltype(CGP::get_energy(solution_t())) set_energy(solution_t& solution, decltype(CGP::get_energy(solution_t())) value);
 
 		/// <summary>
@@ -149,6 +188,14 @@ namespace cgp {
 		/// <param name="value">The value to set as the area value</param>
 		/// <returns>The updated area value of the solution</returns>
 		static decltype(CGP::get_area(solution_t())) set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value);
+
+		/// <summary>
+		/// Set the delay value of the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to set the delay value for</param>
+		/// <param name="value">The value to set as the delay value</param>
+		/// <returns>The updated delay value of the solution</returns>
+		static decltype(CGP::get_quantized_delay(solution_t())) set_quantized_delay(solution_t& solution, decltype(CGP::get_quantized_delay(solution_t())) value);
 
 		/// <summary>
 		/// Set the delay value of the given solution.
@@ -210,6 +257,11 @@ namespace cgp {
 		size_t evolution_steps_made;
 
 		/// <summary>
+		/// Flag indicating that solution has been recently changed.
+		/// </summary>
+		bool best_solution_changed;
+
+		/// <summary>
 		/// Additional configuration attributes lefto by CGPConfiguration::load.
 		/// </summary>
 		std::map<std::string, std::string> other_config_attribitues;
@@ -235,7 +287,7 @@ namespace cgp {
 		/// </summary>
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <returns>The energy fitness value.</returns>
-		energy_t get_energy_fitness(Chromosome& chrom);
+		quantized_energy_t get_energy_fitness(Chromosome& chrom);
 
 		/// <summary>
 		/// Calculate the area fitness of a chromosome.
@@ -249,7 +301,7 @@ namespace cgp {
 		/// </summary>
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <returns>The delay fitness value.</returns>
-		delay_t get_delay_fitness(Chromosome& chrom);
+		quantized_delay_t get_delay_fitness(Chromosome& chrom);
 
 		/// <summary>
 		/// Calculate the depth fitness of a chromosome.
@@ -308,19 +360,11 @@ namespace cgp {
 		std::tuple<bool, bool> dominates(solution_t& a, solution_t& b) const;
 
 		/// <summary>
-		/// Set the best solution from the given string.
+		/// Set the best solution from the given chromosome string.
 		/// </summary>
-		/// <param name="solution">The string representing the solution.</param>
-		/// <param name="format">The format of the solution containing parameters.</param>
-		void set_best_solution(const std::string& solution, std::string format);
-
-		/// <summary>
-		/// Create a solution from the given string.
-		/// </summary>
-		/// <param name="solution">The string representing the solution.</param>
-		/// <param name="format">The format of the string.</param>
-		/// <returns>The created solution.</returns>
-		solution_t create_solution(std::string solution, std::string format);
+		/// <param name="chromosome">The string representing the chromosome.</param>
+		/// <param name="dataset">Dataset to perform evaluation on.</param>
+		void set_best_chromosome(const std::string& chromosome, const dataset_t &dataset);
 
 		void prepare_population_structures(int population);
 	public:
@@ -341,6 +385,14 @@ namespace cgp {
 		/// <param name="in">Input stream containing serialized form of the CGP class.</param>
 		/// <param name="arguments">CGP arguments entered from CLI by the user.</param>
 		CGP(std::istream& in, const std::vector<std::string>& arguments = {});
+
+		/// <summary>
+		/// Constructor for CGP class using text stream to initialize variables.
+		/// </summary>
+		/// <param name="in">Input stream containing serialized form of the CGP class.</param>
+		/// <param name="arguments">CGP arguments entered from CLI by the user.</param>
+		/// <param name="dataset">Dataset used for calculating chromosome fitness</param>
+		CGP(std::istream& in, const std::vector<std::string>& arguments, const dataset_t &dataset);
 
 		/// <summary>
 		/// Constructor for CGP class using text stream to initialize variables.
@@ -401,7 +453,7 @@ namespace cgp {
 		/// Get the current best energy fitness value.
 		/// </summary>
 		/// <returns>Current best energy fitness value.</returns>
-		energy_t get_best_energy_fitness();
+		quantized_energy_t get_best_energy_fitness();
 
 		/// <summary>
 		/// Get the current best area fitness value.
@@ -413,7 +465,7 @@ namespace cgp {
 		/// Get the current best delay fitness value.
 		/// </summary>
 		/// <returns>Current best delay fitness value.</returns>
-		delay_t get_best_delay_fitness();
+		quantized_delay_t get_best_delay_fitness();
 
 		/// <summary>
 		/// Get the current best depth value.
@@ -428,24 +480,16 @@ namespace cgp {
 		gate_count_t get_best_gate_count();
 
 		/// <summary>
+		/// Get the current best solution.
+		/// </summary>
+		/// <returns>Current the best current solution.</returns>
+		solution_t get_best_solution() const;
+
+		/// <summary>
 		/// Get the chromosome with the lowest fitness value.
 		/// </summary>
 		/// <returns>Best chromosome.</returns>
 		std::shared_ptr<Chromosome> get_best_chromosome() const;
-
-		/// <summary>
-		/// Set evoluton to the specific point.
-		/// </summary>
-		/// <param name="chromosome">Starting chromosome for evolution.</param>
-		/// <param name="input">Shared array pointer of input values.</param>
-		/// <param name="expected_output">Shared array pointer of expected output values.</param>
-		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
-		void restore(
-			std::shared_ptr<Chromosome> chromosome,
-			const weight_input_t& input,
-			const weight_output_t& expected_output,
-			const size_t mutations_made = std::numeric_limits<size_t>::max()
-		);
 
 		/// <summary>
 		/// Set evoluton to the specific point.
@@ -460,17 +504,6 @@ namespace cgp {
 		);
 
 		/// <summary>
-		/// Set evoluton to the specific point from given serialized solution string.
-		/// </summary>
-		/// <param name="solution">Serialized solution string containing error fitness, energy fitness and serialized chromosome.</param>
-		/// <param name="mutations_made">Mutations made prior obtaining given chromosome.</param>
-		void restore(
-			const std::string& solution,
-			const std::string& solution_format = CGP::default_solution_format,
-			const size_t mutations_made = std::numeric_limits<size_t>::max()
-		);
-
-		/// <summary>
 		/// Reset the CGP algorithm to initial state.
 		/// </summary>
 		void reset();
@@ -480,6 +513,11 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Number of generations without change.</returns>
 		decltype(generations_without_change) get_generations_without_change() const;
+
+		/// <summary>
+		/// Flag indicating that solution has been recently changed.
+		/// </summary>
+		decltype(best_solution_changed) has_best_solution_changed() const;
 
 		/// <summary>
 		/// Calculate size of the gene.
@@ -502,5 +540,13 @@ namespace cgp {
 		/// <returns>A map containing additional unprocessed information.</returns>
 		std::map<std::string, std::string> load(std::istream& in, const std::vector<std::string>& arguments = {}) override;
 
+		/// <summary>
+		/// Load the CGP experiment parameters from the specified input stream.
+		/// </summary>
+		/// <param name="in">The input stream from which to load the parameters.</param>
+		/// <param name="arguments">Optional arguments for loading.</param>
+		/// <param name="dataet">Dataset used to calculate fitness values of the potential chromosome.</param>
+		/// <returns>A map containing additional unprocessed information.</returns>
+		std::map<std::string, std::string> load(std::istream& in, const std::vector<std::string>& arguments, const dataset_t &dataset);
 	};
 }
