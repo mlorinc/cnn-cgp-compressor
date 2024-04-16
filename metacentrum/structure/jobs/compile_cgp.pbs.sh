@@ -4,9 +4,10 @@
 #PBS -l walltime=00:10:00
 
 # define a DATADIR variable: directory where the input files are taken from and where output will be copied to
-DATADIR=/storage/brno12-cerit/home/mlorinc/cgp_workspace
-CGP_CPP_PROJECT=cgp_cpp_project
-CGP_BINARY_SRC=bin/cgp
+DATADIR=${DATADIR:-/storage/brno12-cerit/home/mlorinc/cgp_workspace}
+CGP_CPP_PROJECT=${CGP_CPP_PROJECT:-cgp_cpp_project}
+CGP_BINARY_SRC=${CGP_BINARY_SRC:-bin/cgp}
+CGP_BIN_DST=${DESTINATION:-$DATADIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC}
 
 # test if scratch directory is set
 # if scratch directory is not set, issue error message and exit
@@ -22,11 +23,10 @@ ml add intelcdk
 # if the copy operation fails, issue error message and exit
 cp -r $DATADIR/$CGP_CPP_PROJECT $SCRATCHDIR || { echo >&2 "Error while copying CGP source file(s)!"; exit 2; }
 
-cd $SCRATCHDIR/$CGP_CPP_PROJECT && make || { echo >&2 "Error while moving to the compilation dir!"; exit 3; }
+cd $SCRATCHDIR/$CGP_CPP_PROJECT && make clean && make || { echo >&2 "Error while moving to the compilation dir!"; exit 3; }
 
-mkdir -p $(dirname $DATADIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC) || { echo >&2 "Error while creating bin dir!"; exit 4; }
+mkdir -p $(dirname $CGP_BIN_DST) || { echo >&2 "Error while creating bin dir!"; exit 4; }
 
-cp $SCRATCHDIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $DATADIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC || { echo >&2 "Error while copying CGP binary!"; exit 5; }
+cp $SCRATCHDIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $CGP_BIN_DST || { echo >&2 "Error while copying CGP binary!"; exit 5; }
 
-# clean the SCRATCH directory
-clean_scratch
+test -n "$NO_CGP_CLEAN" || { echo "cleaning scratch dir"; clean_scratch; }

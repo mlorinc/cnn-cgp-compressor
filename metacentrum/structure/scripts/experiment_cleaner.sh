@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export TIMESTAMP=$(date '+%d_%m_%Y_%H_%M_%S')
 for file in *; do
         pushd . > /dev/null
         cd $file 
@@ -8,3 +9,4 @@ for file in *; do
         fi        
         popd > /dev/null
 done
+unset TIMESTAMP

@@ -9,7 +9,7 @@ SCRATCHDIR=$(echo "$message" | awk '{print $11}')
 EXPERIMENT=$(echo "$message" | awk '{print $14}')
 EXPERIMENT_FOLDER=$(echo "$message" | awk '{print $16}')
 DATADIR=$(echo "$message" | awk '{print $20}')
-TIMESTAMP=$(date '+%d_%m_%Y_%H_%M_%S')
+TIMESTAMP=${TIMESTAMP:-$(date '+%d_%m_%Y_%H_%M_%S')}
 
 if [ -z "$SCRATCHDIR" ]; then
     echo "could not find SCRATCHDIR"
