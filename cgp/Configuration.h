@@ -34,17 +34,21 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for dimension values, represented as unsigned 16-bit integers.
 		/// </summary>
-		using dimension_t = uint_fast32_t;
+		using dimension_t = int;
 
 		/// <summary>
 		/// Type alias for error values.
 		/// </summary>
-		using error_t = uint_fast64_t;
-
+#ifndef __ERROR_T
+		using error_t = uint64_t;
+#else
+		using error_t = __ERROR_T;
+		#warning "Setting error_t to " #__ERROR_T "."
+#endif
 		/// <summary>
 		/// Type alias for energy values which are primary use for computation.
 		/// </summary>
-		using quantized_energy_t = uint_fast64_t;
+		using quantized_energy_t = uint64_t;
 
 		/// <summary>
 		/// Type alias for real energy values.
@@ -54,7 +58,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for delay values, represented as double-precision floating-point numbers.
 		/// </summary>
-		using quantized_delay_t = uint_fast64_t;
+		using quantized_delay_t = uint64_t;
 
 		/// <summary>
 		/// Type alias for real delay values.
@@ -64,12 +68,12 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for depth values, represented as dimension_t.
 		/// </summary>
-		using depth_t = dimension_t;
+		using depth_t = int;
 
 		/// <summary>
 		/// Type alias for gate count values, represented as size_t.
 		/// </summary>
-		using gate_count_t = uint_fast64_t;
+		using gate_count_t = int;
 
 		/// <summary>
 		/// Type alias for area values, represented as double-precision floating-point numbers.
@@ -84,7 +88,7 @@ namespace cgp {
 		/// <summary>
 		/// Type alias for gene values, represented as unsigned 16-bit integers.
 		/// </summary>
-		using gene_t = uint16_t;
+		using gene_t = int;
 
 		/// <summary>
 		/// Value representing NaN for error_t.
@@ -424,22 +428,22 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the input arity of functions.
 		/// </summary>
-		uint8_t function_input_arity_value = 2;
+		int function_input_arity_value = 2;
 
 		/// <summary>
 		/// Default value for the output arity of functions.
 		/// </summary>
-		uint8_t function_output_arity_value = 1;
+		int function_output_arity_value = 1;
 
 		/// <summary>
 		/// Default value for the number of output pins in the CGP.
 		/// </summary>
-		size_t output_count_val = 1;
+		int output_count_val = 1;
 
 		/// <summary>
 		/// Default value for the number of input pins in the CGP.
 		/// </summary>
-		size_t input_count_val = 2;
+		int input_count_val = 2;
 
 		/// <summary>
 		/// Default value for the maximum population size in the CGP algorithm.
@@ -449,22 +453,22 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the maximum mutation value in the CGP algorithm.
 		/// </summary>
-		double mutation_max_value = 0.15;
+		float mutation_max_value = 0.15f;
 
 		/// <summary>
 		/// Variable limiting maximum number of genes that can be mutated.
 		/// </summary>
-		size_t max_genes_to_mutate_value;
+		int max_genes_to_mutate_value;
 
 		/// <summary>
 		/// Default value for the number of rows in the CGP grid.
 		/// </summary>
-		dimension_t row_count_value = 5;
+		int row_count_value = 5;
 
 		/// <summary>
 		/// Default value for the number of columns in the CGP grid.
 		/// </summary>
-		dimension_t col_count_value = 5;
+		int col_count_value = 5;
 
 		/// <summary>
 		/// Default value for the look-back parameter in the CGP algorithm.
@@ -479,12 +483,12 @@ namespace cgp {
 		/// <summary>
 		/// Default value for the number of runs in the CGP algorithm.
 		/// </summary>
-		int number_of_runs_value = 10;
+		int number_of_runs_value = 30;
 
 		/// <summary>
 		/// Default value for the number of functions in the CGP algorithm.
 		/// </summary>
-		uint8_t function_count_value = 30;
+		int function_count_value = 30;
 
 		/// <summary>
 		/// Default value for the log frequency in the CGP algorithm.
@@ -534,7 +538,7 @@ namespace cgp {
 		/// <summary>
 		/// The CGP dataset size.
 		/// </summary>
-		size_t dataset_size_value = 1;
+		int dataset_size_value = 1;
 
 		/// <summary>
 		/// Used in case CGP evolution is resumed.
@@ -554,7 +558,7 @@ namespace cgp {
 		/// <summary>
 		/// Value indicating after how many generations CGP will come to stop.
 		/// </summary>
-		size_t patience_value = 125000;
+		int patience_value = 125000;
 
 		/// <summary>
 		/// Value indicating stop condition for parameter of approximation error. By default
@@ -733,17 +737,17 @@ namespace cgp {
 		/// <summary>
 		/// Calculates the size of the pin map based on row and column counts.
 		/// </summary>
-		size_t pin_map_size() const;
+		int pin_map_size() const;
 
 		/// <summary>
 		/// Calculates the size of the chromosome blocks.
 		/// </summary>
-		size_t blocks_chromosome_size() const;
+		int blocks_chromosome_size() const;
 
 		/// <summary>
 		/// Calculates the total size of the chromosome.
 		/// </summary>
-		size_t chromosome_size() const;
+		int chromosome_size() const;
 
 		/// <summary>
 		/// Gets array of energy costs for various operations.

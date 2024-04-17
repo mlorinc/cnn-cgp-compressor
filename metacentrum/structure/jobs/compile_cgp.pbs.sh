@@ -8,6 +8,7 @@ DATADIR=${DATADIR:-/storage/brno12-cerit/home/mlorinc/cgp_workspace}
 CGP_CPP_PROJECT=${CGP_CPP_PROJECT:-cgp_cpp_project}
 CGP_BINARY_SRC=${CGP_BINARY_SRC:-bin/cgp}
 CGP_BIN_DST=${DESTINATION:-$DATADIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC}
+ERROR_DATATYPE=${ERROR_DATATYPE:-uint64_t}
 
 # test if scratch directory is set
 # if scratch directory is not set, issue error message and exit

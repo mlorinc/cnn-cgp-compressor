@@ -97,6 +97,7 @@ namespace cgp {
 
 	const std::string CGPConfiguration::LEARNING_RATE_LONG = "--learning-rate";
 
+	
 	long long parse_integer_argument(const std::string& arg) {
 		try {
 			return std::stoll(arg);
@@ -199,7 +200,7 @@ namespace cgp {
 	}
 
 	CGPConfiguration::gate_count_t string_to_gate_count(const std::string& value) {
-		return (value == CGPConfiguration::gate_count_nan_string) ? CGPConfiguration::gate_count_nan : std::stoull(value);
+		return (value == CGPConfiguration::gate_count_nan_string) ? CGPConfiguration::gate_count_nan : std::stoi(value);
 	}
 
 	CGPConfiguration::gate_parameters_t CGPConfiguration::get_default_gate_parameters()
@@ -296,7 +297,7 @@ namespace cgp {
 
 	CGPConfiguration::CGPConfiguration()
 	{
-		max_genes_to_mutate_value = chromosome_size() * mutation_max();
+		max_genes_to_mutate_value = static_cast<int>(std::ceil(chromosome_size() * mutation_max()));
 	}
 
 	CGPConfiguration::CGPConfiguration(const std::vector<std::string>& arguments)
@@ -446,22 +447,22 @@ namespace cgp {
 				throw CGPConfigurationOutOfRange("missing argument for " + arguments[i]);
 			}
 		}
-		max_genes_to_mutate_value = chromosome_size() * mutation_max();
+		max_genes_to_mutate_value = static_cast<int>(std::ceil(chromosome_size() * mutation_max()));
 	}
 
 	decltype(CGPConfiguration::function_input_arity_value) CGPConfiguration::function_input_arity() const {
 		return function_input_arity_value;
 	}
 
-	size_t CGPConfiguration::pin_map_size() const {
+	int CGPConfiguration::pin_map_size() const {
 		return row_count() * col_count() * function_output_arity() + output_count();
 	}
 
-	size_t CGPConfiguration::blocks_chromosome_size() const {
+	int CGPConfiguration::blocks_chromosome_size() const {
 		return row_count() * col_count() * (function_input_arity() + 1);
 	}
 
-	size_t CGPConfiguration::chromosome_size() const {
+	int CGPConfiguration::chromosome_size() const {
 		return blocks_chromosome_size() + output_count();
 	}
 
@@ -676,7 +677,7 @@ namespace cgp {
 
 	CGPConfiguration& CGPConfiguration::mutation_max(decltype(mutation_max_value) value) {
 		mutation_max_value = value;
-		max_genes_to_mutate_value = chromosome_size() * value;
+		max_genes_to_mutate_value = static_cast<int>(std::ceil(chromosome_size() * value));
 		return *this;
 	}
 
@@ -756,7 +757,7 @@ namespace cgp {
 	CGPConfiguration& CGPConfiguration::dataset_size(decltype(dataset_size_value) value)
 	{
 		dataset_size_value = value;
-		max_multiplexer_bit_variant_value = std::min(static_cast<double>(max_hardware_multiplexer_bit_variant), std::ceil(std::log2(value)));
+		max_multiplexer_bit_variant_value = std::min(max_hardware_multiplexer_bit_variant, static_cast<int>(std::ceil(std::log2(value))));
 		return *this;
 	}
 
@@ -890,16 +891,16 @@ namespace cgp {
 			// Set the variable based on the key and value
 			if (key == "function_input_arity") function_input_arity(std::stoi(value));
 			else if (key == "function_output_arity") function_output_arity(std::stoi(value));
-			else if (key == "output_count") output_count(std::stoull(value));
-			else if (key == "input_count") input_count(std::stoull(value));
+			else if (key == "output_count") output_count(std::stoi(value));
+			else if (key == "input_count") input_count(std::stoi(value));
 			else if (key == "population_max") population_max(std::stoi(value));
-			else if (key == "mutation_max") mutation_max(std::stod(value));
+			else if (key == "mutation_max") mutation_max(std::stof(value));
 			else if (key == "learning_rate") learning_rate(std::stod(value));
 			else if (key == "row_count") row_count(std::stoi(value));
 			else if (key == "col_count") col_count(std::stoi(value));
 			else if (key == "look_back_parameter") look_back_parameter(std::stoi(value));
 			else if (key == "generation_count") generation_count(std::stoull(value));
-			else if (key == "number_of_runs") number_of_runs(std::stoull(value));
+			else if (key == "number_of_runs") number_of_runs(std::stoi(value));
 			else if (key == "function_count") function_count(std::stoi(value));
 			else if (key == "periodic_log_frequency") periodic_log_frequency(std::stoull(value));
 			else if (key == "input_file") input_file(value);
@@ -911,8 +912,8 @@ namespace cgp {
 			else if (key == "starting_solution") starting_solution(value);
 			else if (key == "mse_threshold") mse_threshold(string_to_error(value));
 			else if (key == "mse_chromosome_logging_threshold") mse_chromosome_logging_threshold(string_to_error(value));
-			else if (key == "dataset_size") dataset_size(std::stoull(value));
-			else if (key == "patience") patience(std::stoull(value));
+			else if (key == "dataset_size") dataset_size(std::stoi(value));
+			else if (key == "patience") patience(std::stoi(value));
 			else if (key == "mse_early_stop") mse_early_stop(string_to_error(value));
 			else if (key == "energy_early_stop") energy_early_stop(string_to_energy(value));
 			else if (key == "delay_early_stop") delay_early_stop(string_to_delay(value));
@@ -930,7 +931,7 @@ namespace cgp {
 				throw CGPConfigurationInvalidArgument("invalid attribute: " + key);
 			}
 		}
-		max_genes_to_mutate_value = chromosome_size() * mutation_max();
+		max_genes_to_mutate_value = static_cast<int>(std::ceil(chromosome_size() * mutation_max()));
 		return remaining_data;
 	}
 }

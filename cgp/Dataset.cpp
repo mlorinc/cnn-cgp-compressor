@@ -12,6 +12,11 @@ const std::vector<weight_output_t>& cgp::get_dataset_output(const dataset_t& dat
 	return std::get<1>(dataset);
 }
 
+const std::vector<int>& cgp::get_dataset_no_care(const dataset_t& dataset)
+{
+	return std::get<2>(dataset);
+}
+
 static std::vector<weight_input_t> get_dataset_input_helper(const dataset_t& dataset)
 {
 	return std::get<0>(dataset);

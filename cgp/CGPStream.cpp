@@ -144,25 +144,11 @@ void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const 
 
 		for (size_t i = 0; i < cgp_model->output_count() - 1; i++)
 		{
-			if (weights[i] == CGPConfiguration::invalid_value)
-			{
-				*this << "nan";
-			}
-			else
-			{
-				*this << weight_to_string(weights[i]);
-			}
+			*this << weight_to_string(weights[i]);
 			*this << " ";
 		}
 
-		if (weights[cgp_model->output_count() - 1] == CGPConfiguration::invalid_value)
-		{
-			*this << "nan";
-		}
-		else
-		{
-			*this << weight_to_string(weights[cgp_model->output_count() - 1]);
-		}
+		*this << weight_to_string(weights[cgp_model->output_count() - 1]);		
 		*this << std::endl;
 		stream->flush();
 		delete[] weights;
@@ -274,7 +260,7 @@ weight_input_t cgp::CGPInputStream::load_input()
 	weight_repr_value_t weight;
 	std::string no_care;
 	auto input = new weight_value_t[cgp_model->input_count()];
-	for (size_t i = 0; i < cgp_model->input_count(); i++)
+	for (int i = 0; i < cgp_model->input_count(); i++)
 	{
 		if (*stream >> weight)
 		{
@@ -294,8 +280,7 @@ weight_input_t cgp::CGPInputStream::load_input()
 		{
 			if (no_care == "x")
 			{
-				// Penalize usage of unallowed value
-				input[i] = CGPConfiguration::invalid_value;
+				input[i] = 0;
 			}
 			else
 			{
@@ -309,12 +294,13 @@ weight_input_t cgp::CGPInputStream::load_input()
 	return input;
 }
 
-weight_output_t cgp::CGPInputStream::load_output()
+std::tuple<weight_output_t, int> cgp::CGPInputStream::load_output()
 {
 	weight_repr_value_t weight;
 	std::string no_care;
 	auto output = new weight_value_t[cgp_model->output_count()];
-	for (size_t i = 0; i < cgp_model->output_count(); i++)
+	int no_care_index = cgp_model->output_count();
+	for (int i = 0; i < cgp_model->output_count(); i++)
 	{
 		if (*stream >> weight)
 		{
@@ -334,8 +320,14 @@ weight_output_t cgp::CGPInputStream::load_output()
 		{
 			if (no_care == "x")
 			{
-				// Penalize usage of unallowed value
-				output[i] = CGPConfiguration::invalid_value;
+				no_care_index = i;
+
+				if (no_care_index == 0)
+				{
+					throw std::invalid_argument("one line in output contains only no care values!");
+				}
+
+				break;
 			}
 			else
 			{
@@ -346,20 +338,24 @@ weight_output_t cgp::CGPInputStream::load_output()
 			throw std::invalid_argument("invalit unknown output value: expecting weight value or x");
 		}
 	}
-	return output;
+	return std::make_tuple(output, no_care_index);
 }
 
 dataset_t cgp::CGPInputStream::load_train_data()
 {
-	std::vector<weight_input_t> inputs, outputs;
+	std::vector<weight_input_t> inputs;
+	std::vector<weight_output_t> outputs;
+	std::vector<int> no_care;
 
 	for (size_t i = 0; i < cgp_model->dataset_size(); i++)
 	{
 		inputs.push_back(load_input());
-		outputs.push_back(load_output());
+		auto output_data = load_output();
+		outputs.push_back(std::get<0>(output_data));
+		no_care.push_back(std::get<1>(output_data));
 	}
 
-	return std::make_tuple(inputs, outputs);
+	return std::make_tuple(inputs, outputs, no_care);
 }
 
 std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load_gate_parameters()

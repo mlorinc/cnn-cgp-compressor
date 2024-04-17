@@ -3,11 +3,11 @@
 CC :=icc 
 CXX := icpc #icpc
 CFLAGS := -pedantic -Wall -O3 -qopenmp
-CXXFLAGS := -pedantic -Wall -O3 -qopenmp -std=c++17 -msse4.2 -axAVX,CORE-AVX2 -D__DISABLE_COUT # -Wall -O3 -fopenmp -std=c++17
+CXXFLAGS := -pedantic -Wall -O3 -std=c++17 -fp-model fast=2 -msse4.2 -axAVX,CORE-AVX2 -D__DISABLE_COUT -D__ERROR_T=${ERROR_DATATYPE} # -Wall -O3 -fopenmp -std=c++17
+LDFLAGS=-L$MKLROOT/lib/intel64 -qopenmp
 DBGFLAGS := -g
 COBJFLAGS := $(CFLAGS) -c
-
-
+# -D__DISABLE_COUT
 # path macros
 BIN_PATH := bin
 OBJ_PATH := obj
@@ -32,10 +32,10 @@ default: makedir all
 
 # non-phony targets
 $(TARGET): $(OBJ)
-	$(CXX) -o $@ $(OBJ) $(CXXFLAGS)
+	$(CXX) -o $@ $(OBJ) $(CXXFLAGS) $(LDFLAGS)
 
 $(OBJ_PATH)/%.o: $(SRC_PATH)/%.c*
-	$(CXX) $(CXXFLAGS) $(COBJFLAGS) -o $@ $<
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(COBJFLAGS) -o $@ $<
 
 # phony rules
 .PHONY: makedir

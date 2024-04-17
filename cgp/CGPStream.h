@@ -1,5 +1,6 @@
 #pragma once
 #include "Stream.h"
+#include "Dataset.h"
 
 namespace cgp
 {
@@ -106,9 +107,9 @@ namespace cgp
 
 	struct CGPCSVRow
 	{
-		bool ok;
-		size_t run;
-		size_t generation;
+		bool ok = false;
+		size_t run = 0;
+		size_t generation = 0;
 		std::string timestamp;
 		std::string chromosome;
 		std::string raw_line;
@@ -128,7 +129,7 @@ namespace cgp
 
 		CGPCSVRow read_csv_line() const;
 		weight_input_t load_input();
-		weight_output_t load_output();
+		std::tuple<weight_output_t, int> load_output();
 		dataset_t load_train_data();
 		std::unique_ptr<CGPConfiguration::gate_parameters_t[]> load_gate_parameters();
 	};

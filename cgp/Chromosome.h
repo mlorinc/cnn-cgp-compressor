@@ -115,11 +115,6 @@ namespace cgp {
 		std::unique_ptr<weight_value_t[]> pin_map;
 
 		/// <summary>
-		/// Unique pointer to the function energy map array.
-		/// </summary>
-		std::unique_ptr<gate_parameters_t[]> gate_parameters_map;
-
-		/// <summary>
 		/// Unique pointer to the function energy visit map array.
 		/// </summary>
 		std::unique_ptr<bool[]> gate_visit_map;
@@ -199,21 +194,21 @@ namespace cgp {
 		/// </summary>
 		/// <param name="position">The position in the chromosome.</param>
 		/// <returns>True if the position represents a function, otherwise false.</returns>
-		bool is_function(size_t position) const;
+		bool is_function(int position) const;
 
 		/// <summary>
 		/// Predicate to check if a given position in the chromosome represents an input.
 		/// </summary>
 		/// <param name="position">The position in the chromosome.</param>
 		/// <returns>True if the position represents an input, otherwise false.</returns>
-		bool is_input(size_t position) const;
+		bool is_input(int position) const;
 
 		/// <summary>
 		/// Predicate to check if a given position in the chromosome represents an output.
 		/// </summary>
 		/// <param name="position">The position in the chromosome.</param>
 		/// <returns>True if the position represents an output, otherwise false.</returns>
-		bool is_output(size_t position) const;
+		bool is_output(int position) const;
 
 		/// <summary>
 		/// Method for setting up the initial state of the chromosome randomly.
@@ -320,14 +315,14 @@ namespace cgp {
 		/// <param name="row">Row index of the block.</param>
 		/// <param name="column">Column index of the block.</param>
 		/// <returns>Pointer to the block inputs.</returns>
-		gene_t* get_block_inputs(size_t row, size_t column) const;
+		gene_t* get_block_inputs(int row, int column) const;
 
 		/// <summary>
 		/// Getter for the pointer to the inputs of a specific block in the chromosome.
 		/// </summary>
 		/// <param name="index">Digital gate index. Indexing start from top-left position, continues down, finally moves to the next column. Repeat until the end is reached.</param>
 		/// <returns>Pointer to the block inputs.</returns>
-		gene_t* get_block_inputs(size_t index) const;
+		gene_t* get_block_inputs(int index) const;
 
 		/// <summary>
 		/// Getter for the pointer to the function represented by a specific block in the chromosome.
@@ -335,7 +330,14 @@ namespace cgp {
 		/// <param name="row">Row index of the block.</param>
 		/// <param name="column">Column index of the block.</param>
 		/// <returns>Pointer to the block function.</returns>
-		gene_t* get_block_function(size_t row, size_t column) const;
+		gene_t* get_block_function(int row, int column) const;
+
+		/// <summary>
+		/// Getter for the pointer to the function represented by a specific block in the chromosome.
+		/// </summary>
+		/// <param name="gate_index">Index of the specific block.</param>
+		/// <returns>Pointer to the block function.</returns>
+		gene_t* get_block_function(int gate_index) const;
 
 		/// <summary>
 		/// Getter for the shared pointer to the chromosome array.
@@ -364,7 +366,7 @@ namespace cgp {
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.
 		/// </summary>
-		void evaluate(size_t selector);
+		void evaluate(int selector);
 
 		/// <summary>
 		/// Getter for the pointer to the beginning of the output array.
@@ -388,7 +390,7 @@ namespace cgp {
 		/// Calculate size of the gene.
 		/// </summary>
 		/// <returns>The size of gene.</returns>
-		size_t get_serialized_chromosome_size() const;
+		int get_serialized_chromosome_size() const;
 
 		/// <summary>
 		/// Estimate energy used by phenotype digital circuit.
@@ -450,7 +452,7 @@ namespace cgp {
 		/// <param name="input">Shared pointer to an array of input values.</param>
 		/// <param name="selector">Selector set to multipexor and de-multiplexor gates.</param>
 		/// <returns>Shared pointer to an array of infered weights</returns>
-		weight_output_t get_weights(const weight_input_t &input, size_t selector = 0);
+		weight_output_t get_weights(const weight_input_t &input, int selector = 0);
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return vector of weights arrays.

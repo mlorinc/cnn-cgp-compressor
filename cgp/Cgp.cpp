@@ -184,23 +184,15 @@ void CGP::generate_population()
 
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output) const
+CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const
 {
 	CGP::error_t sum = 0;
-	int end = output_count();
 	#pragma omp parallel for reduction(+:sum)
-	for (int i = 0; i < end; i++)
+	for (int i = 0; i < no_care; i++)
 	{
-		if (expected_output[i] == no_care_value) continue;
-		error_t diff = predictions[i] - expected_output[i];
+		const error_t diff = static_cast<int>(predictions[i]) - static_cast<int>(expected_output[i]);
 		sum += diff * diff;
 	}
-
-	// Overflow detected, discard result completely
-	if (sum < 0) {
-		return error_nan;
-	}
-
 	return sum;
 }
 
@@ -217,58 +209,42 @@ void CGP::set_best_chromosome(const std::string& solution, const dataset_t& data
 
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& expected_output) const
+CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const
 {
 	error_t sum = 0;
-	int quantity = 0;
-	int end = output_count();
-	#pragma omp parallel for reduction(+:sum) reduction(+:quantity)
-	for (int i = 0; i < end; i++)
+	#pragma omp parallel for reduction(+:sum)
+	for (int i = 0; i < no_care; i++)
 	{
-		if (expected_output[i] == no_care_value) continue;
-		const error_t diff = predictions[i] - expected_output[i];
+		const error_t diff = static_cast<int>(predictions[i]) - static_cast<int>(expected_output[i]);
 		sum += diff * diff;
-		quantity += 1;
 	}
 
-	// Overflow detected, discard result completely
-	if (sum < 0) {
-		return error_nan;
-	}
-
-	return sum / quantity;
+	return sum / no_care;
 }
 
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const dataset_t& dataset)
 {
 	const auto& input = get_dataset_input(dataset);
 	const auto& expected_output = get_dataset_output(dataset);
-	const auto end = input.size();
-	decltype(mse(nullptr, nullptr)) mse_accumulator = 0;
+	const auto& no_cares = get_dataset_no_care(dataset);
+	const int end = input.size();
+	error_t mse_accumulator = 0;
 
 	for (int i = 0; i < end; i++)
 	{
 		chrom->set_input(input[i]);
 		chrom->evaluate(i);
-		const auto prev = mse_accumulator;
-		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i]);
-
-		// Detect overflow
-		if (mse_accumulator < prev)
-			{
-				mse_accumulator = error_nan;
-				break;
-			}
+		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i], no_cares[i]);
 	}
 
 	return CGP::create_solution(chrom, mse_accumulator);
 }
 
-CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t& input, const weight_output_t& expected_output, size_t selector)
+CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t& input, const weight_output_t& expected_output, const int no_care, int selector)
 {
 	chrom->set_input(input);
 	chrom->evaluate(selector);
-	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output));
+	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output, no_care));
 }
 
 CGP::quantized_energy_t CGP::get_energy_fitness(Chromosome& chrom)
@@ -296,12 +272,12 @@ CGP::gate_count_t CGP::get_gate_count(Chromosome& chrom)
 	return chrom.get_node_count();
 }
 
-CGP::error_t CGP::error_fitness(Chromosome& chrom, const weight_output_t &expected_output) {
-	return mse(chrom.begin_output(), expected_output);
+CGP::error_t CGP::error_fitness(Chromosome& chrom, const weight_output_t &expected_output, const int no_care) {
+	return mse(chrom.begin_output(), expected_output, no_care);
 }
 
-CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output) {
-	return mse_without_division(chrom.begin_output(), expected_output);
+CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care) {
+	return mse_without_division(chrom.begin_output(), expected_output, no_care);
 }
 
 CGP::solution_t CGP::get_default_solution()
@@ -714,7 +690,7 @@ decltype(CGP::best_solution_changed) CGP::has_best_solution_changed() const
 	return best_solution_changed;
 }
 
-size_t CGP::get_serialized_chromosome_size() const
+int CGP::get_serialized_chromosome_size() const
 {
 	// chromosome size + input information + output information
 	return chromosome_size() * sizeof(gene_t) + 2 * sizeof(gene_t);

@@ -8,6 +8,11 @@ constexpr auto LOGGER_OUTPUT_FILE = ("#");
 constexpr auto LOGGER_OUTPUT_FILE = ("-");
 #endif
 
+#ifdef _MEASURE_LEARNING_RATE
+#error "Critical error when compiling CGP. Learning should be disabled."
+#endif // _MEASURE_LEARNING_RATE
+
+
 using namespace cgp;
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -162,27 +167,6 @@ static int perform_evolution(const double start_time, const double now, std::sha
 	return 1;
 }
 
-static LearningRates get_learning_rate(const CGP::solution_t& start_epoch_solution, const CGP::solution_t& end_epoch_solution)
-{
-	LearningRates rates{};
-	if (CGP::get_chromosome(start_epoch_solution) == CGP::get_chromosome(end_epoch_solution))
-	{
-		return rates;
-	}
-
-	rates.error = CGP::get_error(end_epoch_solution) < CGP::get_error(start_epoch_solution) ? (CGP::get_error(start_epoch_solution) - CGP::get_error(end_epoch_solution)) : (0);
-	rates.energy = (CGP::get_quantized_energy(start_epoch_solution) - CGP::get_quantized_energy(end_epoch_solution)) / static_cast<double>(CGP::get_quantized_energy(start_epoch_solution));
-	rates.delay = (CGP::get_quantized_delay(start_epoch_solution) - CGP::get_quantized_delay(end_epoch_solution)) / static_cast<double>(CGP::get_quantized_delay(start_epoch_solution));
-	rates.gate_count = (CGP::get_gate_count(end_epoch_solution) < CGP::get_gate_count(start_epoch_solution)) ? (CGP::get_gate_count(start_epoch_solution) - CGP::get_gate_count(end_epoch_solution)) : 0;
-
-	return rates;
-}
-
-static bool is_stagnated(const LearningRates& rates, double LR)
-{
-	return rates.error == 0 && rates.gate_count == 0 && rates.energy < LR && rates.delay < LR;
-}
-
 static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run)
 {
 #ifdef _MEASURE_LEARNING_RATE
@@ -197,7 +181,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 
 	size_t start_run = (run == -1) ? (cgp_model->start_run()) : (run);
 	size_t generation = cgp_model->start_generation();
-	size_t end_run = (run == -1) ? (cgp_model->number_of_runs()) : (run + 1);
+	int end_run = (run == -1) ? (cgp_model->number_of_runs()) : (run + 1);
 	auto mode = (generation == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
 	CGPOutputStream logger(cgp_model, LOGGER_OUTPUT_FILE);
 	CGPOutputStream event_logger(cgp_model, "-");
@@ -205,7 +189,6 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 	cgp_model->build_indices();
 	logger.dump();
 	cgp_model->generate_population();
-	std::unordered_map<std::string, std::string> template_args{};
 	for (size_t run = start_run; run < end_run; run++)
 	{
 		double start_time = omp_get_wtime();

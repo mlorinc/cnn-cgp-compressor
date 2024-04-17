@@ -272,7 +272,7 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
 		/// <returns>The error fitness value.</returns>
-		error_t error_fitness(Chromosome& chrom, const weight_output_t& expected_output);
+		error_t error_fitness(Chromosome& chrom, const weight_output_t& expected_output, const int no_care);
 
 		/// <summary>
 		/// Calculate the accuracy (error) fitness of a chromosome without aggregation.
@@ -280,7 +280,7 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
 		/// <returns>The error fitness value.</returns>
-		error_t error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output);
+		error_t error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care);
 
 		/// <summary>
 		/// Calculate the energy fitness of a chromosome.
@@ -323,7 +323,7 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value.</returns>
-		error_t mse(const weight_value_t* predictions, const weight_output_t& expected_output) const;
+		error_t mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
 
 		/// <summary>
 		/// Calculate the Mean Squared Error (MSE) metric for made predictions without division.
@@ -331,7 +331,7 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value without being divided.</returns>
-		error_t mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output) const;
+		error_t mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
 
 		/// <summary>
 		/// Analyze chromosome and calculate MSE metric for made predictions. It does not fill up other fitnesses due to performance.
@@ -349,7 +349,7 @@ namespace cgp {
 		/// <param name="expected_output">The expected output data.</param>
 		/// <param name="selector">Optional parameter for selector.</param>
 		/// <returns>The solution containing the analyzed chromosome and MSE metric. Other attributes can be accesed from the chromosome instance.</returns>
-		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t &input, const weight_output_t &expected_output, size_t selector = 0);
+		solution_t analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t &input, const weight_output_t &expected_output, int no_care, int selector = 0);
 
 		/// <summary>
 		/// Determine whether candidate solution A is better than B.
@@ -523,7 +523,7 @@ namespace cgp {
 		/// Calculate size of the gene.
 		/// </summary>
 		/// <returns>The size of gene.</returns>
-		size_t get_serialized_chromosome_size() const;
+		int get_serialized_chromosome_size() const;
 
 		/// <summary>
 		/// Dump the CGP experiment parameters to the specified output stream.
