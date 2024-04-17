@@ -21,8 +21,9 @@ class AllLayersExperiment(MultiExperiment):
                  prefix="",
                  suffix="",
                  rows_per_filter=5,
-                 cols_per_layer=15) -> None:
-        super().__init__(config, model_adapter, cgp, args, dtype)
+                 cols_per_layer=15,
+                 **kwargs) -> None:
+        super().__init__(config, model_adapter, cgp, args, dtype, **kwargs)
         
         self.mse_thresholds = mse_thresholds
         self.prefix = prefix
@@ -30,15 +31,17 @@ class AllLayersExperiment(MultiExperiment):
         self.layer_names = layer_names
         self.rows_per_filter = rows_per_filter
         self.cols_per_layer = cols_per_layer
+        self._prepare_filters()
 
-        layers = [self._model_adapter.get_layer(layer_name) for layer_name in layer_names]
+    def _prepare_filters(self):
+        layers = [self._model_adapter.get_layer(layer_name) for layer_name in self.layer_names]
         single_cell_size = self.rows_per_filter * max(map(lambda x: x.out_channels, layers))
 
         for mse in self.mse_thresholds:
-            experiment = self.create_experiment(f"{prefix}mse_{mse}{suffix}", self._get_filters(layer_names))
-            experiment.config.set_row_count(single_cell_size)
-            experiment.config.set_col_count(self.cols_per_layer * len(layers))
-            experiment.config.set_look_back_parameter(self.cols_per_layer * len(layers))
+            for experiment in self.create_experiment(f"{self.prefix}mse_{mse}{self.suffix}", self._get_filters(self.layer_names)):
+                experiment.config.set_row_count(single_cell_size)
+                experiment.config.set_col_count(self.cols_per_layer * len(layers))
+                experiment.config.set_look_back_parameter(self.cols_per_layer * len(layers))
 
     def _get_filters(self, layer_names: List[str]):
         out = []
@@ -65,4 +68,5 @@ class AllLayersExperiment(MultiExperiment):
                                    suffix=args.suffix,
                                    mse_thresholds=args.mse_thresholds,
                                    rows_per_filter=args.rows_per_filter,
-                                   cols_per_layer=args.cols_per_layer)
+                                   cols_per_layer=args.cols_per_layer,
+                                   batches=args.batches)

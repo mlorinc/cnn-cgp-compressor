@@ -1,4 +1,4 @@
-patience: 1000000
+patience: 400000
 mse_threshold: 0
 number_of_runs: 30
 mutation_max: 0.15
@@ -9,6 +9,6 @@ dataset_size: 1
 input_count: 9
 output_count: 16
 population_max: 32
-periodic_log_frequency: 500000
+periodic_log_frequency: 400000
 gate_parameters_file: C:\Users\Majo\source\repos\TorchCompresser\cmd\gate_info\data\parameters.txt
 learning_rate: 0.05

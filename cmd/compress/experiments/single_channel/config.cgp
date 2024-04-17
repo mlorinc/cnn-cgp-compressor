@@ -1,5 +1,4 @@
-generation_count: 50000000
-patience: 1000000
+patience: 3000000
 number_of_runs: 30
 mutation_max: 0.15
 function_count: 28
@@ -9,7 +8,7 @@ dataset_size: 1
 input_count: 54
 output_count: 96
 population_max: 32
-periodic_log_frequency: 500000
+periodic_log_frequency: 1000000
 gate_parameters_file: C:\Users\Majo\source\repos\TorchCompresser\cmd\gate_info\data\parameters.txt
 mse_chromosome_logging_threshold: 300
 learning_rate: 0.05

@@ -23,23 +23,28 @@ class SingleChannelExperiment(MultiExperiment):
                  prefix="", 
                  suffix="", 
                  mse_thresholds=thresholds,
-                 rows_per_filter=rows_per_filter) -> None:
-        super().__init__(config, model_adapter, cgp, args, dtype)
-        
+                 rows_per_filter=rows_per_filter,
+                 **kwargs) -> None:
+        super().__init__(config, model_adapter, cgp, args, dtype, **kwargs)
         self.mse_thresholds = mse_thresholds
         self.prefix = prefix
         self.suffix = suffix
         self.rows_per_filter = rows_per_filter
+        self.layer_name = layer_name
+        self.channel = channel
+        self._prepare_filters()
 
-        layer = self._model_adapter.get_layer(layer_name)
+    def _prepare_filters(self):
+        layer = self._model_adapter.get_layer(self.layer_name)
         single_cell_size = self.rows_per_filter * layer.out_channels
         for mse in self.mse_thresholds:
-            experiment = self.create_experiment(f"{prefix}{layer_name}_mse_{mse}{suffix}", self._get_filter(layer_name, channel))
-            experiment.config.set_mse_threshold(mse)
-            experiment.config.set_row_count(single_cell_size)
-            experiment.config.set_col_count(15)
-            experiment.config.set_look_back_parameter(15)
-            experiment.config.set_mse_chromosome_logging_threshold(max(SingleChannelExperiment.thresholds))
+            for experiment in self.create_experiment(f"{self.prefix}{self.layer_name}_mse_{mse}{self.suffix}", self._get_filter(self.layer_name, self.channel)):
+                experiment.config.set_mse_threshold(mse)
+                experiment.config.set_row_count(single_cell_size)
+                experiment.config.set_col_count(15)
+                experiment.config.set_look_back_parameter(15)
+                experiment.config.set_patience(max(1000000, int(8 / experiment.config.get_population_max() * experiment.config.get_patience())))
+                experiment.config.set_mse_chromosome_logging_threshold(max(SingleChannelExperiment.thresholds))
 
     def _get_filter(self, layer_name: str, channel_i: int):
         return conv2d_selector(layer_name, [slice(None), channel_i], 5, 3)
@@ -63,4 +68,5 @@ class SingleChannelExperiment(MultiExperiment):
                                     prefix=args.prefix,
                                     suffix=args.suffix,
                                     mse_thresholds=args.mse_thresholds,
-                                    rows_per_filter=args.rows_per_filter)
+                                    rows_per_filter=args.rows_per_filter,
+                                    batches=args.batches)

@@ -4,6 +4,7 @@ import os
 import torch
 from parse import parse
 import shutil
+import math
 from string import Template
 from pathlib import Path
 from cgp.cgp_adapter import CGP
@@ -54,13 +55,13 @@ class Experiment(object):
         self._to_number = int if self.dtype == torch.int8 else float
         self.model_top_k = None
         self.model_loss = None
+        self.name_fmt = None
         self.reset()
 
     @classmethod
     def with_data_only(cls, path: Union[Path, str], model_name: str = None, model_path: str = None):
         path = Path(path)
-        # model_adapter = BaseAdapter.load_base_model(model_name, model_path)
-        model_adapter = None
+        model_adapter = BaseAdapter.load_base_model(model_name, model_path) if model_name and model_path else None
         if path.name == Experiment.train_cgp_name:
             return cls(CGPConfiguration(path), model_adapter, model_path, None, {})
         else:
@@ -192,7 +193,7 @@ class Experiment(object):
         if not config.has_train_weights_file():
             config.set_train_weights_file(self._handle_path(self.result_weights, relative_paths))
         if not config.has_learning_rate_file():
-            config.set_learning_rate_file(self._handle_path(self.learning_rate_file, relative_paths))            
+            config.set_learning_rate_file(self._handle_path(self.learning_rate_file, relative_paths))         
         return experiment
 
     def setup_isolated_train_environment(self, experiment_path: str, clean=False, relative_paths: bool = False) -> Self:
@@ -209,10 +210,11 @@ class Experiment(object):
 
             # todo remove
             if True or not self.gate_parameters_file.exists():
-                get_gate_parameters(
+                _, self.energy_series, self.delay_series = get_gate_parameters(
                     self.gate_parameters_csv_file,
                     self.gate_parameters_file,
                     grid_size=(config.get_row_count(), config.get_col_count()))
+                
             config.set_gate_parameters_file(self._handle_path(self.gate_parameters_file, relative_paths))
 
             experiment = self.setup_train_environment(config, relative_paths=relative_paths)
@@ -255,13 +257,24 @@ class Experiment(object):
                             cgp_folder: str = "cgp_cpp_project",
                             cpu=32,
                             mem="2gb",
-                            scratch_capacity="1gb"):        
+                            scratch_capacity="1gb"):
+        
+        unsigned_types = {
+            8: "uint8_t",
+            16: "uint16_t",
+            32: "uint32_t",
+            64: "uint64_t",
+        }
+        
+        error_bits = math.ceil(math.log2(self.config.get_output_count() * 255**2 + 1))
+        error_type = next(t for bit, t in unsigned_types.items() if error_bits <= bit)
+        
         args = self.config.to_args()
         job_name = self.get_name().replace("/", "_")
         template_data = {
             "machine": f"select=1:ncpus={cpu}:mem={mem}:scratch_local={scratch_capacity}",
             "time_limit": time_limit,
-            "job_name": f"cgp_mlorinc_{job_name}",
+            "job_name": f"cgp_{job_name}",
             "server": os.environ.get("pbs_server"),
             "username": os.environ.get("pbs_username"),
             "workspace": "/storage/$server/home/$username/cgp_workspace",
@@ -273,7 +286,8 @@ class Experiment(object):
             "cgp_command": "train",
             "cgp_config": self.config.path.name,
             "cgp_args": " ".join([str(arg) for arg in args]),
-            "experiment": self.get_name()
+            "experiment": self.get_name(),
+            "error_t": error_type
         }
 
         with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w", newline="\n") as pbs_f:
@@ -295,6 +309,12 @@ class Experiment(object):
                         changed = line != old_line
                     pbs_f.write(line)
         print("saved pbs file to: " + str(self.train_pbs))
+
+    def decode_configuration(self):
+        if self.name_fmt is None:
+            raise ValueError(f"decoding not supported for {self.__class__.__name__}")
+        
+        return parse(self.name_fmt, self.get_name())
 
     def reset(self):
         self._planner = CGPPinPlanner() 
