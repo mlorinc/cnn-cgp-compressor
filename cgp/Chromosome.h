@@ -272,8 +272,12 @@ namespace cgp {
 		weight_value_t neg(weight_value_t a);
 
 		void mutate_genes(std::shared_ptr<Chromosome> that) const;
-
 		weight_value_t get_pin_value(int index) const;
+		bool move_block_to_the_start(int gate_index);
+		void move_gate(int src_gate_index, int dst_gate_index);
+		int get_gate_index_from_output_pin(int pin) const;
+		int get_gate_index_from_input_pin(int pin) const;
+		void invalidate();
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -317,6 +321,13 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Pointer to the chromosome outputs.</returns>
 		gene_t* get_outputs() const;
+
+		/// <summary>
+		/// Getter for the pointer to the specific block in the chromosome.
+		/// </summary>
+		/// <param name="index">Digital gate index. Indexing start from top-left position, continues down, finally moves to the next column. Repeat until the end is reached.</param>
+		/// <returns>Pointer to the block inputs.</returns>
+		gene_t* get_block(int index) const;
 
 		/// <summary>
 		/// Getter for the pointer to the inputs of a specific block in the chromosome.
@@ -400,6 +411,8 @@ namespace cgp {
 		/// </summary>
 		/// <returns>The size of gene.</returns>
 		int get_serialized_chromosome_size() const;
+
+		void tight_layout();
 
 		/// <summary>
 		/// Estimate energy used by phenotype digital circuit.

@@ -173,7 +173,7 @@ void CGP::generate_population()
 	// Create new population
 	for (int i = 0; i < end; i++)
 	{
-		chromosomes[i] = (best_chromosome) ? (best_chromosome->mutate()) : (std::make_shared<Chromosome>(*this, minimum_output_indicies));
+		chromosomes[i] = (best_chromosome) ? (best_chromosome->mutate(chromosomes[i])) : (std::make_shared<Chromosome>(*this, minimum_output_indicies));
 	}
 }
 

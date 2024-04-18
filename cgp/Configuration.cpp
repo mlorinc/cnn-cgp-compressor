@@ -458,8 +458,13 @@ namespace cgp {
 		return row_count() * col_count() * function_output_arity() + output_count() * dataset_size();
 	}
 
+	int CGPConfiguration::block_chromosome_size() const
+	{
+		return function_input_arity() + 1;
+	}
+
 	int CGPConfiguration::blocks_chromosome_size() const {
-		return row_count() * col_count() * (function_input_arity() + 1);
+		return row_count() * col_count() * block_chromosome_size();
 	}
 
 	int CGPConfiguration::chromosome_size() const {

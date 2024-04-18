@@ -66,27 +66,29 @@ static int evaluate_chromosome(std::shared_ptr<CGP> cgp_model, const dataset_t& 
 {
 	auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
 	auto solution = cgp_model->evaluate(dataset, chrom);
-	CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::trunc);
-	out.log_csv(0, 0, "");
+	chrom->tight_layout();
+	solution = cgp_model->evaluate(dataset, chrom);
+	CGPOutputStream out(cgp_model, "-", std::ios::trunc);
+	out.log_csv(0, 0, "", solution, true);
+	out.log_human(0, 0, solution);
 	return 0;
 }
 
 static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
 {
-	std::unordered_map<std::string, std::string> template_args{};
 	CGPInputStream in(cgp_model, cgp_model->cgp_statistics_file());
 	size_t counter = 1;
 	while (!in.eof() && !in.fail())
 	{
+		std::unordered_map<std::string, std::string> template_args{ {"run", std::to_string(counter)} };
 		std::string chromosome;
 		std::getline(in.get_stream(), chromosome);
 
-		template_args["run"] = std::to_string(counter);
 		auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
 		auto solution = cgp_model->evaluate(dataset, chrom);
 
 		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
-		out.log_csv(counter, counter, "");
+		out.log_csv(counter, counter, "", solution);
 		counter++;
 	}
 
@@ -100,6 +102,7 @@ static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, st
 		std::unordered_map<std::string, std::string> template_args{ {"run", std::to_string(i + 1)} };
 		CGPInputStream in(cgp_model, cgp_model->cgp_statistics_file(), template_args);
 		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
+		CGPOutputStream weight_logger(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
 
 		while (!in.eof() && !in.fail())
 		{
@@ -122,6 +125,7 @@ static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, st
 					row.timestamp,
 					solution,
 					true);
+				weight_logger.log_weights(chrom, get_dataset_input(dataset));
 			}
 		}
 	}
@@ -185,6 +189,11 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 	auto mode = (generation == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
 	CGPOutputStream logger(cgp_model, LOGGER_OUTPUT_FILE);
 	CGPOutputStream event_logger(cgp_model, "-");
+
+	if (generation != 0 && !cgp_model->get_best_chromosome())
+	{
+		throw std::invalid_argument("cannot resume evolution without starting chromosome");
+	}
 
 	cgp_model->build_indices();
 	logger.dump();
@@ -291,6 +300,7 @@ int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
+
 #if defined __DATE__ && defined __TIME__
 	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;
 #endif // _COMPILE_TIME

@@ -740,6 +740,11 @@ namespace cgp {
 		int pin_map_size() const;
 
 		/// <summary>
+		/// Calculates the size of a chromosome block.
+		/// </summary>
+		int block_chromosome_size() const;
+
+		/// <summary>
 		/// Calculates the size of the chromosome blocks.
 		/// </summary>
 		int blocks_chromosome_size() const;
