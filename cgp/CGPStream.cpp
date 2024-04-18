@@ -54,6 +54,8 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 	{
 		return;
 	}
+
+	const auto& chromosome = CGP::get_chromosome(solution);
 	*this
 		<< "[" << (run + 1)
 		<< ", " << (generation + 1) << "] MSE: "
@@ -72,6 +74,14 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 		<< depth_to_string(CGP::get_depth(solution))
 		<< ", Gates: "
 		<< gate_count_to_string(CGP::get_gate_count(solution))
+		<< ", Top row: "
+		<< ((chromosome) ? std::to_string(chromosome->get_top_row()) : ("nan"))
+		<< ", Bottom row: "
+		<< ((chromosome) ? std::to_string(chromosome->get_bottom_row()) : ("nan"))
+		<< ", First col: "
+		<< ((chromosome) ? std::to_string(chromosome->get_first_column()) : ("nan"))
+		<< ", Last col: "
+		<< ((chromosome) ? std::to_string(chromosome->get_last_column()) : ("nan"))
 		<< std::endl;
 }
 
@@ -140,7 +150,7 @@ void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const 
 	}
 
 	for (int i = 0; i < inputs.size(); i++) {
-		auto weights = chromosome->get_weights(inputs[i]);
+		auto weights = chromosome->get_weights(inputs[i], i);
 
 		for (size_t i = 0; i < cgp_model->output_count() - 1; i++)
 		{
@@ -321,7 +331,6 @@ std::tuple<weight_output_t, int> cgp::CGPInputStream::load_output()
 			if (no_care == "x")
 			{
 				no_care_index = i;
-
 				if (no_care_index == 0)
 				{
 					throw std::invalid_argument("one line in output contains only no care values!");
@@ -338,6 +347,12 @@ std::tuple<weight_output_t, int> cgp::CGPInputStream::load_output()
 			throw std::invalid_argument("invalit unknown output value: expecting weight value or x");
 		}
 	}
+
+	for (int i = no_care_index+1; i < cgp_model->output_count(); i++)
+	{
+		*stream >> no_care;
+	}
+
 	return std::make_tuple(output, no_care_index);
 }
 

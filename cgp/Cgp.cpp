@@ -168,11 +168,6 @@ void CGP::generate_population()
 {
 	const auto& best_chromosome = get_best_chromosome();
 
-	if ((start_generation() != 0 || start_run() != 0) && !best_chromosome)
-	{
-		throw std::invalid_argument("cannot resume evolution without starting chromosome");
-	}
-
 	const int end = population_max();
 #pragma omp parallel for default(shared)
 	// Create new population
@@ -232,8 +227,8 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 
 	for (int i = 0; i < end; i++)
 	{
-		chrom->set_input(input[i]);
-		chrom->evaluate(i);
+		chrom->set_input(input[i], i);
+		chrom->evaluate();
 		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i], no_cares[i]);
 	}
 
@@ -242,8 +237,8 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const weight_input_t& input, const weight_output_t& expected_output, const int no_care, int selector)
 {
-	chrom->set_input(input);
-	chrom->evaluate(selector);
+	chrom->set_input(input, selector);
+	chrom->evaluate();
 	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output, no_care));
 }
 

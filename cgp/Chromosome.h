@@ -82,22 +82,22 @@ namespace cgp {
 		/// <summary>
 		/// Pointer to the start position of the chromosome output.
 		/// </summary>
-		gene_t* output_start;
+		gene_t* output_start, *absolute_output_start;
 
 		/// <summary>
 		/// Pointer to the end position of the chromosome output.
 		/// </summary>
-		gene_t* output_end;
+		gene_t* output_end, *absolute_output_end;
 
 		/// <summary>
 		/// Pointer to the start position of the output pins in the pin map.
 		/// </summary>
-		weight_value_t* output_pin_start;
+		weight_value_t* output_pin_start, *absolute_pin_start;
 
 		/// <summary>
 		/// Pointer to the end position of the output pins in the pin map.
 		/// </summary>
-		weight_value_t* output_pin_end;
+		weight_value_t* output_pin_end, *absolute_pin_end;
 
 		/// <summary>
 		/// Array containing tuples specifying the minimum and maximum pin indices for possible output connections based on the look-back parameter.
@@ -123,6 +123,11 @@ namespace cgp {
 		/// Shared pointer to the input array.
 		/// </summary>
 		const weight_value_t* input = nullptr;
+
+		/// <summary>
+		/// Current selector.
+		/// </summary>
+		int selector = 0;
 
 		/// <summary>
 		/// Flag indicating whether the chromosome needs evaluation.
@@ -190,6 +195,16 @@ namespace cgp {
 		int bottom_row = 0;
 
 		/// <summary>
+		/// Cached the lowest used column.
+		/// </summary>
+		int first_col = 0;
+
+		/// <summary>
+		/// Cached the highest used column.
+		/// </summary>
+		int last_col = 0;
+
+		/// <summary>
 		/// Predicate to check if a given position in the chromosome represents a function.
 		/// </summary>
 		/// <param name="position">The position in the chromosome.</param>
@@ -241,15 +256,9 @@ namespace cgp {
 		void setup_maps(Chromosome&& that);
 
 		/// <summary>
-		/// Method for setting up iterator pointers.
+		/// Method for setting up output iterator pointer.
 		/// </summary>
-		void setup_iterators();
-
-		/// <summary>
-		/// Method for setting up iterator pointers from the chromosome and later disposing it.
-		/// </summary>
-		/// <param name="that">The chromosome to be transferred.</param>
-		void setup_iterators(Chromosome&& that);
+		void setup_output_iterators(int selector);
 
 		weight_value_t plus(int a, int b);
 		weight_value_t minus(int a, int b);
@@ -361,12 +370,12 @@ namespace cgp {
 		/// Method to set the input for the chromosome.
 		/// </summary>
 		/// <param name="input">Shared pointer to the input array.</param>
-		void set_input(const weight_value_t *input);
+		void set_input(const weight_value_t *input, int selector);
 
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.
 		/// </summary>
-		void evaluate(int selector);
+		void evaluate();
 
 		/// <summary>
 		/// Getter for the pointer to the beginning of the output array.
@@ -445,6 +454,18 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Qunatity of used digital gates.</returns>
 		decltype(bottom_row) get_bottom_row();
+
+		/// <summary>
+		/// Get the first column used by phenotype.
+		/// </summary>
+		/// <returns>Qunatity of used digital gates.</returns>
+		decltype(first_col) get_first_column();
+
+		/// <summary>
+		/// Get the last column used by phenotype.
+		/// </summary>
+		/// <returns>Qunatity of used digital gates.</returns>
+		decltype(last_col) get_last_column();
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return array of weights.

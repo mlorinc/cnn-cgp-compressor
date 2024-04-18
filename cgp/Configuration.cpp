@@ -455,7 +455,7 @@ namespace cgp {
 	}
 
 	int CGPConfiguration::pin_map_size() const {
-		return row_count() * col_count() * function_output_arity() + output_count();
+		return row_count() * col_count() * function_output_arity() + output_count() * dataset_size();
 	}
 
 	int CGPConfiguration::blocks_chromosome_size() const {
@@ -463,7 +463,7 @@ namespace cgp {
 	}
 
 	int CGPConfiguration::chromosome_size() const {
-		return blocks_chromosome_size() + output_count();
+		return blocks_chromosome_size() + output_count() * dataset_size();
 	}
 
 	const decltype(CGPConfiguration::function_costs_value)& CGPConfiguration::function_costs() const
@@ -893,12 +893,11 @@ namespace cgp {
 			else if (key == "function_output_arity") function_output_arity(std::stoi(value));
 			else if (key == "output_count") output_count(std::stoi(value));
 			else if (key == "input_count") input_count(std::stoi(value));
-			else if (key == "population_max") population_max(std::stoi(value));
-			else if (key == "mutation_max") mutation_max(std::stof(value));
-			else if (key == "learning_rate") learning_rate(std::stod(value));
 			else if (key == "row_count") row_count(std::stoi(value));
 			else if (key == "col_count") col_count(std::stoi(value));
 			else if (key == "look_back_parameter") look_back_parameter(std::stoi(value));
+			else if (key == "population_max") population_max(std::stoi(value));
+			else if (key == "learning_rate") learning_rate(std::stod(value));
 			else if (key == "generation_count") generation_count(std::stoull(value));
 			else if (key == "number_of_runs") number_of_runs(std::stoi(value));
 			else if (key == "function_count") function_count(std::stoi(value));
@@ -921,6 +920,7 @@ namespace cgp {
 			else if (key == "gate_count_early_stop") gate_count_early_stop(string_to_gate_count(value));
 			else if (key == "expected_value_min") expected_value_min(std::stoi(value));
 			else if (key == "expected_value_max") expected_value_max(std::stoi(value));
+			else if (key == "mutation_max") mutation_max(std::stof(value));
 			
 			else if (!key.empty() && key != "start_generation" && key != "start_run")
 			{
