@@ -7,8 +7,10 @@
 #include <chrono>
 #include <functional>
 #include <unordered_map>
+#include <csignal>
 #include "StringTemplate.h"
 #include "CGPStream.h"
 #include "Cgp.h"
 #include "Learning.h"
 
+void signal_handler(int signum);

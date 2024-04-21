@@ -17,6 +17,21 @@ using namespace cgp;
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 
+bool stop_flag = false;
+int code = 0;
+
+void signal_handler(int signum)
+{
+	if (signum == SIGTERM) {
+		std::cerr << "received sigterm ... terminating" << std::endl;
+		stop_flag = true;
+		code = 33;
+	}
+	else {
+		std::cerr << "received unknown signal: " << signum << std::endl;
+	}
+}
+
 static dataset_t init_dataset(const std::string& cgp_file, const std::vector<std::string>& arguments)
 {
 	std::ifstream config_in(cgp_file);
@@ -65,10 +80,11 @@ static std::string format_timestamp(double t) {
 static int evaluate_chromosome(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, std::string chromosome)
 {
 	auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
-	auto solution = cgp_model->evaluate(dataset, chrom);
+	CGPOutputStream weights(cgp_model, cgp_model->train_weights_file(), std::ios::trunc);
+	weights.log_weights(chrom, get_dataset_input(dataset));
 	chrom->tight_layout();
-	solution = cgp_model->evaluate(dataset, chrom);
-	CGPOutputStream out(cgp_model, "-", std::ios::trunc);
+	auto solution = cgp_model->evaluate(dataset, chrom);
+	CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::trunc);
 	out.log_csv(0, 0, "", solution, true);
 	out.log_human(0, 0, solution);
 	return 0;
@@ -78,11 +94,11 @@ static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t&
 {
 	CGPInputStream in(cgp_model, cgp_model->cgp_statistics_file());
 	size_t counter = 1;
+	std::string chromosome;
+	std::getline(in.get_stream(), chromosome);
 	while (!in.eof() && !in.fail())
 	{
 		std::unordered_map<std::string, std::string> template_args{ {"run", std::to_string(counter)} };
-		std::string chromosome;
-		std::getline(in.get_stream(), chromosome);
 
 		auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
 		auto solution = cgp_model->evaluate(dataset, chrom);
@@ -90,6 +106,9 @@ static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t&
 		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
 		out.log_csv(counter, counter, "", solution);
 		counter++;
+		CGPOutputStream weight_logger(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
+		weight_logger.log_weights(chrom, get_dataset_input(dataset));
+		std::getline(in.get_stream(), chromosome);
 	}
 
 	return 0;
@@ -129,7 +148,6 @@ static int evaluate(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, st
 			}
 		}
 	}
-
 	return 0;
 }
 
@@ -152,7 +170,7 @@ static int perform_evolution(const double start_time, const double now, std::sha
 	}
 	else if (log_counter >= cgp_model->periodic_log_frequency())
 	{
-		logger.log_human(run, i);
+		logger.log_human(run, i, true);
 		log_counter = 0;
 	}
 	else
@@ -222,7 +240,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 #endif
 
 		event_logger << "performin run " << run + 1 << " and starting from generation " << (generation + 1) << std::endl;
-		for (size_t log_counter = cgp_model->periodic_log_frequency(); generation < cgp_model->generation_count(); generation++)
+		for (size_t log_counter = cgp_model->periodic_log_frequency(); !stop_flag && generation < cgp_model->generation_count(); generation++)
 		{
 			auto now = omp_get_wtime();
 			int continue_evolution = perform_evolution(start_time, now, cgp_model, dataset, logger, run, generation, stats_out, log_counter, patience);
@@ -230,7 +248,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 			if (continue_evolution == 0)
 			{
 				event_logger << "early stopping because target fitness values were satisfied" << std::endl;
-				logger.log_human(run, generation);
+				logger.log_human(run, generation, true);
 				stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
 				break;
 			}
@@ -301,6 +319,22 @@ int main(int argc, const char** args) {
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
 
+	//std::vector<std::string> arguments
+	//{
+	//	"evaluate:chromosomes",
+	//	R"(c:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\..\\..\\data_store\\single_channel\\conv1_mse_0_30_7\\train_cgp.config)",
+	//	R"(--input-file)",
+	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/train.data)",
+	//	R"(--cgp-statistics-file)",
+	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/chromosomes.txt)",
+	//	R"(--output-file)",
+	//	R"(#)",
+	//	R"(--train-weights-file)",
+	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/chromosome_weights/chromosomes.{run}.txt)",
+	//	R"(--gate-parameters-file)",
+	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/gate_parameters.txt)"
+	//};
+
 #if defined __DATE__ && defined __TIME__
 	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;
 #endif // _COMPILE_TIME
@@ -319,7 +353,6 @@ int main(int argc, const char** args) {
 	}
 
 	dataset_t train_dataset;
-	int code = 0;
 	try
 	{
 		int consumed_arguments = 2;
@@ -355,9 +388,9 @@ int main(int argc, const char** args) {
 		}
 		else if (command == "evaluate:all")
 		{
-			code = evaluate(cgp_model, train_dataset);
+			code = evaluate(cgp_model, train_dataset, [cgp_model](const CGPCSVRow& row) -> bool { return row.error <= cgp_model->mse_chromosome_logging_threshold(); });
 		}
-		else if (command == "evaluate:chrmosomes")
+		else if (command == "evaluate:chromosomes")
 		{
 			code = evaluate_chromosomes(cgp_model, train_dataset);
 		}

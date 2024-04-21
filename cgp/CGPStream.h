@@ -33,7 +33,7 @@ namespace cgp
 		/// </summary>
 		/// <param name="run">The current run number.</param>
 		/// <param name="generation">The current generation number.</param>
-		void log_human(size_t run, size_t generation);
+		void log_human(size_t run, size_t generation, bool show_chromosome = false);
 
 		/// <summary>
 		/// Logs human-readable information about the CGP model to the specified stream.
@@ -41,7 +41,7 @@ namespace cgp
 		/// <param name="run">The current run number.</param>
 		/// <param name="generation">The current generation number.</param>
 		/// <param name="solution">Solution to log.</param>
-		void log_human(size_t run, size_t generation, const CGP::solution_t& solution);
+		void log_human(size_t run, size_t generation, const CGP::solution_t& solution, bool show_chromosome = false);
 
 		void log_csv_header();
 
@@ -110,6 +110,14 @@ namespace cgp
 		bool ok = false;
 		size_t run = 0;
 		size_t generation = 0;
+		uint64_t error = 0;
+		uint64_t quantized_energy = 0;
+		double energy = 0;
+		double area = 0;
+		uint64_t quantized_delay = 0;
+		double delay = 0;
+		uint64_t depth = 0;
+		uint64_t gate_count = 0;
 		std::string timestamp;
 		std::string chromosome;
 		std::string raw_line;

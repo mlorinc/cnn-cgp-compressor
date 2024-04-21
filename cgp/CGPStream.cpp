@@ -1,5 +1,6 @@
 #include "CGPStream.h"
 #include <iostream>
+#include <sstream>
 
 using namespace cgp;
 
@@ -43,12 +44,12 @@ CGPOutputStream::CGPOutputStream(std::shared_ptr<CGP> cgp_model, const std::stri
 	this->cgp_model = cgp_model;
 }
 
-void CGPOutputStream::log_human(size_t run, size_t generation)
+void CGPOutputStream::log_human(size_t run, size_t generation, bool show_chromosome)
 {
 	log_human(run, generation, cgp_model->get_best_solution());
 }
 
-void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::solution_t& solution)
+void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::solution_t& solution, bool show_chromosome)
 {
 	if (is_ignoring_output())
 	{
@@ -82,6 +83,8 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 		<< ((chromosome) ? std::to_string(chromosome->get_first_column()) : ("nan"))
 		<< ", Last col: "
 		<< ((chromosome) ? std::to_string(chromosome->get_last_column()) : ("nan"))
+		<< ", Chromosome: "
+		<< ((chromosome && show_chromosome) ? chromosome->to_string() : (Chromosome::nan_chromosome_string))
 		<< std::endl;
 }
 
@@ -239,20 +242,23 @@ CGPCSVRow cgp::CGPInputStream::read_csv_line() const
 			return row;
 		}
 
-		auto end_run = line.find_first_of(',');
-		auto generation_end = line.find_first_of(',', end_run + 1);
-		auto timestamp_end = line.find_first_of(',', generation_end + 1);
 
-		auto run = line.substr(0, end_run);
-		auto gen = line.substr(end_run + 1, generation_end - end_run - 1);
-		// Remove double quotes too +1 and -1
-		auto time = line.substr(generation_end + 1 + 1, timestamp_end - generation_end - 1 - 1);
-		auto chrom = line.substr(begin, line.size() - begin - 1);
+		std::istringstream iss(line);
+		char comma;
 
-		row.run = std::stoull(run) - 1;
-		row.generation = std::stoull(gen) - 1;
-		row.timestamp = time;
-		row.chromosome = chrom;
+		// Parse fields
+		if (!(iss >> row.run >> comma >> row.generation >> comma >> row.error >> comma
+			>> row.quantized_energy >> comma >> row.energy >> comma >> row.area
+			>> comma >> row.quantized_delay >> comma >> row.delay >> comma
+			>> row.depth >> comma >> row.gate_count >> comma >> row.timestamp >> comma >> row.chromosome)) {
+			row.ok = false;
+			return row;
+		}
+
+		// Adjust run and generation
+		row.run--;
+		row.generation--;
+
 		return row;
 	}
 	else if (eof())
@@ -425,7 +431,7 @@ std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load
 			CGPConfiguration::set_delay_parameter(parameters, delay);
 			costs[end + j] = parameters;
 			std::cout 
-				<< "Loading " << ((end + j == 28) ? ("mux") : ("demux")) << "[" << (end + j) << "]\n\t"
+				<< "Loading " << (Chromosome::is_mux(end + j) ? ("mux") : ("demux")) << "[" << (end + j) << "]\n\t"
 				<< "Quantized Energy: " << quantized_energy << ", "
 				<< "Energy: " << energy << ", "
 				<< "Area: " << area << ", "
