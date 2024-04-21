@@ -1,4 +1,5 @@
 import argparse
+from commands.debug_model import debug_model
 from experiments.experiment import Experiment
 from experiments.all_layers.experiment import AllLayersExperiment
 from experiments.grid_size.experiment import GridSizeExperiment 
@@ -11,7 +12,7 @@ from commands.fix_train_stats import fix_train_statistics
 from commands.optimize_model import optimize_model
 from commands.evaluate_cgp_model import evaluate_cgp_model
 from commands.train_model import train_model
-from commands.evaluate_model import evaluate_model
+from commands.evaluate_model import evaluate_base_model
 from commands.quantize_model import quantize_model
 from cgp.cgp_configuration import CGPConfiguration
 from typing import List
@@ -41,11 +42,19 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     evaluate_parser.add_argument("model_path", help="Path to the model to evaluate")
     evaluate_parser.add_argument("--weights", nargs="?", type=str, help="", default=[], required=False)
 
+    # model:evaluate
+    evaluate_parser = subparsers.add_parser("model:mobilenet_v2", help="Evaluate mobilenet_v2")
+
     # model:quantize
     quantize_parser = subparsers.add_parser("model:quantize", help="Quantize a model")
     quantize_parser.add_argument("model_name", help="Name of the model to quantize")
     quantize_parser.add_argument("model_path", help="Path where trained model is saved")
     quantize_parser.add_argument("new_path", help="Path of the new quantized model where it will be stored")    
+
+    # model:debug
+    debug_parser = subparsers.add_parser("model:debug", help="Debug a model")
+    debug_parser.add_argument("model_name", help="Name of the model to quantize")
+    debug_parser.add_argument("-m", "--model_path", help="Path where trained model is saved", required=False, default=None) 
 
 def _register_experiment_commands(subparsers: argparse._SubParsersAction, experiment_names: List[str]):
     help_train = "Train a new CGP model to infer mising convolution weights from CNN model. Weights are trained as they are defined by {experiment_name}."
@@ -75,6 +84,7 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
                 experiment_group.add_argument("--experiment-root", nargs='?', help="Experiment root", required=False)
 
             experiment_group = experiment_class.get_argument_parser(experiment_group)
+            experiment_group = experiment_class.get_base_argument_parser(experiment_group)
 
             pbs_group = experiment_parser.add_argument_group("PBS Metacentrum")
             if "pbs" in command:
@@ -109,9 +119,13 @@ def dispatch(args):
         if args.command == "model:train":
             return lambda: train_model(args.model_name, args.model_path, args.base)
         elif args.command == "model:evaluate":
-            return lambda: evaluate_model(args.model_name, args.model_path, args.weights)
+            return lambda: evaluate_base_model(args.model_name, args.model_path, args.weights)
+        elif args.command == "model:mobilenet_v2":
+            return lambda: evaluate_base_model("mobilenet_v2", None, None)
         elif args.command == "model:quantize":
             return lambda: quantize_model(args.model_name, args.model_path, args.new_path)
+        elif args.command == "model:debug":
+            return lambda: debug_model(args.model_name, args.model_path)
         else:
             print("Invalid command. Use --help for usage information.")
             print(e)

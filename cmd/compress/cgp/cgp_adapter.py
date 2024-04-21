@@ -99,3 +99,9 @@ class CGP(object):
 
     def evaluate_all(self):
         return self._execute(command="evaluate:all")
+    
+    def evaluate_chromosomes(self):
+        return self._execute(command="evaluate:chromosomes")
+    
+    def evaluate_chromosome(self, chromosome: str):
+        return self._execute(command="evaluate:chromosome", other_args=[chromosome])

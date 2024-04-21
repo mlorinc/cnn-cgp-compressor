@@ -13,9 +13,10 @@ export CGP_BINARY_SRC=$cgp_binary_src
 export CGP_BINARY=$cgp_binary
 export CGP_COMMAND="$cgp_command"
 export CGP_CONFIG="$cgp_config"
-export CGP_ARGS=$cgp_args
+export CGP_ARGS="$cgp_args"
 export NO_CGP_CLEAN="yes"
 export ERROR_DATATYPE=$error_t
+export CXXFLAGS_EXTRA="$cflags"
 # PYTHON TEMPLATE END
 
 # test if scratch directory is set

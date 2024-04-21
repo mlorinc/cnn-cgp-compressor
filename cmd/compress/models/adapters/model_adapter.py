@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from typing import List, Union, Self, Iterable, Optional
 from functools import reduce
 from models.base_model import BaseModel
-from models.quantization import dequantize_per_tensor
+from models.quantization import dequantize_per_tensor, tensor_iterator
 from models.selector import FilterSelector
 from tqdm import tqdm
 
@@ -35,20 +35,25 @@ class ModelAdapter(ABC):
     def clone(self):
         cloned_adapter = copy.deepcopy(self)
         cloned_adapter.device = self.device
-
+        cloned_adapter.model = copy.deepcopy(self.model)
+        
         if isinstance(cloned_adapter.model, BaseModel) and isinstance(self.model, BaseModel):
             cloned_adapter.model.load_state(self.model.get_state())
         else:
             cloned_adapter.model.load_state(self.model.state_dict())
 
+        cloned_adapter.model.backend = self.model.backend
         cloned_adapter.model.to(self.device)
         return cloned_adapter
 
     def eval(self):
         self.model.eval()
 
+    def train(self, mode=True):
+        self.model.train(mode=True)
+
     def evaluate(self,
-                 batch_size: int = 32,
+                 batch_size: int = None,
                  max_batches: int = None,
                  top: Union[List[int], int] = 1,
                  include_loss: bool =True,
@@ -60,7 +65,7 @@ class ModelAdapter(ABC):
         criterion = self.get_criterion()
         try:
             self.model.eval()
-            loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+            loader = DataLoader(dataset, batch_size=batch_size or len(dataset), shuffle=False)
             running_loss = 0
             total_samples = 0
             running_topk_correct = dict([(k, 0) for k in top])
@@ -69,7 +74,7 @@ class ModelAdapter(ABC):
                     for batch_index, (x, y) in pbar:
                         y_hat = self.model(x)
 
-                        if include_loss:
+                        if include_loss and criterion is not None:
                             loss = criterion(y_hat, y)
                             running_loss += loss.item() * y.size(0)
                         
@@ -79,10 +84,10 @@ class ModelAdapter(ABC):
                             running_topk_correct[k] += correct[:, :k].sum().item()
                         total_samples += y.size(0)
 
-                        top_k = {k: 100 * v / total_samples for k, v in running_topk_correct.items()}
-                        top_k_strings = [f"Top-{k}: {v:.6f}%" for k, v in running_topk_correct.items()[1:show_top_k]]
+                        top_k = {k: v / total_samples for k, v in running_topk_correct.items()}
+                        top_k_strings = [f"Top-{k}: {v:.6f}" for k, v in list(top_k.items())[1:show_top_k]]
                         top_k_strings = (", " + ", ".join(top_k_strings) if top_k_strings else "")
-                        if include_loss:
+                        if include_loss and criterion is not None:
                             pbar.set_description(f"Loss: {running_loss / total_samples:.4f}, Acc: {top_k[1]:.6f}" + top_k_strings)
                         else:
                             pbar.set_description(f"Acc: {top_k[1]:.6f}" + top_k_strings)
@@ -91,7 +96,7 @@ class ModelAdapter(ABC):
                             break
                                 
 
-            top_k = {k: 100 * v / total_samples for k, v in running_topk_correct.items()}      
+            top_k = {k: v / total_samples for k, v in running_topk_correct.items()}      
             average_loss = running_loss / total_samples
 
             if len(top_k) == 1:
@@ -127,7 +132,7 @@ class ModelAdapter(ABC):
 
         try:
             layer.set_weight_bias(weights, biases)
-        except:
+        except Exception as e:
             layer.weight = weights 
             layer.bias = biases
 
@@ -137,32 +142,16 @@ class ModelAdapter(ABC):
         try:
             model.eval()
             with torch.inference_mode():
-                offset = 0
                 for weights, injection_plans in zip(weights_vector, all_injection_plans):
+                    offset = 0
                     for plan in injection_plans:
-                        bias = self.get_bias(plan.layer_name)
-                        fp32_weights = self.get_weights(plan.layer_name)
-
-                        for out_selector in plan.out:
-                            initial_output_tensor = fp32_weights[*out_selector]
-                            size = None
-                            if isinstance(out_selector[0], slice) and out_selector[0].start is None and out_selector[0].stop is None:
-                                for filter_i, filter_tensor in enumerate(initial_output_tensor):
-                                    if isinstance(out_selector[1], slice) and out_selector[1].start is None and out_selector[1].stop is None:
-                                        for channel_tensor_i, channel_tensor in enumerate(filter_tensor):
-                                            w = fp32_weights[filter_i, channel_tensor_i, *out_selector[2:]]
-                                            size = reduce(operator.mul, w.shape)
-                                            fp32_weights[filter_i, channel_tensor_i, *out_selector[2:]] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
-                                    else:
-                                        w = fp32_weights[filter_i, out_selector[1], *out_selector[2:]]
-                                        size = reduce(operator.mul, w.shape)
-                                        fp32_weights[filter_i, out_selector[1], *out_selector[2:]] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
-                            else:
-                                w = initial_output_tensor
-                                size = reduce(operator.mul, w.shape)
-                                fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
+                        bias = model.get_bias(plan.layer_name)
+                        fp32_weights = model.get_weights(plan.layer_name)
+                        for w, size, out_selector in tensor_iterator(fp32_weights, plan.out):
+                            fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())                                      
                             offset += size
-                        self.set_weights_bias(plan.layer_name, fp32_weights, bias)
+                        model.set_weights_bias(plan.layer_name, fp32_weights, bias)
+                    assert offset == reduce(operator.mul, weights.shape)
                 return model
         finally:
             model.train(mode=original_train_mode)

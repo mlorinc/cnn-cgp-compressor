@@ -196,7 +196,7 @@ class CGPConfiguration:
         finally:
             if f_handle is not None:
                 f_handle.close()
-
+            
     def get_attribute(self, name):
         return self._attributes.get(name, None) or self._extra_attributes.get(name)
 

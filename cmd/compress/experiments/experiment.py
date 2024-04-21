@@ -1,15 +1,17 @@
 import argparse
 import csv
 import os
-import torch
-from parse import parse
 import shutil
 import math
+import tempfile
 from string import Template
 from pathlib import Path
+from typing import Union, Self, Optional, List, Iterable
+import torch
+from parse import parse
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
-from typing import Union, Self, Optional, List, Iterable
+from models.quantization import tensor_iterator
 from experiments.planner import CGPPinPlanner
 from models.adapters.model_adapter import ModelAdapter
 from models.adapters.base import BaseAdapter
@@ -26,6 +28,12 @@ class Experiment(object):
     chromosome_parameters = ["chromosome"]
     columns = evolution_parameters + fitness_parameters + chromosome_parameters
     train_cgp_name = "train_cgp.config"
+
+    @staticmethod
+    def get_base_argument_parser(parser: argparse.ArgumentParser):
+        parser.add_argument("--depth", action="store_true", default=False, help="Include depth metric")
+        parser.add_argument("-e", "--allowed-mse-error", default=0.15, help="Allowed error when chromosomes will be logged in statistics")
+        return parser
 
     @staticmethod
     def get_train_pbs_argument_parser(parser: argparse.ArgumentParser):
@@ -50,7 +58,7 @@ class Experiment(object):
         self.parent: Self = parent
         self.config = config if isinstance(config, CGPConfiguration) else None
         self._model_adapter = model_adapter
-        self._cgp = cgp
+        self._cgp = cgp if not isinstance(cgp, str) else CGP(cgp)
         self.dtype = dtype
         self._to_number = int if self.dtype == torch.int8 else float
         self.model_top_k = None
@@ -59,13 +67,13 @@ class Experiment(object):
         self.reset()
 
     @classmethod
-    def with_data_only(cls, path: Union[Path, str], model_name: str = None, model_path: str = None):
+    def with_data_only(cls, path: Union[Path, str], model_name: str = None, model_path: str = None, cgp: str = None):
         path = Path(path)
         model_adapter = BaseAdapter.load_base_model(model_name, model_path) if model_name and model_path else None
         if path.name == Experiment.train_cgp_name:
-            return cls(CGPConfiguration(path), model_adapter, model_path, None, {})
+            return cls(CGPConfiguration(path), model_adapter, model_path, cgp, {})
         else:
-            return cls(CGPConfiguration(path / Experiment.train_cgp_name), model_adapter, None, {})
+            return cls(CGPConfiguration(path / Experiment.train_cgp_name), model_adapter, cgp, {})
 
     def get_name(self, depth: Optional[int] = None):
         current_item = self
@@ -119,7 +127,7 @@ class Experiment(object):
         self.clean_eval()
 
     def _clone(self, config: CGPConfiguration) -> Self:
-        experiment = Experiment(config, self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.args, self.dtype)
+        experiment = Experiment(config or self.config.clone(), self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.args, self.dtype)
         experiment.model_top_k = self.model_top_k
         experiment.model_loss = self.model_loss
         experiment._cgp_prepared = self._cgp_prepared
@@ -132,7 +140,7 @@ class Experiment(object):
     def _handle_path(self, path: Path, relative: bool):
         return path if not relative else path.relative_to(self.temporary_base_folder or self.base_folder)
 
-    def setup_resumed_train_environment(self, config: CGPConfiguration = None, relative_paths: bool = False, start_run=None, start_generation=None):
+    def get_resumed_train_env(self, config: CGPConfiguration = None, relative_paths: bool = False, start_run=None, start_generation=None):
         experiment = self._clone(config or self.config.clone())
         if start_run is None and start_generation is None:
             last_run = self.get_number_of_experiment_results()
@@ -162,7 +170,7 @@ class Experiment(object):
             experiment.config.set_start_generation(start_generation)
         return experiment
 
-    def setup_train_environment(self, config: CGPConfiguration = None, clean=False, relative_paths: bool = False) -> Self:
+    def get_train_env(self, config: CGPConfiguration = None, clean=False, relative_paths: bool = False) -> Self:
         if clean:
             self.clean_train()
 
@@ -193,10 +201,28 @@ class Experiment(object):
         if not config.has_train_weights_file():
             config.set_train_weights_file(self._handle_path(self.result_weights, relative_paths))
         if not config.has_learning_rate_file():
-            config.set_learning_rate_file(self._handle_path(self.learning_rate_file, relative_paths))         
+            config.set_learning_rate_file(self._handle_path(self.learning_rate_file, relative_paths))   
+        if not config.has_mse_chromosome_logging_threshold():
+            allowed_mse_error = self.args.allowed_mse_error
+            try:
+                allowed_mse_error = int(allowed_mse_error)
+            except:
+                allowed_mse_error = float(allowed_mse_error)
+            
+            if isinstance(allowed_mse_error, int):
+                config.set_mse_chromosome_logging_threshold(allowed_mse_error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size())
+            elif isinstance(allowed_mse_error, float):
+                if not (-1 < allowed_mse_error < 1):
+                    raise ValueError(f"allowed-mse-error out of range -1 < {allowed_mse_error} < 1")
+                error = int(256 * allowed_mse_error)
+                config.set_mse_chromosome_logging_threshold(error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size())
+            elif allowed_mse_error is not None:
+                raise TypeError("allowed-mse-error must be either int or float: " + str(type(allowed_mse_error)))
+        if not config.has_start_run() and self.args.start_run:
+            config.set_start_run(self.args.start_run)
         return experiment
 
-    def setup_isolated_train_environment(self, experiment_path: str, clean=False, relative_paths: bool = False) -> Self:
+    def get_isolated_train_env(self, experiment_path: str, clean=False, relative_paths: bool = False) -> Self:
         try:
             new_folder = Path(experiment_path) / (self.get_name())
             new_folder.mkdir(exist_ok=True, parents=True)
@@ -217,14 +243,14 @@ class Experiment(object):
                 
             config.set_gate_parameters_file(self._handle_path(self.gate_parameters_file, relative_paths))
 
-            experiment = self.setup_train_environment(config, relative_paths=relative_paths)
+            experiment = self.get_train_env(config, relative_paths=relative_paths)
             experiment.config.apply_extra_attributes()
             experiment.config.save()
             return experiment
         finally:
             self.set_paths(self.base_folder)
 
-    def setup_eval_environment(self, clean: bool = False) -> Self:
+    def get_result_eval_env(self, clean: bool = False) -> Self:
         experiment = self._clone(self.config.clone(self.eval_config))
         if clean:
             experiment.clean_eval()
@@ -236,16 +262,22 @@ class Experiment(object):
         experiment.config.set_cgp_statistics_file(self.eval_statistics)
         experiment.config.set_stdout_file(self.eval_stdout)
         experiment.config.set_stdout_file(self.eval_stderr)
-        experiment.config.apply_extra_attributes()
-        experiment.config.save()
         return experiment
 
-    def setup_statistics_fix_environment(self) -> Self:
-        experiment = self._clone(self.config.clone())
+    def get_statistics_fix_env(self, inline=False) -> Self:
+        experiment = self._clone(self.config.clone()) if not inline else self
         experiment.config.set_input_file(self.train_weights)
         experiment.config.set_output_file(self.train_statistics.parent / (self.train_statistics.name + ".fixed"))
         experiment.config.set_cgp_statistics_file(self.train_statistics)
         return experiment        
+
+    def get_model_metrics_env(self, output_file: Optional[Union[Path, str]] = None, inline=False) -> Self:
+        assert output_file is not None
+        experiment = self._clone(self.config.clone()) if not inline else self
+        experiment.config.set_input_file(self.train_weights)
+        experiment.config.set_output_file(output_file or self.train_statistics.parent / (self.train_statistics.name + ".eval"))
+        experiment.config.set_train_weights_file(output_file)
+        return experiment  
 
     #  select=1:mem=16gb:scratch_local=10gb:ngpus=1:gpu_cap=cuda60:cuda_version=11.0 -q gpu -l walltime=4:00:00
     # select=1:ncpus={cpu}:mem={ram}:scratch_local={capacity}
@@ -271,8 +303,13 @@ class Experiment(object):
         
         args = self.config.to_args()
         job_name = self.get_name().replace("/", "_")
+        cxx_flags = ["-D_DISABLE_ROW_COL_STATS"]
+        
+        if not self.args.depth:
+            cxx_flags.append("-D_DEPTH_DISABLED")
+        
         template_data = {
-            "machine": f"select=1:ncpus={cpu}:mem={mem}:scratch_local={scratch_capacity}",
+            "machine": f"select=1:ncpus={cpu}:ompthreads={cpu}:mem={mem}:scratch_local={scratch_capacity}",
             "time_limit": time_limit,
             "job_name": f"cgp_{job_name}",
             "server": os.environ.get("pbs_server"),
@@ -287,7 +324,8 @@ class Experiment(object):
             "cgp_config": self.config.path.name,
             "cgp_args": " ".join([str(arg) for arg in args]),
             "experiment": self.get_name(),
-            "error_t": error_type
+            "error_t": error_type,
+            "cflags": " ".join([str(arg) for arg in cxx_flags])
         }
 
         with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w", newline="\n") as pbs_f:
@@ -329,6 +367,14 @@ class Experiment(object):
         ):
         self._planner.add_mapping(sel)
 
+    def add_filter_selectors(self, selectors: Union[Iterable[FilterSelector], FilterSelector]):
+        selectors = selectors if isinstance(selectors, Iterable) else [selectors]
+
+        for x in selectors[:-1]:
+            self.add_filter_selector(x)
+            self.next_input_combination()
+        self.add_filter_selector(selectors[-1])        
+
     def _prepare_cgp(self, config: CGPConfiguration):
         if self._cgp_prepared: 
             return
@@ -341,10 +387,10 @@ class Experiment(object):
                 for combinational_plans in self._planner.get_plan():
                     for plan in combinational_plans:
                         weights = self._model_adapter.get_train_weights(plan.layer_name)
-                        for in_selector in plan.inp:
-                            self._cgp.add_inputs(weights[*in_selector])
-                        for out_selector in plan.out:
-                            self._cgp.add_outputs(weights[*out_selector])
+                        for w, _, _ in tensor_iterator(weights, plan.inp):
+                            self._cgp.add_inputs(w)
+                        for w, _, _ in tensor_iterator(weights, plan.out):
+                            self._cgp.add_outputs(w)
                         self._cgp.next_train_item()
             self._cgp_prepared = True
         finally:
@@ -378,10 +424,50 @@ class Experiment(object):
         self._prepare_cgp(config)
         self._cgp.evaluate()
 
-    def evaluate_missing_statistics(self):
+    def evaluate_chromosome_in_statistics(self, statistics: Union[Path, str], output_statistics: Union[Path, str], output_weights: Union[Path, str], mse_threshold=None):
+        assert statistics != output_statistics
         config = self.config.clone()
+        config.set_input_file(self.train_weights)
+        config.set_cgp_statistics_file(statistics)
+        config.set_output_file(output_statistics)
+        config.set_train_weights_file(output_weights)
+        
+        if mse_threshold:
+            config.set_mse_chromosome_logging_threshold(mse_threshold)
+        
         self._cgp.setup(config)
         self._cgp.evaluate_all()
+
+    def evaluate_chromosomes(self, chromosomes_file: Union[Path, str], output_statistics: Union[Path, str], output_weights: Union[Path, str]):
+        config = self.config.clone()
+        config.set_input_file(self.train_weights)
+        config.set_cgp_statistics_file(chromosomes_file)
+        config.set_output_file(output_statistics)
+        config.set_train_weights_file(output_weights)
+        config.set_gate_parameters_file(self.gate_parameters_file)
+        self._cgp.setup(config)
+        self._cgp.evaluate_chromosomes()
+        
+    def evaluate_chromosome(self, chromosome: Union[Path, str], output_file: Union[Path, str] = "-", weights_file: Union[Path, str] = "-"):
+        config = self.config.clone()
+        if weights_file == "-":
+            weights_file = ".chromosome.temp"        
+        config.set_input_file(self.train_weights)
+        config.set_output_file(output_file)
+        config.set_train_weights_file(weights_file)
+        config.set_gate_parameters_file(self.gate_parameters_file)
+        
+        self._cgp.setup(config)
+        self._cgp.evaluate_chromosome(chromosome)        
+
+        if weights_file == ".chromosome.temp":
+            weights = None
+            with open(weights_file, "r") as f:
+                weights = f.readlines()
+            os.remove(weights_file)
+            return weights
+        return None
+                
 
     def get_train_statistics(self, runs: Optional[Union[List[int], int]] = None) -> List[Path]:
         runs = runs if isinstance(runs, list) else [runs] if runs is not None else self.get_infered_weights_run_list()
@@ -392,34 +478,33 @@ class Experiment(object):
         return [self.learning_rate_file.parent / (self.learning_rate_file.name.format(run=run)) for run in runs]
 
     def get_model_metrics(self,
+                               weight_files: Optional[Union[Path, str]] = None,
+                               output_file: Optional[Union[Path, str]] = None,
+                               append=True,
                                clean=False,
-                               only_path=True,
                                batch_size: int = 32,
                                max_batches: int = None,
                                top: Union[List[int], int] = [1, 5],
                                include_loss: bool = True,
                                show_top_k: int = 0):
-        runs = self.get_infered_weights_run_list()
-        if len(runs) != self.config.get_number_of_runs():
-            self.infer_missing_weights()
-        
-        if clean or not self.model_eval_statistics.exists():
-            with open(self.model_eval_statistics, "w") as file:
+        weight_files = weight_files or [self.result_weights.parent / (self.result_weights.name.format(run=run)) for run in self.get_infered_weights_run_list()]
+        output_file = Path(output_file) or self.model_eval_statistics
+
+        if clean or not output_file.exists():
+            with open(output_file, "w" if not append else "a") as file:
                 csv_writer = csv.writer(file, lineterminator="\n", delimiter=",")
-                headers = [f"top-{k}" for k in top] + ["loss"]         
-                csv_writer.writerow(headers)
-                metrics = []
-                for run in runs:
-                    weights, plans = self.get_weights(self.result_weights.parent / (self.result_weights.name.format(run=run)))
+                if not append:
+                    headers = [f"top-{k}" for k in top] + ["loss"]         
+                    csv_writer.writerow(headers)
+                for file in weight_files:
+                    weights, plans = self.get_weights(file)
                     model = self._model_adapter.inject_weights(weights, plans, inline=False)
                     top_k, loss = model.evaluate(batch_size=batch_size, max_batches=max_batches, top=top, include_loss=include_loss, show_top_k=show_top_k)
                     values = list(top_k) + [loss]            
                     csv_writer.writerow(values)
-                    if only_path:
-                        metrics.append(values)
-                return (headers, metrics) if not only_path else self.model_eval_statistics
-        elif self.model_eval_statistics.exists():
-            return self.model_eval_statistics
+                return output_file
+        elif output_file.exists():
+            return output_file
         else:
             raise NotImplementedError()
 
@@ -465,18 +550,23 @@ class Experiment(object):
     
     def get_weights(self, file: Optional[Union[Path, str, int]]):
         with torch.inference_mode():
-            file = Path(file) if not isinstance(file, int) else str(self.result_configs).format(run=file)
-            weights_vector = []
+            file = Path(file) if not isinstance(file, int) else str(self.result_weights).format(run=file)
             with open(file) as f:
-                for line in f:
-                    segments = line.split(" ")
+                return self.parse_weights(f)
 
-                    if "nan" in segments:
-                        raise ValueError(f"CGP training failed for {file}; the file contains invalid weight")
+    def parse_weights(self, weights: Union[List[str], str]):
+        with torch.inference_mode():
+            weights = weights if isinstance(weights, Iterable) else [weights]
+            weights_vector = []
+            for line in weights:
+                segments = line.strip().split(" ")
 
-                    weights = torch.Tensor([self._to_number(segment) for segment in segments if segment.strip() != ""])
-                    weights_vector.append(weights)
+                if "nan" in segments:
+                    raise ValueError(f"CGP training failed for {line}; the file contains invalid weight")
 
-                    if len(weights_vector) == self._cgp.config.get_dataset_size():
-                        break;
+                weights = torch.Tensor([self._to_number(segment) for segment in segments if segment.strip() != ""])
+                weights_vector.append(weights)
+
+                if len(weights_vector) == self.config.get_dataset_size():
+                    break;
             return weights_vector, self._planner.get_plan()

@@ -36,9 +36,7 @@ class BaseAdapter(ModelAdapter):
         if name == QATQuantizedLeNet5.name:
             return cls(QATQuantizedLeNet5(path))
         if name == PTQQuantizedLeNet5.name:
-            return cls(PTQQuantizedLeNet5(path))
-        if name == MobileNetV2.name:
-            return cls(MobileNetV2())        
+            return cls(PTQQuantizedLeNet5(path))    
         else:
             raise ValueError(f"unknown model {name}")                
 

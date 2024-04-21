@@ -3,7 +3,7 @@
 CC :=icc 
 CXX := icpc #icpc
 CFLAGS := -pedantic -Wall -O3 -qopenmp
-CXXFLAGS := -pedantic -Wall -O3 -std=c++17 -fp-model fast=2 -msse4.2 -axAVX,CORE-AVX2 -D__DISABLE_COUT -D__ERROR_T=${ERROR_DATATYPE} # -Wall -O3 -fopenmp -std=c++17
+CXXFLAGS := -pedantic -Wall -O3 -std=c++17 -fp-model fast=2 -msse4.2 -axAVX,CORE-AVX2 -D__DISABLE_COUT -D__ERROR_T=${ERROR_DATATYPE} ${CXXFLAGS_EXTRA} # -Wall -O3 -fopenmp -std=c++17
 LDFLAGS=-L$MKLROOT/lib/intel64 -qopenmp
 DBGFLAGS := -g
 COBJFLAGS := $(CFLAGS) -c

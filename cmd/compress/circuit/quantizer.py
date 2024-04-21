@@ -25,6 +25,7 @@ class Quantizier(object):
         if self.max_error >= error_allowance:
             raise ValueError(f"cannot quantized because error is more significant than anticipated: {error_allowance} <= {self.max_error}")
         
+        print("max quantization error:", self.max_error)
         for limit in [8, 16, 32, 64]:
             if self.bits <= limit:
                 self.bits = limit

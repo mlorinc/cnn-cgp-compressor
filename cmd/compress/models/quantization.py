@@ -1,5 +1,30 @@
 import torch
 from models.selector import FilterSelector
+from experiments.planner import CGPPinPlanner
+from models.selector import FilterSelector
+from functools import reduce
+import operator
+
+def _tensor_iterator_helper(tensor: torch.Tensor, selector):
+    if isinstance(selector, slice):
+        start = selector.start or 0
+        stop = selector.stop or tensor.shape[0]
+        step = selector.step or 1
+        for i in range(start, stop, step):
+            yield (i, tensor[i])
+    elif isinstance(selector, int):
+        yield (selector, tensor[selector])
+    else:
+        raise TypeError("unknown selector: " + str(type(selector)))
+
+def tensor_iterator(tensor: torch.Tensor, selectors):
+    for sel in selectors:    
+        for filter_i, filter_tensor in _tensor_iterator_helper(tensor, sel[0]):
+            for channel_tensor_i, channel_tensor in _tensor_iterator_helper(filter_tensor, sel[1]):
+                for row_tensor_i, row_tensor in _tensor_iterator_helper(channel_tensor, sel[2]):
+                    w = row_tensor[sel[-1]]
+                    size = reduce(operator.mul, w.shape)
+                    yield w, size, [filter_i, channel_tensor_i, row_tensor_i, sel[-1]]                               
 
 def conv2d_core_slices(kernel_size, core_size):
     # Ensure the core size is valid

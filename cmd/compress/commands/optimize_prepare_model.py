@@ -43,7 +43,7 @@ def optimize_prepare_model(args):
             experiment.config.set_start_run(args.start_run)
         if not experiment.config.has_start_generation():
             experiment.config.set_start_generation(args.start_generation)
-        experiment = experiment.setup_isolated_train_environment(args.experiment_env, relative_paths=True)
+        experiment = experiment.get_isolated_train_env(args.experiment_env, relative_paths=True)
         cpu = args.cpu
         if not experiment.config.has_population_max() and cpu is None:
             raise ValueError("population_max or cpu argument is needed in order to create pbs job")

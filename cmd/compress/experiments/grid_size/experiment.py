@@ -12,7 +12,7 @@ from functools import partial
 
 class GridSizeExperiment(MultiExperiment):
     name = "grid_size"
-    default_grid_sizes=[(2, 2),(3, 3),(5, 5),(10, 10)]
+    default_grid_sizes=[(5, 5)]
     def __init__(self, 
                 config: CGPConfiguration,
                 model_adapter: ModelAdapter, 
@@ -28,19 +28,20 @@ class GridSizeExperiment(MultiExperiment):
                 **kwargs
                 ) -> None:
         super().__init__(config, model_adapter, cgp, args, dtype, **kwargs)    
-        assert n % len(layer_names) == 0
+        assert n is None or n % len(layer_names) == 0
         self.grid_sizes = grid_sizes
         self.layer_names = layer_names
         self.prefix = prefix
         self.suffix = suffix
-        self.k = n // len(layer_names)
+        self.k = n // len(layer_names) if n is not None else None
         self._prepare_filters(automatic_creation)
         
     def _prepare_filters(self, automatic_creation: bool):
         if automatic_creation:
             for layer_name in self.layer_names:
                 layer = self._model_adapter.get_layer(layer_name)
-                combinations = random.sample([(a, b) for b in range(layer.out_channels) for a in range(layer.in_channels)], k=self.k)
+                combinations = [(a, b) for b in range(layer.out_channels) for a in range(layer.in_channels)]
+                combinations = random.sample(combinations, k=self.k) if self.k is not None else combinations
                 for row, col in self.grid_sizes:
                     for inp, out in combinations:
                         for experiment in self.setup_experiment(layer_name, inp, out, row, col):
@@ -74,7 +75,7 @@ class GridSizeExperiment(MultiExperiment):
     def get_argument_parser(parser: argparse._SubParsersAction):
         parser.add_argument("--prefix", default="", help="Prefix for experiment names")
         parser.add_argument("--suffix", default="", help="Suffix for experiment names")
-        parser.add_argument("-n", default=5, type=int, help="Amount of filters to be tested")
+        parser.add_argument("-n", default=None, type=int, help="Amount of filters to be tested")
         parser.add_argument("--layer-names", nargs="+", default=["conv1", "conv2"], help="List of CNN layer names")
         parser.add_argument("--grid-sizes", nargs="+", type=int, default=GridSizeExperiment.default_grid_sizes, help="List of grid sizes (rows, columns)")
         parser.add_argument("--reuse", type=str, default=None, help="Reuse experiment configuration from the other experiment")
