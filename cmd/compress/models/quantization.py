@@ -1,7 +1,7 @@
 import torch
 from models.selector import FilterSelector
 from experiments.planner import CGPPinPlanner
-from models.selector import FilterSelector
+from models.selector import FilterSelector, ZeroSelector, ByteSelector
 from functools import reduce
 import operator
 
@@ -17,8 +17,15 @@ def _tensor_iterator_helper(tensor: torch.Tensor, selector):
     else:
         raise TypeError("unknown selector: " + str(type(selector)))
 
-def tensor_iterator(tensor: torch.Tensor, selectors):
+def tensor_iterator(tensor: torch.Tensor, selectors, input_size: int =None):
     for sel in selectors:    
+        if isinstance(sel, ZeroSelector):
+            yield torch.zeros(size=(sel.size,)), sel.size, None  
+            continue
+        elif isinstance(sel, ByteSelector):
+            yield torch.tensor([-128 / 2**i for i in range(0, 8)]), sel.size, None  
+            continue        
+        
         for filter_i, filter_tensor in _tensor_iterator_helper(tensor, sel[0]):
             for channel_tensor_i, channel_tensor in _tensor_iterator_helper(filter_tensor, sel[1]):
                 for row_tensor_i, row_tensor in _tensor_iterator_helper(channel_tensor, sel[2]):

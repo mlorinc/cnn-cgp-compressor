@@ -1,33 +1,27 @@
 import argparse
+import os
 from commands.debug_model import debug_model
-from experiments.experiment import Experiment
-from experiments.all_layers.experiment import AllLayersExperiment
-from experiments.grid_size.experiment import GridSizeExperiment 
-from experiments.reversed_single_filter.experiment import ReversedSingleFilterExperiment
-from experiments.single_channel.experiment import SingleChannelExperiment
-from experiments.single_filter_zero_outter.experiment import SingleFilterZeroOutterExperiment
-from experiments.single_filter.experiment import SingleFilterExperiment
+import experiments.manager as experiments
 from commands.optimize_prepare_model import optimize_prepare_model
 from commands.fix_train_stats import fix_train_statistics
 from commands.optimize_model import optimize_model
-from commands.evaluate_cgp_model import evaluate_cgp_model
+from commands.evaluate_cgp_model import evaluate_cgp_model, evaluate_model_metrics
 from commands.train_model import train_model
 from commands.evaluate_model import evaluate_base_model
 from commands.quantize_model import quantize_model
 from cgp.cgp_configuration import CGPConfiguration
+from commands.datastore import Datastore
 from typing import List
 
-experiments_classes = {
-    AllLayersExperiment.name: AllLayersExperiment,
-    GridSizeExperiment.name: GridSizeExperiment,
-    ReversedSingleFilterExperiment.name: ReversedSingleFilterExperiment,
-    SingleChannelExperiment.name: SingleChannelExperiment,
-    SingleFilterZeroOutterExperiment.name: SingleFilterZeroOutterExperiment,
-    SingleFilterExperiment.name: SingleFilterExperiment
-}
 
-experiment_factories = dict([(name, clazz.new) for name, clazz in experiments_classes.items()])
-experiment_commands = ["train", "train-pbs", "evaluate", "fix-train-stats"]
+experiment_commands = ["train", "train-pbs", "evaluate", "fix-train-stats", "model-metrics"]
+required_cgp = {
+    "train": True,
+    "train-pbs": False,
+    "evaluate": True,
+    "fix-train-stats": True,
+    "model-metrics": True
+}
 
 def _register_model_commands(subparsers: argparse._SubParsersAction):
     # model:train
@@ -61,40 +55,38 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
     help_evaluate = "Evaluate CGP model perfomance such as MSE, Energy, Area, Delay, Depth, Gate count and CNN accuracy and loss. Weights are trained as they are defined by {experiment_name}."
     help_metacentrum = "Prepare file structure and a PBS file for training in Metacentrum. Dataset is generated according to {experiment_name}."
 
-    for command, help in zip(experiment_commands, [help_train, help_metacentrum, help_evaluate, ""]):
+    for command, help in zip(experiment_commands, [help_train, help_metacentrum, help_evaluate, "", ""]):
         for experiment_name in experiment_names:
             experiment_parser = subparsers.add_parser(f"{experiment_name}:{command}", help=help.format(experiment_name=experiment_name))
-            experiment_class = experiments_classes.get(experiment_name)
-
             if command != "fix-train-stats":
                 experiment_parser.add_argument("model_name", help="Name of the model to optimize")
                 experiment_parser.add_argument("model_path", help="Path to the model to optimize")
-
-            experiment_parser.add_argument("cgp_binary_path", help="Path to the CGP binary")
+            experiment_parser.add_argument("--cgp", help="Path to the CGP binary", type=str, default=os.environ.get("cgp", None), required=("cgp" not in os.environ and required_cgp[command]))
+            experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=os.environ.get("experiments_root", "cmd/compress/experiments/"))
+            experiment_parser.add_argument("--experiment", help="Specific sub-experiments", type=str, nargs="+", default=[])
 
             cgp_group = experiment_parser.add_argument_group("Cartesian Genetic Programming")
             CGPConfiguration.get_cgp_arguments(cgp_group)
 
             experiment_group = experiment_parser.add_argument_group("Experiment")
-            if command in ["train", "train-pbs"]:
-                experiment_group.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
-            elif command in ["evaluate"]:
-                experiment_group.add_argument("--file", nargs='+', help="List of file paths to evaluate", required=False)
-            elif command in ["fix-train-stats"]:
-                experiment_group.add_argument("--experiment-root", nargs='?', help="Experiment root", required=False)
+            experiment_group.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
 
-            experiment_group = experiment_class.get_argument_parser(experiment_group)
-            experiment_group = experiment_class.get_base_argument_parser(experiment_group)
+            if command == "model-metrics":
+                experiment_group.add_argument("--runs", help="Specific runs to evaluate", nargs="+", default=None)
+                experiment_group.add_argument("--top", help="Evaluate only the best", type=int, default=None)
+
+            experiments.get_experiment_arguments(experiment_name, experiment_group)
+            experiments.get_base_argument_parser(experiment_group)
 
             pbs_group = experiment_parser.add_argument_group("PBS Metacentrum")
             if "pbs" in command:
-                pbs_group = Experiment.get_train_pbs_argument_parser(pbs_group)                
+                pbs_group = experiments.get_train_pbs_argument_parser(pbs_group)                
 
-            experiment_parser.set_defaults(factory=experiment_factories.get(experiment_name), experiment_name=experiment_name)
+            experiment_parser.set_defaults(factory=experiments.get_experiment_factory(experiment_name), experiment_name=experiment_name)
 
 def register_commands(parser: argparse._SubParsersAction):
     subparsers = parser.add_subparsers(dest="command")
-    _register_experiment_commands(subparsers, experiments_classes.keys())
+    _register_experiment_commands(subparsers, experiments.experiments_classes.keys())
     _register_model_commands(subparsers)
 
 def dispatch(args):
@@ -113,6 +105,8 @@ def dispatch(args):
             return lambda: evaluate_cgp_model(args)
         if command == "fix-train-stats":
             return lambda: fix_train_statistics(args)
+        if command == "model-metrics":
+            return lambda: evaluate_model_metrics(args)
         else:
             raise ValueError(f"unknown commmand {args.command}")
     except ValueError as e:

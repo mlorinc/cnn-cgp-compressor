@@ -1,9 +1,7 @@
-import argparse
 import csv
 import os
 import shutil
 import math
-import tempfile
 from string import Template
 from pathlib import Path
 from typing import Union, Self, Optional, List, Iterable
@@ -23,42 +21,24 @@ class MissingChromosomeError(ValueError):
         super().__init__(*args)
 
 class Experiment(object):
-    evolution_parameters = ["run", "generation", "timestamp"]
-    fitness_parameters = ["mse", "area", "energy", "delay", "depth", "gate_count"]
-    chromosome_parameters = ["chromosome"]
-    columns = evolution_parameters + fitness_parameters + chromosome_parameters
     train_cgp_name = "train_cgp.config"
 
-    @staticmethod
-    def get_base_argument_parser(parser: argparse.ArgumentParser):
-        parser.add_argument("--depth", action="store_true", default=False, help="Include depth metric")
-        parser.add_argument("-e", "--allowed-mse-error", default=0.15, help="Allowed error when chromosomes will be logged in statistics")
-        return parser
-
-    @staticmethod
-    def get_train_pbs_argument_parser(parser: argparse.ArgumentParser):
-        parser.add_argument("--time-limit", required=True, help="Time limit for the PBS job")
-        parser.add_argument("--template-pbs-file", required=True, help="Path to the template PBS file")
-        parser.add_argument("--experiments-folder", default="experiments_folder", help="Experiments folder")
-        parser.add_argument("--results-folder", default="results", help="Results folder")
-        parser.add_argument("--cgp-folder", default="cgp_cpp_project", help="CGP folder")
-        parser.add_argument("--cpu", type=int, default=None, help="Number of CPUs")
-        parser.add_argument("--mem", default="2gb", help="Memory")
-        parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
-        return parser
-
-    def __init__(self, config: Union[CGPConfiguration, str, Path], model_adapter: ModelAdapter, cgp: CGP, args, dtype=torch.int8, parent: Optional[Self] = None) -> None:
-        self.base_folder = config.path.parent if isinstance(config, CGPConfiguration) else Path(config)
-        self.args = args
+    def __init__(self, config: Union[CGPConfiguration, str, Path], model_adapter: ModelAdapter, cgp: CGP,
+                 dtype=torch.int8, parent: Optional[Self] = None, start_run=None, depth=None, allowed_mse_error=None, **kwargs) -> None:
+        self.base_folder = config.path.parent if isinstance(config, CGPConfiguration) else Path(config) if config is not None else None
+        self.args = dict(**kwargs)
+        self._allowed_mse_error = None# self.args["allowed_mse_error"]
+        self._start_run = start_run
+        self._depth = depth
         if isinstance(config, CGPConfiguration):
-            config.parse_arguments(args)
+            config.parse_arguments({**self.args, "start_run": start_run})
 
         self.temporary_base_folder = None
         self.set_paths(self.base_folder)
         self.parent: Self = parent
         self.config = config if isinstance(config, CGPConfiguration) else None
         self._model_adapter = model_adapter
-        self._cgp = cgp if not isinstance(cgp, str) else CGP(cgp)
+        self._cgp = cgp if isinstance(cgp, CGP) else CGP(cgp)
         self.dtype = dtype
         self._to_number = int if self.dtype == torch.int8 else float
         self.model_top_k = None
@@ -74,6 +54,10 @@ class Experiment(object):
             return cls(CGPConfiguration(path), model_adapter, model_path, cgp, {})
         else:
             return cls(CGPConfiguration(path / Experiment.train_cgp_name), model_adapter, cgp, {})
+
+    @classmethod
+    def with_cli_arguments(cls, config: Union[CGPConfiguration, str, Path], model_adapter: ModelAdapter, cgp: CGP, args, prepare=True):
+        return cls(config, model_adapter, cgp, prepare=prepare, **args)
 
     def get_name(self, depth: Optional[int] = None):
         current_item = self
@@ -127,7 +111,7 @@ class Experiment(object):
         self.clean_eval()
 
     def _clone(self, config: CGPConfiguration) -> Self:
-        experiment = Experiment(config or self.config.clone(), self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.args, self.dtype)
+        experiment = Experiment(config or self.config.clone(), self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.dtype, **self.args)
         experiment.model_top_k = self.model_top_k
         experiment.model_loss = self.model_loss
         experiment._cgp_prepared = self._cgp_prepared
@@ -135,6 +119,9 @@ class Experiment(object):
         experiment.parent = self.parent
         experiment.args = self.args
         experiment.dtype = self.dtype
+        experiment._depth = self._depth
+        experiment._start_run = self._start_run
+        experiment._allowed_mse_error = self._allowed_mse_error
         return experiment
 
     def _handle_path(self, path: Path, relative: bool):
@@ -202,8 +189,8 @@ class Experiment(object):
             config.set_train_weights_file(self._handle_path(self.result_weights, relative_paths))
         if not config.has_learning_rate_file():
             config.set_learning_rate_file(self._handle_path(self.learning_rate_file, relative_paths))   
-        if not config.has_mse_chromosome_logging_threshold():
-            allowed_mse_error = self.args.allowed_mse_error
+        if not config.has_mse_chromosome_logging_threshold() and self._allowed_mse_error is not None:
+            allowed_mse_error = self._allowed_mse_error
             try:
                 allowed_mse_error = int(allowed_mse_error)
             except:
@@ -218,8 +205,8 @@ class Experiment(object):
                 config.set_mse_chromosome_logging_threshold(error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size())
             elif allowed_mse_error is not None:
                 raise TypeError("allowed-mse-error must be either int or float: " + str(type(allowed_mse_error)))
-        if not config.has_start_run() and self.args.start_run:
-            config.set_start_run(self.args.start_run)
+        if not config.has_start_run() and self._start_run:
+            config.set_start_run(self._start_run)
         return experiment
 
     def get_isolated_train_env(self, experiment_path: str, clean=False, relative_paths: bool = False) -> Self:
@@ -305,7 +292,7 @@ class Experiment(object):
         job_name = self.get_name().replace("/", "_")
         cxx_flags = ["-D_DISABLE_ROW_COL_STATS"]
         
-        if not self.args.depth:
+        if not self._depth:
             cxx_flags.append("-D_DEPTH_DISABLED")
         
         template_data = {

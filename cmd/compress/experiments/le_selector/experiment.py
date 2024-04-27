@@ -5,13 +5,14 @@ from models.adapters.model_adapter import ModelAdapter
 from experiments.composite.experiment import MultiExperiment
 from experiments.experiment import Experiment
 from models.quantization import conv2d_selector
+from models.selector import FilterSelector, ZeroSelector
 import argparse
 from typing import List
 from parse import parse
 
-class AllLayersExperiment(MultiExperiment):
-    name = "all_layers"
-    thresholds = [250, 150, 100, 50, 25, 15, 10, 0]
+class LeSelectorExperiment(MultiExperiment):
+    name = "le_selector"
+    thresholds = [0]
     def __init__(self, 
                  config: CGPConfiguration, 
                  model_adapter: ModelAdapter, 
@@ -35,7 +36,7 @@ class AllLayersExperiment(MultiExperiment):
     def _prepare_filters(self):
         for mse in self.mse_thresholds:
             for experiment in self.create_experiment(f"{self.prefix}mse_{mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.layer_names)):
-                experiment.config.set_mse_threshold(mse**2 * (16*6*16+6*16))
+                experiment.config.set_mse_threshold(mse**2 * (16*6*25+6*25))
                 experiment.config.set_row_count(self.args["rows"])
                 experiment.config.set_col_count(self.args["cols"])
                 experiment.config.set_look_back_parameter(self.args["cols"])
@@ -62,12 +63,12 @@ class AllLayersExperiment(MultiExperiment):
     def _get_filters(self, layer_names: List[str]):
         out = []
         for layer_name in layer_names:
-            out.append(conv2d_selector(layer_name, [slice(None), slice(None)], 5, 3))
+            out.append(FilterSelector(layer_name, [ZeroSelector(self.config.get_input_count())], [(slice(None), slice(None), slice(None), slice(None))]))
         return out
 
     @staticmethod
     def new(config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args):
-        return AllLayersExperiment(config, model_adapter, cgp, args,
+        return LeSelectorExperiment(config, model_adapter, cgp, args,
                                    layer_names=args.layer_names,
                                    prefix=args.prefix,
                                    suffix=args.suffix,

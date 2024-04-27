@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Self
 from models.base_model import BaseModel
 import torch.nn as nn
 import torch
@@ -21,6 +21,9 @@ class LeNet5(BaseModel):
         self.fc1 = nn.Linear(16 * 4 * 4, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
+
+    def _create_self(self, *args) -> Self:
+        return LeNet5(self.model_path)
 
     def get_train_data(self):
         return torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=LeNet5.transforms)

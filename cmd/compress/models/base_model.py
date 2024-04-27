@@ -44,6 +44,7 @@ class BaseModel(ABC, nn.Module):
 
     def load_state(self, state):
         self.load_state_dict(state)
+        self.to(self.device)
         return self        
 
     def get_state(self):
@@ -68,9 +69,12 @@ class BaseModel(ABC, nn.Module):
             model.model_path = self.model_path or path
             return model
 
+    @abstractmethod
+    def _create_self(self, *args) -> Self:
+        raise NotImplementedError()
+
     def clone(self) -> Self:
-        # Create a new instance of the same type
-        clone = copy.deepcopy(self)
+        clone = self._create_self()
         clone.load_state(self.get_state())
         return clone
 

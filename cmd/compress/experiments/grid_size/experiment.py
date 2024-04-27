@@ -7,7 +7,7 @@ from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from models.adapters.model_adapter import ModelAdapter
 from models.quantization import conv2d_selector
-from experiments.multi_experiment import MultiExperiment
+from experiments.composite.experiment import MultiExperiment
 from functools import partial
 
 class GridSizeExperiment(MultiExperiment):
@@ -17,7 +17,6 @@ class GridSizeExperiment(MultiExperiment):
                 config: CGPConfiguration,
                 model_adapter: ModelAdapter, 
                 cgp: CGP,
-                args,
                 grid_sizes=default_grid_sizes,
                 layer_names=["conv1", "conv2"],
                 prefix="",
@@ -27,7 +26,7 @@ class GridSizeExperiment(MultiExperiment):
                 automatic_creation: bool = True,
                 **kwargs
                 ) -> None:
-        super().__init__(config, model_adapter, cgp, args, dtype, **kwargs)    
+        super().__init__(config, model_adapter, cgp, dtype, **kwargs)    
         assert n is None or n % len(layer_names) == 0
         self.grid_sizes = grid_sizes
         self.layer_names = layer_names
@@ -70,26 +69,8 @@ class GridSizeExperiment(MultiExperiment):
                 pass
         desired_instance._prepared = True
         return desired_instance
-    
-    @staticmethod
-    def get_argument_parser(parser: argparse._SubParsersAction):
-        parser.add_argument("--prefix", default="", help="Prefix for experiment names")
-        parser.add_argument("--suffix", default="", help="Suffix for experiment names")
-        parser.add_argument("-n", default=None, type=int, help="Amount of filters to be tested")
-        parser.add_argument("--layer-names", nargs="+", default=["conv1", "conv2"], help="List of CNN layer names")
-        parser.add_argument("--grid-sizes", nargs="+", type=int, default=GridSizeExperiment.default_grid_sizes, help="List of grid sizes (rows, columns)")
-        parser.add_argument("--reuse", type=str, default=None, help="Reuse experiment configuration from the other experiment")
-        parser.add_argument("--name-format", type=str, default=None, help="Name format of the resued experiments")
-        MultiExperiment.get_argument_parser(parser)
-        return parser
 
-    @staticmethod
-    def new(config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args):
-        cls = GridSizeExperiment if not args.reuse else partial(GridSizeExperiment.with_replication, args.reuse, args.name_format)
-        return cls(config, model_adapter, cgp, args,
-                                        grid_sizes=args.grid_sizes,
-                                        layer_names=args.layer_names,
-                                        suffix=args.suffix,
-                                        prefix=args.prefix,
-                                        n=args.n,
-                                        batches=args.batches)
+    @classmethod
+    def with_cli_arguments(cli, config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args):
+        cls = cli if not args.reuse else partial(GridSizeExperiment.with_replication, args.reuse, args.name_format)
+        return cls(config, model_adapter, cgp, **args)

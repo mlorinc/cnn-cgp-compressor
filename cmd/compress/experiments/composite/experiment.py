@@ -1,7 +1,7 @@
-import argparse
 from typing import Generator, List, Dict, Union, Optional, Self
 import torch
 import os
+from experiments.composite.cli import get_argument_parser
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from experiments.experiment import Experiment, FilterSelector
@@ -16,10 +16,9 @@ class SkipExperimentError(ValueError):
         super().__init__(*args)
 
 class MultiExperiment(Experiment, ABC):
-    def __init__(self, config: Union[str, CGPConfiguration, Path], model_adapter: ModelAdapter, cgp: CGP, args, dtype=torch.int8, name_fmt: str = None, batches: int = None) -> None:
-        super().__init__(config, model_adapter, cgp, args, dtype)
+    def __init__(self, config: Union[str, CGPConfiguration, Path], model_adapter: ModelAdapter, cgp: CGP, dtype=torch.int8, name_fmt: str = None, batches: int = None, **kwargs) -> None:
+        super().__init__(config, model_adapter, cgp, dtype, **kwargs)
         self.experiments: Dict[str, Experiment] = {}
-        self.args = args
         self.name_fmt = name_fmt
         self.batches = batches
 
@@ -55,7 +54,7 @@ class MultiExperiment(Experiment, ABC):
                 if isinstance(self.config, CGPConfiguration) else \
                 CGPConfiguration(self.base_folder / current_experiment_name / Experiment.train_cgp_name)
 
-            new_experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype)
+            new_experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, **self.args)
             new_experiment.parent = self
             
             if self.batches is not None:
@@ -117,8 +116,3 @@ class MultiExperiment(Experiment, ABC):
 
     def get_number_of_experiments(self) -> int:
         return sum([1 for obj in os.listdir(self.experiment_root_path) if os.path.isfile(self.experiment_root_path / obj)])
-
-    @staticmethod
-    def get_argument_parser(parser: argparse._SubParsersAction):
-        parser.add_argument("-b", "--batches", default=None, type=int, help="Split single experiment into multiple smaller batches")    
-        return parser

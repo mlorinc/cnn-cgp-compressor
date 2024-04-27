@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Self
 from models.lenet import LeNet5
 from models.quantized_model import QuantizedBaseModel
 import torch
@@ -13,7 +13,11 @@ class QATQuantizedLeNet5(QuantizedBaseModel, LeNet5):
         self.dequant = torch.quantization.DeQuantStub()
         self.backend = "fbgemm"     
 
+    def _create_self(self, *args) -> Self:
+        return QATQuantizedLeNet5(self.model_path)
+
     def _prepare(self):
+        super()._prepare()
         # fuse first Conv-ReLU pair
         torch.quantization.fuse_modules(self, ["conv1", "relu1"], inplace=True)
         # fuse second Conv-ReLU pair
@@ -24,6 +28,7 @@ class QATQuantizedLeNet5(QuantizedBaseModel, LeNet5):
         torch.quantization.prepare_qat(self, inplace=True)
 
     def _convert(self):
+        super()._convert()
         torch.quantization.convert(self, inplace=True)
 
     def quantize(self, new_path: str, inline=True):

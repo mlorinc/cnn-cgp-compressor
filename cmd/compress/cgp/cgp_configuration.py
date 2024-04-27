@@ -92,7 +92,7 @@ class CGPConfiguration:
     def parse_arguments(self, args):
         for argument_name, metadata in self.ARGUMENTS.items():
             if metadata["attribute"] in args:
-                value = getattr(args, metadata["attribute"])
+                value = args[metadata["attribute"]]
                 if value is not None:
                     self.set_attribute(metadata["attribute"], value)
 

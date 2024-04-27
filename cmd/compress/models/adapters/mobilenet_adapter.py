@@ -7,7 +7,7 @@ import torch.optim as optim
 # import torchvision.models.quantization as models
 import torchvision.models as models
 import torchvision.datasets as datasets
-import torchvision.models.quantization as qunatization_models
+import torchvision.models.quantization as quantization_models
 
 from typing import Any, Optional, Union
 
@@ -48,8 +48,11 @@ class MobileNetV2Adapter(ModelAdapter):
     def __init__(self):
         # super().__init__(models.mobilenet_v2(weights=models.MobileNet_V2_QuantizedWeights, quantize=True, pretrained=True))
         # super().__init__(qunatization_models.mobilenet_v2(weights=qunatization_models.MobileNet_V2_QuantizedWeights, quantize=True, backend = "fbgemm"))
-        super().__init__(models.mobilenet_v2(weights=models.MobileNet_V2_Weights, pretrained=True))
+        super().__init__(quantization_models.mobilenet_v2(weights=quantization_models.MobileNet_V2_QuantizedWeights, pretrained=True, quantize=True))
         self.block_count = 19
+
+    def clone(self):
+        return super().clone()
 
     def get_block(self, index: int) -> Union[Residual, ExpandedResidual, nn.Conv2d]:
         if index == 0 or 18 <= index:

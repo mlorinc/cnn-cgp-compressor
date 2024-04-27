@@ -1,44 +1,8 @@
-import torch
-from commands.evaluate_model import get_model_adapter
-from cgp.cgp_adapter import CGP
-from cgp.cgp_configuration import CGPConfiguration
-from experiments.experiment import Experiment
-from experiments.multi_experiment import MultiExperiment
-from models.adapters.model_adapter import ModelAdapter
-from models.adapters.base import BaseAdapter
-from typing import Generator
+from commands.factory.experiment import create_all_experiment
 
-def get_experiment(config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args, dtype=torch.int8) -> Experiment:
-    return args.factory(config=config, model_adapter=model_adapter, cgp=cgp, args=args)
-
-def prepare_experiment(args) -> Generator[Experiment, None, None]:
-    factories = args.factories if "factories" in args else args.factory
-    factories = factories if isinstance(factories, list) else [factories]
-
-    for factory in factories:
-        cgp = CGP(args.cgp_binary_path)
-        model = BaseAdapter.from_base_model(args.model_name, args.model_path) if "model_name" in args else None
-
-        if model is not None:
-            model.load()
-            model.eval()
-
-        if "experiment_root" not in args:
-            config = CGPConfiguration(f"cmd/compress/experiments/{args.experiment_name}/config.cgp")
-            config.parse_arguments(args)
-        else:
-            config = args.experiment_root
-
-        experiment = factory(config=config, model_adapter=model, cgp=cgp, args=args)
-
-        if isinstance(experiment, MultiExperiment):
-            for x in experiment.experiments.values() if "experiment_root" not in args else experiment.get_experiments():
-                yield x
-        else:
-            yield experiment
 
 def optimize_prepare_model(args):
-    for experiment in prepare_experiment(args):
+    for experiment in create_all_experiment(args):
         if not experiment.config.has_start_run():
             experiment.config.set_start_run(args.start_run)
         if not experiment.config.has_start_generation():

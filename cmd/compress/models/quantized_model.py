@@ -8,14 +8,23 @@ from tqdm import tqdm
 class QuantizedBaseModel(BaseModel, ABC):
     def __init__(self, model_path: str = None):
         super().__init__(model_path)
+        self.prepared = False
+
+    def clone(self) -> Self:
+        clone = self._create_self()
+        if self.prepared:
+            clone._prepare()
+            clone._convert()
+        clone.load_state(self.get_state())
+        return clone
 
     @abstractmethod
     def _prepare(self):
-        raise NotImplementedError()
+        self.prepared = True
 
     @abstractmethod
     def _convert(self):
-        raise NotImplementedError()
+        self.prepared = True
     
     @abstractmethod
     def quantize(self, new_path: str = None, inline=True) -> Self:
@@ -30,7 +39,6 @@ class QuantizedBaseModel(BaseModel, ABC):
         self._convert()
         super().load(model_path)
         return self
-    
 
     def ptq_quantization(self) -> Self:
         reference_model = copy.deepcopy(self)

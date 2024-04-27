@@ -17,7 +17,10 @@ class CGPProcessError(Exception):
 
 class CGP(object):
     def __init__(self, binary: str, dtype=torch.int8) -> None:
-        self._binary = Path(binary)
+        if binary is None:
+            self._binary = None
+        else:
+            self._binary = Path(binary)
         self.config = None
         self._dtype = dtype
 
