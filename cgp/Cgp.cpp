@@ -179,14 +179,14 @@ void CGP::generate_population()
 
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const
+CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const
 {
 	CGP::error_t sum = 0;
 	#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < no_care; i++)
 	{
-		const error_t diff = static_cast<int>(predictions[i]) - static_cast<int>(expected_output[i]);
-		sum += diff * diff;
+		const error_t delta = (predictions[i] > expected_output[i]) ? (predictions[i] - expected_output[i]) : (expected_output[i] - predictions[i]);
+		sum += delta * delta;
 	}
 	return sum;
 }
@@ -204,17 +204,17 @@ void CGP::set_best_chromosome(const std::string& solution, const dataset_t& data
 
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
-CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const
+CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const
 {
 	error_t sum = 0;
 	#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < no_care; i++)
 	{
-		const error_t diff = static_cast<int>(predictions[i]) - static_cast<int>(expected_output[i]);
-		sum += diff * diff;
+		const error_t delta = (predictions[i] > expected_output[i]) ? (predictions[i] - expected_output[i]) : (expected_output[i] - predictions[i]);
+		sum += delta * delta;
 	}
 
-	return sum / no_care;
+	return  sum;
 }
 
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const dataset_t& dataset)
@@ -222,14 +222,13 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	const auto& input = get_dataset_input(dataset);
 	const auto& expected_output = get_dataset_output(dataset);
 	const auto& no_cares = get_dataset_no_care(dataset);
-	const int end = input.size();
+	const size_t end = input.size();
 	error_t mse_accumulator = 0;
-
 	for (int i = 0; i < end; i++)
 	{
 		chrom->set_input(input[i], i);
 		chrom->evaluate();
-		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i], no_cares[i]);
+		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i], no_cares[i], i);
 	}
 
 	return CGP::create_solution(chrom, mse_accumulator);
@@ -239,7 +238,7 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 {
 	chrom->set_input(input, selector);
 	chrom->evaluate();
-	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output, no_care));
+	return CGP::create_solution(chrom, error_fitness_without_aggregation(*chrom, expected_output, no_care, selector));
 }
 
 CGP::quantized_energy_t CGP::get_energy_fitness(Chromosome& chrom)
@@ -267,12 +266,12 @@ CGP::gate_count_t CGP::get_gate_count(Chromosome& chrom)
 	return chrom.get_node_count();
 }
 
-CGP::error_t CGP::error_fitness(Chromosome& chrom, const weight_output_t &expected_output, const int no_care) {
-	return mse(chrom.begin_output(), expected_output, no_care);
+CGP::error_t CGP::error_fitness(Chromosome& chrom, const weight_output_t &expected_output, const int no_care, const int layer) {
+	return mse(chrom.begin_output(), expected_output, no_care, layer);
 }
 
-CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care) {
-	return mse_without_division(chrom.begin_output(), expected_output, no_care);
+CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer) {
+	return mse_without_division(chrom.begin_output(), expected_output, no_care, layer);
 }
 
 CGP::solution_t CGP::get_default_solution()

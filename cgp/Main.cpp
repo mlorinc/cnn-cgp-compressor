@@ -96,14 +96,14 @@ static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t&
 	size_t counter = 1;
 	std::string chromosome;
 	std::getline(in.get_stream(), chromosome);
+	CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::trunc);
+	out.log_csv_header();
 	while (!in.eof() && !in.fail())
 	{
 		std::unordered_map<std::string, std::string> template_args{ {"run", std::to_string(counter)} };
 
 		auto chrom = std::make_shared<Chromosome>(*cgp_model, chromosome);
 		auto solution = cgp_model->evaluate(dataset, chrom);
-
-		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
 		out.log_csv(counter, counter, "", solution);
 		counter++;
 		CGPOutputStream weight_logger(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
@@ -318,22 +318,6 @@ int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
-
-	//std::vector<std::string> arguments
-	//{
-	//	"evaluate:chromosomes",
-	//	R"(c:\\Users\\Majo\\source\\repos\\TorchCompresser\\cmd\\compress\\..\\..\\data_store\\single_channel\\conv1_mse_0_30_7\\train_cgp.config)",
-	//	R"(--input-file)",
-	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/train.data)",
-	//	R"(--cgp-statistics-file)",
-	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/chromosomes.txt)",
-	//	R"(--output-file)",
-	//	R"(#)",
-	//	R"(--train-weights-file)",
-	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/chromosome_weights/chromosomes.{run}.txt)",
-	//	R"(--gate-parameters-file)",
-	//	R"(c:/users/majo/source/repos/torchcompresser/data_store/single_channel/conv1_mse_0_30_7/gate_parameters.txt)"
-	//};
 
 #if defined __DATE__ && defined __TIME__
 	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;

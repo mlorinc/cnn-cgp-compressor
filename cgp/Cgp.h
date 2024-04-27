@@ -272,7 +272,7 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
 		/// <returns>The error fitness value.</returns>
-		error_t error_fitness(Chromosome& chrom, const weight_output_t& expected_output, const int no_care);
+		error_t error_fitness(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer);
 
 		/// <summary>
 		/// Calculate the accuracy (error) fitness of a chromosome without aggregation.
@@ -280,7 +280,7 @@ namespace cgp {
 		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
 		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
 		/// <returns>The error fitness value.</returns>
-		error_t error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care);
+		error_t error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer);
 
 		/// <summary>
 		/// Calculate the energy fitness of a chromosome.
@@ -323,7 +323,7 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value.</returns>
-		error_t mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
+		error_t mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const;
 
 		/// <summary>
 		/// Calculate the Mean Squared Error (MSE) metric for made predictions without division.
@@ -331,7 +331,7 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value without being divided.</returns>
-		error_t mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
+		error_t mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const;
 
 		/// <summary>
 		/// Analyze chromosome and calculate MSE metric for made predictions. It does not fill up other fitnesses due to performance.

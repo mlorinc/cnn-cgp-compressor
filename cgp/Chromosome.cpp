@@ -132,7 +132,7 @@ void Chromosome::setup_chromosome(const std::string& serialized_chromosome)
 	std::istringstream input(serialized_chromosome);
 
 	char discard;
-	size_t input_count, output_count, col_count, row_count, function_input_arity, dataset_size, l_back;
+	size_t input_count, output_count, col_count, row_count, function_input_arity, dataset_size, l_back, number_discard;
 
 	// {n,n,n,n,n,n,5}
 	input >> discard >> input_count >> discard >> output_count >> discard >> col_count >> discard >> row_count
@@ -145,34 +145,54 @@ void Chromosome::setup_chromosome(const std::string& serialized_chromosome)
 
 	setup_maps();
 	setup_output_iterators(0);
-
+	
 	size_t block_size = cgp_configuration.function_input_arity() + 1;
 	auto it = chromosome.get();
-	for (size_t i = 0; i < col_count * row_count; i++)
-	{
-		// ([n]i,i,...,f)
-		if (!(input >> discard >> discard >> input_count >> discard))
-		{
-			throw std::invalid_argument("invalid format of the gate ID");
-		}
+	auto target_row = cgp_configuration.row_count();
+	auto target_col = cgp_configuration.col_count();
 
-		for (size_t i = 0; i < block_size; i++)
+	if (target_row != row_count || target_col != col_count)
+	{
+		setup_chromosome();
+	}
+
+	for (size_t j = 0; j < col_count; j++)
+	{
+		for (size_t i = 0; i < row_count; i++)
 		{
-			if (!(input >> *it++ >> discard))
+			// ([n]i,i,...,f)
+			if (!(input >> discard >> discard >> number_discard >> discard))
 			{
-				throw std::invalid_argument("invalid format of the chromosome gate definition\n" + serialized_chromosome);
+				throw std::invalid_argument("invalid format of the gate ID");
+			}
+
+			auto target_block = (j * target_row + i) * block_size;
+			for (size_t k = 0; k < block_size; k++)
+			{
+				if (!(input >> it[target_block + k] >> discard))
+				{
+					throw std::invalid_argument("invalid format of the chromosome gate definition\n" + serialized_chromosome);
+				}
 			}
 		}
 	}
 
 	// (n,n,...,n)
 	input >> discard;
-	for (size_t i = 0; i < output_count * dataset_size; i++)
+	gene_t pin;
+	for (auto it = absolute_output_start; it != absolute_output_end; it++)
 	{
-		if (!(input >> *it++ >> discard))
+		if (!(input >> pin >> discard))
 		{
 			throw std::invalid_argument("invalid format of the chromosome output\n" + serialized_chromosome);
 		}
+		
+		int gate_index = (pin - input_count) / cgp_configuration.function_output_arity();
+		int pin_delta = (pin - input_count) - gate_index * cgp_configuration.function_output_arity();
+		int row = gate_index % row_count;
+		int col = gate_index / row_count;
+		int transformed_index = col * target_row + row;
+		*it = input_count + transformed_index * cgp_configuration.function_output_arity() + pin_delta;
 	}
 
 #ifdef __CGP_DEBUG 
