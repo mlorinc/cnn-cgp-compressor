@@ -96,7 +96,6 @@ def dispatch(args):
         print(experiment_name, command)
         if experiment_name == "model":
             raise ValueError(f"invalid experiment name {experiment_name}")
-
         if command == "train":
             return lambda: optimize_model(args)
         if command == "train-pbs":

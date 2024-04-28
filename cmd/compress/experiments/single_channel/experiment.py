@@ -53,7 +53,7 @@ class SingleChannelExperiment(MultiExperiment):
          
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
-        experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype)
+        experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error)
         result = parse("{layer_name}_mse_{mse}_{rows}_{cols}", name)
         
         if not result:

@@ -35,14 +35,15 @@ class AllLayersExperiment(MultiExperiment):
     def _prepare_filters(self):
         for mse in self.mse_thresholds:
             for experiment in self.create_experiment(f"{self.prefix}mse_{mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.layer_names)):
-                experiment.config.set_mse_threshold(mse**2 * (16*6*16+6*16))
+                experiment.config.set_mse_threshold(int(mse**2 * (16*6*16+6*16)))
+                # experiment.config.set_mse_chromosome_logging_threshold((30)**2 * (16*6*16+6*16))
                 experiment.config.set_row_count(self.args["rows"])
                 experiment.config.set_col_count(self.args["cols"])
                 experiment.config.set_look_back_parameter(self.args["cols"])
 
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
-        experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype)
+        experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error)
         result = parse("{prefix}mse_{mse}_{rows}_{cols}", name)
         
         if not result:

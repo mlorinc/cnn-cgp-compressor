@@ -40,7 +40,6 @@ def create_experiment(args, prepare=True) -> Experiment:
         config = _get_config(args.experiment_path, args.experiment_name)
         if isinstance(config, CGPConfiguration):
             config.parse_arguments(vars(args))
-        
         args = vars(args)
         if "cgp" in args:
             cgp = args["cgp"]

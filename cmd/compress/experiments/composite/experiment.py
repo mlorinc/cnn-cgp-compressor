@@ -54,7 +54,7 @@ class MultiExperiment(Experiment, ABC):
                 if isinstance(self.config, CGPConfiguration) else \
                 CGPConfiguration(self.base_folder / current_experiment_name / Experiment.train_cgp_name)
 
-            new_experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, **self.args)
+            new_experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
             new_experiment.parent = self
             
             if self.batches is not None:

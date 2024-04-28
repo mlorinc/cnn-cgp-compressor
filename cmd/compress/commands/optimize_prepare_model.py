@@ -1,6 +1,5 @@
 from commands.factory.experiment import create_all_experiment
 
-
 def optimize_prepare_model(args):
     for experiment in create_all_experiment(args):
         if not experiment.config.has_start_run():

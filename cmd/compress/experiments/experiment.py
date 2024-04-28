@@ -27,7 +27,7 @@ class Experiment(object):
                  dtype=torch.int8, parent: Optional[Self] = None, start_run=None, depth=None, allowed_mse_error=None, **kwargs) -> None:
         self.base_folder = config.path.parent if isinstance(config, CGPConfiguration) else Path(config) if config is not None else None
         self.args = dict(**kwargs)
-        self._allowed_mse_error = None# self.args["allowed_mse_error"]
+        self._allowed_mse_error = int(allowed_mse_error) if allowed_mse_error is not None else None
         self._start_run = start_run
         self._depth = depth
         if isinstance(config, CGPConfiguration):
@@ -199,10 +199,7 @@ class Experiment(object):
             if isinstance(allowed_mse_error, int):
                 config.set_mse_chromosome_logging_threshold(allowed_mse_error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size())
             elif isinstance(allowed_mse_error, float):
-                if not (-1 < allowed_mse_error < 1):
-                    raise ValueError(f"allowed-mse-error out of range -1 < {allowed_mse_error} < 1")
-                error = int(256 * allowed_mse_error)
-                config.set_mse_chromosome_logging_threshold(error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size())
+                config.set_mse_chromosome_logging_threshold(int(allowed_mse_error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size()))
             elif allowed_mse_error is not None:
                 raise TypeError("allowed-mse-error must be either int or float: " + str(type(allowed_mse_error)))
         if not config.has_start_run() and self._start_run:
