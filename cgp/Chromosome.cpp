@@ -427,12 +427,17 @@ void Chromosome::set_input(const weight_value_t* input, int selector)
 		{
 			return;
 		}
+		this->selector = selector;
+		setup_output_iterators(selector);
+		need_evaluation = true;
 	}
-
-	this->input = input;
-	this->selector = selector;
-	invalidate();
-	setup_output_iterators(selector);
+	else
+	{
+		this->input = input;
+		this->selector = selector;
+		invalidate();
+		setup_output_iterators(selector);
+	}
 }
 
 inline static void set_value(CGPConfiguration::weight_value_t& target, const CGPConfiguration::weight_value_t& value)

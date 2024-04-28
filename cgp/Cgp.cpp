@@ -185,8 +185,11 @@ CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const 
 	#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < no_care; i++)
 	{
-		const error_t delta = (predictions[i] > expected_output[i]) ? (predictions[i] - expected_output[i]) : (expected_output[i] - predictions[i]);
-		sum += delta * delta;
+		const int a = predictions[i];
+		const int b = expected_output[i];
+		const int delta = a - b;
+		const int delta_squared = delta * delta;
+		sum += delta_squared;
 	}
 	return sum;
 }
@@ -210,11 +213,14 @@ CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& 
 	#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < no_care; i++)
 	{
-		const error_t delta = (predictions[i] > expected_output[i]) ? (predictions[i] - expected_output[i]) : (expected_output[i] - predictions[i]);
-		sum += delta * delta;
+		const int a = predictions[i];
+		const int b = expected_output[i];
+		const int delta = a - b;
+		const int delta_squared = delta * delta;
+		sum += delta_squared;
 	}
 
-	return  sum;
+	return sum / no_care;
 }
 
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const dataset_t& dataset)
