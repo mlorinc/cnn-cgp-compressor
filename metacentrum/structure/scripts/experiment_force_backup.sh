@@ -5,7 +5,7 @@ for file in *; do
         pushd . > /dev/null
         cd $file 
         if [ -f jobs_info.txt ] ; then
-            ~/scripts/job_backup.sh "$1"
+            ~/scripts/job_backup.sh "$1" "$2" "$3"
         fi        
         popd > /dev/null
 done

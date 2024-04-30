@@ -39,9 +39,13 @@ if [ -z "$EXPERIMENT_FOLDER" ] || [ -z "$EXPERIMENT" ]; then
     exit 2
 fi
 
-mkdir -p ~/cgp_workspace/failed_jobs_results/$EXPERIMENT_FOLDER/$EXPERIMENT
-ssh $HOSTNAME "cd $SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT && zip -r data.zip *" || { echo "skipping $EXPERIMENT"; exit 0; }
-scp $HOSTNAME:$SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT/data.zip ~/cgp_workspace/failed_jobs_results/$EXPERIMENT_FOLDER/$EXPERIMENT/${TIMESTAMP}_data.zip
+if [ -z "$3" ]; then
+    BACKUP_DIR=~/cgp_workspace/failed_jobs_results
+else
+    BACKUP_DIR=$3
+fi
+
+~/scripts/jobs_backup.sh "$1" "$2" "$BACKUP_DIR"
 ssh $HOSTNAME "rm -rf $SCRATCHDIR/*"
 DIR=$(ssh $HOSTNAME "ls -A $SCRATCHDIR/* || echo ''")
 
