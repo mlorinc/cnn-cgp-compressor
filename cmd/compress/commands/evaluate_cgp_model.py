@@ -17,16 +17,80 @@ def evaluate_cgp_model(args):
         experiment = experiment.get_result_eval_env()
         experiment.get_model_metrics_from_statistics()
 
+
+# def evaluate_model_metrics_pbs(self,
+#                         time_limit: str,
+#                         template_pbs_file: str = r"C:\Users\Majo\source\repos\TorchCompresser\cmd\compress\commands\pbs\model_metrics_job.sh",
+#                         experiments_folder: str = "experiments_folder",
+#                         results_folder: str = "results",
+#                         cgp_folder: str = "cgp_cpp_project",
+#                         cpu=32,
+#                         mem="2gb",
+#                         scratch_capacity="1gb"):
+    
+#     job_name = self.get_name().replace("/", "_")
+    
+#     template_data = {
+#         "machine": f"select=1:ncpus={cpu}:ompthreads={cpu}:mem={mem}:scratch_local={scratch_capacity}",
+#         "time_limit": time_limit,
+#         "job_name": f"cgp_model_metrics_{job_name}",
+#         "server": os.environ.get("pbs_server"),
+#         "username": os.environ.get("pbs_username"),
+#         "copy_src": "/storage/$server/home/$username/cgp_workspace/jobs_backups/experiments_folder/friday/all_layers/fixed_mse_16_50_10",
+#         "copy_dst": "workspace/all_layers",
+#         "end_copy_src": "$copy_dst/fixed_mse_16_50_10/data_store/model_metrics/*.csv",
+#         "end_copy_dst": "/storage/$server/home/$username/cgp_workspace/cgp_model_eval",
+#         "program": "",
+#         "cwd": "$copy_dst/fixed_mse_16_50_10",
+        
+#         "workspace": "/storage/$server/home/$username/cgp_workspace",
+#         "experiments_folder": experiments_folder,
+#         "results_folder": results_folder,
+#         "cgp_cpp_project": cgp_folder,
+#         "cgp_binary_src": "bin/cgp",
+#         "cgp_binary": "cgp",
+#         "cgp_command": "train",
+#         "cgp_config": self.config.path.name,
+#         "cgp_args": " ".join([str(arg) for arg in args]),
+#         "experiment": self.get_name(),
+#         "error_t": error_type,
+#         "cflags": " ".join([str(arg) for arg in cxx_flags])
+#     }
+
+#     with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w", newline="\n") as pbs_f:
+#         copy_mode = False
+#         for line in template_pbs_f:
+#             if not copy_mode and line.strip() == "# PYTHON TEMPLATE END":
+#                 copy_mode = True
+#                 continue
+
+#             if copy_mode:
+#                 pbs_f.write(line)
+#             else:
+#                 # keep substituting until it is done
+#                 changed = True
+#                 while changed:
+#                     old_line = line
+#                     template = Template(line)
+#                     line = template.safe_substitute(template_data)
+#                     changed = line != old_line
+#                 pbs_f.write(line)
+#     print("saved pbs file to: " + str(self.train_pbs))    
+
 def sample(top: int, f: str):
     df = pd.read_csv(f)
-    return pd.concat([df.tail(n=1), df.sample(n=top-1)])
+    return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
+
+def pick_top(top: int, f: str):
+    df = pd.read_csv(f)
+    return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
 
 def evaluate_model_metrics(args):
     experiment_list = args.experiment
     experiment = create_experiment(args, prepare=False)
     data_store = store.Datastore()
     data_store.init_experiment_path(experiment)
-    df_factory = pd.read_csv if args.top is None else partial(sample, args.top)
+    df_factory = pd.read_csv if args.top is None else partial(pick_top, args.top)
 
     if not isinstance(experiment, experiments.MultiExperiment):
         experiment_list = [experiment]

@@ -10,10 +10,9 @@ from parse import parse
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from models.quantization import tensor_iterator
-from experiments.planner import CGPPinPlanner
 from models.adapters.model_adapter import ModelAdapter
 from models.adapters.base import BaseAdapter
-from models.selector import FilterSelector
+from models.selector import FilterSelectorCombinations
 from circuit.loader import get_gate_parameters
 
 class MissingChromosomeError(ValueError):
@@ -27,7 +26,7 @@ class Experiment(object):
                  dtype=torch.int8, parent: Optional[Self] = None, start_run=None, depth=None, allowed_mse_error=None, **kwargs) -> None:
         self.base_folder = config.path.parent if isinstance(config, CGPConfiguration) else Path(config) if config is not None else None
         self.args = dict(**kwargs)
-        self._allowed_mse_error = int(allowed_mse_error) if allowed_mse_error is not None else None
+        self._allowed_mse_error = allowed_mse_error
         self._start_run = start_run
         self._depth = depth
         if isinstance(config, CGPConfiguration):
@@ -44,6 +43,7 @@ class Experiment(object):
         self.model_top_k = None
         self.model_loss = None
         self.name_fmt = None
+        self._feature_maps_combinations = None
         self.reset()
 
     @classmethod
@@ -111,11 +111,11 @@ class Experiment(object):
         self.clean_eval()
 
     def _clone(self, config: CGPConfiguration) -> Self:
-        experiment = Experiment(config or self.config.clone(), self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.dtype, **self.args)
+        experiment = Experiment(config or self.config.clone(), self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.dtype)
         experiment.model_top_k = self.model_top_k
         experiment.model_loss = self.model_loss
         experiment._cgp_prepared = self._cgp_prepared
-        experiment._planner = self._planner.clone()
+        experiment._feature_maps_combinations = self._feature_maps_combinations.clone()
         experiment.parent = self.parent
         experiment.args = self.args
         experiment.dtype = self.dtype
@@ -160,7 +160,6 @@ class Experiment(object):
     def get_train_env(self, config: CGPConfiguration = None, clean=False, relative_paths: bool = False) -> Self:
         if clean:
             self.clean_train()
-
         experiment = self._clone(config or self.config.clone())
         exists_ok = not clean or self.get_number_of_experiment_results() == 0
         experiment.result_configs.parent.mkdir(exist_ok=exists_ok, parents=True)
@@ -339,25 +338,15 @@ class Experiment(object):
         return parse(self.name_fmt, self.get_name())
 
     def reset(self):
-        self._planner = CGPPinPlanner() 
         self._cgp_prepared = False
 
-    def next_input_combination(self):
-        self._planner.next_mapping()
+    def get_input_combinations(self) -> FilterSelectorCombinations:
+        if self._feature_maps_combinations:
+            return self._feature_maps_combinations
+        raise NotImplementedError() 
 
-    def add_filter_selector(
-            self,
-            sel: FilterSelector
-        ):
-        self._planner.add_mapping(sel)
-
-    def add_filter_selectors(self, selectors: Union[Iterable[FilterSelector], FilterSelector]):
-        selectors = selectors if isinstance(selectors, Iterable) else [selectors]
-
-        for x in selectors[:-1]:
-            self.add_filter_selector(x)
-            self.next_input_combination()
-        self.add_filter_selector(selectors[-1])        
+    def set_feature_maps_combinations(self, combinations: FilterSelectorCombinations):
+        self._feature_maps_combinations = combinations
 
     def _prepare_cgp(self, config: CGPConfiguration):
         if self._cgp_prepared: 
@@ -366,16 +355,15 @@ class Experiment(object):
         original_training = self._model_adapter.model.training
         try:
             self._model_adapter.eval()
-            self._planner.finish_mapping()
             with torch.inference_mode():
-                for combinational_plans in self._planner.get_plan():
-                    for plan in combinational_plans:
-                        weights = self._model_adapter.get_train_weights(plan.layer_name)
-                        for w, _, _ in tensor_iterator(weights, plan.inp):
+                for combination in self.get_input_combinations().get_combinations():
+                    for selector in combination.get_selectors():
+                        weights = self._model_adapter.get_train_weights(selector.selector)
+                        for w, _, _ in tensor_iterator(weights, selector.inp):
                             self._cgp.add_inputs(w)
-                        for w, _, _ in tensor_iterator(weights, plan.out):
+                        for w, _, _ in tensor_iterator(weights, selector.out):
                             self._cgp.add_outputs(w)
-                        self._cgp.next_train_item()
+                    self._cgp.next_train_item()
             self._cgp_prepared = True
         finally:
             self._model_adapter.model.train(mode=original_training)
@@ -553,4 +541,4 @@ class Experiment(object):
 
                 if len(weights_vector) == self.config.get_dataset_size():
                     break;
-            return weights_vector, self._planner.get_plan()
+            return weights_vector, self.get_input_combinations()

@@ -3,6 +3,7 @@ from typing import TextIO, Optional, Union
 import contextlib
 import subprocess
 import os
+import copy
 
 class CGPConfiguration:
     ignored_arguments = set(["stdout", "stderr"])
@@ -99,8 +100,8 @@ class CGPConfiguration:
     def clone(self, new_config_file: str = None):
         cloned_instance = CGPConfiguration()
         cloned_instance.path = new_config_file or self.path
-        cloned_instance._attributes = self._attributes.copy()
-        cloned_instance._extra_attributes = self._extra_attributes.copy()
+        cloned_instance._attributes = copy.deepcopy(self._attributes)
+        cloned_instance._extra_attributes = copy.deepcopy(self._extra_attributes)
         return cloned_instance
 
     def load(self, config_file: str = None):
@@ -108,7 +109,7 @@ class CGPConfiguration:
             raise ValueError(
                 "either config file must be passed to the load function or the class constructor must have been provided a configuration file as argument"
             )
-        with open(config_file, "r") as f:
+        with open(config_file or self.path, "r") as f:
             for line in f:
                 line = line.strip()
                 # Skip empty lines
@@ -198,7 +199,7 @@ class CGPConfiguration:
                 f_handle.close()
             
     def get_attribute(self, name):
-        return self._attributes.get(name, None) or self._extra_attributes.get(name)
+        return self._extra_attributes.get(name) or self._attributes.get(name, None)
 
     def get_learning_rate_file(self):
         return self.get_attribute(self.COMMAND_LEARNING_RATE_FILE)
@@ -641,7 +642,6 @@ class CGPConfiguration:
 
             if not isinstance(v, str):
                 v = str(v)
-
 
             key = k.replace("_", "-")
             arguments.append(f"--{key}")

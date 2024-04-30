@@ -5,7 +5,7 @@ function_count: 29
 function_input_arity: 2
 function_output_arity: 2
 dataset_size: 2
-input_count: 1
+input_count: 8
 output_count: 2400
 population_max: 64
 periodic_log_frequency: 1000000

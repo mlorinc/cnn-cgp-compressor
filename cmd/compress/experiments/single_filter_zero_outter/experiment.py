@@ -54,16 +54,16 @@ class SingleFilterZeroOutterExperiment(GridSizeExperiment):
         return conv2d_selector(layer_name, [filter_i, channel_i], 5, 3)
 
     def zero_outter(self, sel: FilterSelector):
-        bias = self._model_adapter.get_bias(sel.layer_name)
-        fp32_weights = self._model_adapter.get_weights(sel.layer_name)
+        bias = self._model_adapter.get_bias(sel.selector)
+        fp32_weights = self._model_adapter.get_weights(sel.selector)
         for output_selector in sel.out:
             w = fp32_weights[*output_selector]
             size = reduce(operator.mul, w.shape)
             fp32_weights[*output_selector] = dequantize_per_tensor(torch.zeros(size), w.q_scale(), w.q_zero_point())
-        self._model_adapter.set_weights_bias(sel.layer_name, fp32_weights, bias)        
+        self._model_adapter.set_weights_bias(sel.selector, fp32_weights, bias)        
 
     def has_zero_in_input(self, sel: FilterSelector):
-        fp32_weights = self._model_adapter.get_train_weights(sel.layer_name)
+        fp32_weights = self._model_adapter.get_train_weights(sel.selector)
         for input_sel in sel.inp:
             w: torch.Tensor = fp32_weights[*input_sel]
             if torch.any(w == 0):

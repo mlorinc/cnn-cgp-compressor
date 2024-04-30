@@ -4,7 +4,8 @@ import os
 from experiments.composite.cli import get_argument_parser
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
-from experiments.experiment import Experiment, FilterSelector
+from experiments.experiment import Experiment
+from models.selector import FilterSelector, FilterSelectorCombinations
 from models.adapters.model_adapter import ModelAdapter
 from models.adapters.base import BaseAdapter
 from pathlib import Path
@@ -43,18 +44,17 @@ class MultiExperiment(Experiment, ABC):
     def create_experiment_from_name(self, config: CGPConfiguration) -> Experiment:
         raise NotImplementedError()
 
-    def create_experiment(self, experiment_name: str, filters: Union[List[FilterSelector], FilterSelector], register: bool=True, name_fmt: str = None) -> Generator[Experiment, None, None]:   
+    def create_experiment(self, experiment_name: str, feature_maps_combiations: FilterSelectorCombinations, register: bool=True, name_fmt: str = None) -> Generator[Experiment, None, None]:   
         for i in range(self.batches or 1):
             current_experiment_name = experiment_name
             
             if self.batches is not None:
                 current_experiment_name = experiment_name + f"_batch_{i}"
-
             config = self.config.clone(self.base_folder / current_experiment_name / self.config.path.name) \
                 if isinstance(self.config, CGPConfiguration) else \
                 CGPConfiguration(self.base_folder / current_experiment_name / Experiment.train_cgp_name)
-
-            new_experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
+            
+            new_experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, start_run=self._start_run, **self.args)
             new_experiment.parent = self
             
             if self.batches is not None:
@@ -70,7 +70,7 @@ class MultiExperiment(Experiment, ABC):
                 batch_step = new_experiment.config.get_number_of_runs() // self.batches
                 new_experiment.config.set_start_run(batch_step * i)
                 new_experiment.config.set_number_of_runs(batch_step * i + batch_step)
-            new_experiment.add_filter_selectors(filters)
+            new_experiment.set_feature_maps_combinations(feature_maps_combiations)
             if register:
                 self.register_experiment(new_experiment)
             new_experiment.name_fmt = name_fmt + "_batch_{i}" if name_fmt else None

@@ -3,6 +3,7 @@ import torch
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from models.adapters.model_adapter import ModelAdapter
+from models.selector import FilterSelectorCombinations, FilterSelectorCombination
 from experiments.composite.experiment import MultiExperiment
 from experiments.experiment import Experiment
 from models.quantization import conv2d_selector
@@ -66,9 +67,12 @@ class SingleChannelExperiment(MultiExperiment):
         experiment.config.set_row_count(rows)
         experiment.config.set_col_count(cols)
         experiment.config.set_look_back_parameter(cols)
-        experiment.add_filter_selectors(self._get_filter(result["layer_name"], 0))
-        experiment._planner.finish_mapping()
+        experiment.set_feature_maps_combinations(self._get_filter(result["layer_name"], 0))
         return experiment
             
     def _get_filter(self, layer_name: str, channel_i: int):
-        return conv2d_selector(layer_name, [slice(None), channel_i], 5, 3)
+        combinations = FilterSelectorCombinations()
+        combination = FilterSelectorCombination()
+        combinations.add(combination)
+        combination.add(conv2d_selector(layer_name, [slice(None), channel_i], 5, 3))
+        return combinations

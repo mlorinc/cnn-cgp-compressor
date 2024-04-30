@@ -33,15 +33,21 @@ class MobileNetV2Adapter(ModelAdapter):
     inverted_residual_setting = [
         # t, c, n, s
         [1, 16, 1, 1],
-        [6, 24, 2, 1],
-        [6, 24, 2, 1],
-        [6, 32, 3, 1],
-        [6, 32, 3, 1],
-        [6, 64, 4, 1],
-        [6, 64, 4, 1],
-        [6, 96, 3, 1],
-        [6, 160, 3, 1],
-        [6, 160, 3, 1],
+        [6, 24, 1, 2],
+        [6, 24, 1, 2],
+        [6, 32, 1, 2],
+        [6, 32, 1, 2],
+        [6, 32, 1, 2],
+        [6, 64, 1, 2],
+        [6, 64, 1, 2],
+        [6, 64, 1, 2],
+        [6, 64, 1, 2],
+        [6, 96, 1, 1],
+        [6, 96, 1, 1],
+        [6, 96, 1, 1],
+        [6, 160, 1, 2],
+        [6, 160, 1, 2],
+        [6, 160, 1, 2],
         [6, 320, 1, 1],
     ]    
     
@@ -55,7 +61,7 @@ class MobileNetV2Adapter(ModelAdapter):
         return super().clone()
 
     def get_block(self, index: int) -> Union[Residual, ExpandedResidual, nn.Conv2d]:
-        if index == 0 or 18 <= index:
+        if index == 0 or len(self.inverted_residual_setting) + 1 <= index:
             return self.model.features[index][0]
         
         t, _, _, _ = self.inverted_residual_setting[index-1]

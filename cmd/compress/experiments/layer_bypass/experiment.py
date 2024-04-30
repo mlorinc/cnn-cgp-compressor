@@ -5,20 +5,21 @@ from models.adapters.model_adapter import ModelAdapter
 from experiments.composite.experiment import MultiExperiment
 from experiments.experiment import Experiment
 from models.quantization import conv2d_selector
-from models.selector import FilterSelector, ByteSelector, FilterSelectorCombination, FilterSelectorCombinations
+from models.selector import FilterSelector, FilterSelectorCombination, FilterSelectorCombinations
 import argparse
 from typing import List
 from parse import parse
 
-class LeSelectorExperiment(MultiExperiment):
-    name = "le_selector"
-    thresholds = [0]
+class LayerBypassExperiment(MultiExperiment):
+    name = "layer_bypass"
+    thresholds = [250, 150, 100, 50, 25, 15, 10, 0]
     def __init__(self, 
                  config: CGPConfiguration, 
                  model_adapter: ModelAdapter, 
                  cgp: CGP,
                  dtype=torch.int8, 
-                 layer_names=["conv1", "conv2"], 
+                 input_layer_names=["conv1"], 
+                 output_layer_names=["conv2"], 
                  mse_thresholds=thresholds,
                  prefix="",
                  suffix="",
@@ -28,15 +29,17 @@ class LeSelectorExperiment(MultiExperiment):
         self.mse_thresholds = mse_thresholds
         self.prefix = prefix
         self.suffix = suffix
-        self.layer_names = layer_names
+        self.input_layer_names = input_layer_names
+        self.output_layer_names = output_layer_names
         
         if prepare:
             self._prepare_filters()
 
     def _prepare_filters(self):
         for mse in self.mse_thresholds:
-            for experiment in self.create_experiment(f"{self.prefix}mse_{mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.layer_names)):
-                experiment.config.set_mse_threshold(int(mse**2 * (16*6*25+6*25)))
+            for experiment in self.create_experiment(f"{self.prefix}mse_{mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.input_layer_names, self.output_layer_names)):
+                experiment.config.set_mse_threshold(int(mse**2 * (16*6*25)))
+                # experiment.config.set_mse_chromosome_logging_threshold((30)**2 * (16*6*16+6*16))
                 experiment.config.set_row_count(self.args["rows"])
                 experiment.config.set_col_count(self.args["cols"])
                 experiment.config.set_look_back_parameter(self.args["cols"])
@@ -56,22 +59,15 @@ class LeSelectorExperiment(MultiExperiment):
         experiment.config.set_row_count(rows)
         experiment.config.set_col_count(cols)
         experiment.config.set_look_back_parameter(cols)
-        experiment.set_feature_maps_combinations(self._get_filters(self.layer_names))
+        experiment.set_feature_maps_combinations(self._get_filters(self.input_layer_names, self.output_layer_names))
         return experiment
 
-    def _get_filters(self, layer_names: List[str]):
+    def _get_filters(self, input_layer_names: List[str], output_layer_names: List[str]):
         combinations = FilterSelectorCombinations()
-        for layer_name in layer_names:
-            combination = FilterSelectorCombination()
-            combination.add(FilterSelector(layer_name, [ByteSelector(self.config.get_input_count())], [(slice(None), slice(None), slice(None), slice(None))]))
+        combination = FilterSelectorCombination()
+        for layer_name in input_layer_names:
+            combination.add(FilterSelector(layer_name, [(slice(None), slice(None), slice(None), slice(None))], []))
+        for layer_name in output_layer_names:
+            combination.add(FilterSelector(layer_name, [], [(slice(None), slice(None), slice(None), slice(None))]))
         combinations.add(combination)
         return combinations
-
-    @staticmethod
-    def new(config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args):
-        return LeSelectorExperiment(config, model_adapter, cgp, args,
-                                   layer_names=args.layer_names,
-                                   prefix=args.prefix,
-                                   suffix=args.suffix,
-                                   mse_thresholds=args.mse_thresholds,
-                                   batches=args.batches)

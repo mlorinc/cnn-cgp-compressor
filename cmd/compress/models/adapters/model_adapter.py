@@ -4,11 +4,12 @@ import operator
 import copy
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
-from typing import List, Union, Self, Iterable, Optional
+from typing import List, Union, Self, Iterable, Optional, Callable
 from functools import reduce
+
 from models.base_model import BaseModel
 from models.quantization import dequantize_per_tensor, tensor_iterator
-from models.selector import FilterSelector
+from models.selector import FilterSelector, FilterSelectorCombinations
 from tqdm import tqdm
 
 class ModelAdapter(ABC):
@@ -29,8 +30,13 @@ class ModelAdapter(ABC):
     def get_criterion(self, **kwargs):
         raise NotImplementedError()
 
-    def get_layer(self, layer: str) -> nn.Module:
-        return getattr(self.model, layer)
+    def get_layer(self, selector: Union[str, Callable[[Self], nn.Conv2d]]) -> nn.Module:
+        if isinstance(selector, str):
+            return getattr(self.model, selector)
+        elif isinstance(selector, nn.Module):
+            return selector
+        else:
+            return selector(self)
 
     @abstractmethod
     def clone(self):
@@ -107,52 +113,51 @@ class ModelAdapter(ABC):
         finally:
             self.model.train(mode=original_train_mode)
         
-    def get_bias(self, layer: Union[nn.Module, str]):
-        layer = getattr(self.model, layer) if isinstance(layer, str) else layer
+    def get_bias(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
+        layer = self.get_layer(layer)
         try:
             return layer.bias()
         except:
             return layer.bias
         
-    def get_weights(self, layer: Union[nn.Module, str]):
-        layer = getattr(self.model, layer) if isinstance(layer, str) else layer
+    def get_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
+        layer = self.get_layer(layer)
         try:
             return layer.weight().detach()
         except:
             return layer.weight.detach()
 
-    def get_train_weights(self, layer: Union[nn.Module, str]):
-        layer = getattr(self.model, layer) if isinstance(layer, str) else layer
+    def get_train_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
+        layer = self.get_layer(layer)
         try:
             return layer.weight().detach().int_repr()
         except:
             return layer.weight.detach()        
 
-    def set_weights_bias(self, layer: Union[nn.Module, str], weights: torch.Tensor, biases: torch.Tensor):
-        layer = getattr(self.model, layer) if isinstance(layer, str) else layer
-
+    def set_weights_bias(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor, biases: torch.Tensor):
+        layer = self.get_layer(layer)
         try:
             layer.set_weight_bias(weights, biases)
         except Exception as e:
             layer.weight = weights 
             layer.bias = biases
 
-    def inject_weights(self, weights_vector: List[torch.Tensor], all_injection_plans: List[List[FilterSelector]], inline=False):
+    def inject_weights(self, weights_vector: List[torch.Tensor], injection_combinations: FilterSelectorCombinations, inline=False):
         original_train_mode = self.model.training
         model = self.clone() if not inline else self
         try:
             model.eval()
             with torch.inference_mode():
-                for weights, injection_plans in zip(weights_vector, all_injection_plans):
+                for weights, injection_plans in zip(weights_vector, injection_combinations.get_combinations()):
                     offset = 0
-                    for plan in injection_plans:
-                        bias = model.get_bias(plan.layer_name)
-                        fp32_weights = model.get_weights(plan.layer_name)
-                        for w, size, out_selector in tensor_iterator(fp32_weights, plan.out):
+                    for sel in injection_plans.get_selectors():
+                        bias = model.get_bias(sel.selector)
+                        fp32_weights = model.get_weights(sel.selector)
+                        for w, size, out_selector in tensor_iterator(fp32_weights, sel.out):
                             # print("Layer:", plan.layer_name, "Sel:", out_selector, "Size:", size)
                             fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())                                      
                             offset += size
-                        model.set_weights_bias(plan.layer_name, fp32_weights, bias)
+                        model.set_weights_bias(sel.selector, fp32_weights, bias)
                     print("offset:", offset, "size:", reduce(operator.mul, weights.shape))
                     # assert offset == reduce(operator.mul, weights.shape)
                 return model
