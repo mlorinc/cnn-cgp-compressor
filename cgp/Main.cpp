@@ -215,7 +215,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 
 	cgp_model->build_indices();
 	logger.dump();
-	cgp_model->generate_population();
+	cgp_model->generate_population(dataset);
 	for (size_t run = start_run; run < end_run; run++)
 	{
 		double start_time = omp_get_wtime();
@@ -300,7 +300,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 		weights_out.close();
 
 		cgp_model->reset();
-		cgp_model->generate_population();
+		cgp_model->generate_population(dataset);
 		generation = 0;
 		mode = std::ios::out | std::ios::app;
 	}

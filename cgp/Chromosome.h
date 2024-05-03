@@ -6,6 +6,7 @@
 #include <tuple>
 #include <vector>
 #include "Configuration.h"
+#include "Dataset.h"
 
 namespace cgp {
 	/// <summary>
@@ -105,9 +106,14 @@ namespace cgp {
 		const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies;
 
 		/// <summary>
-		/// Shared pointer to the chromosome array.
+		/// Unique pointer to the chromosome array.
 		/// </summary>
 		std::unique_ptr<gene_t[]> chromosome;
+
+		/// <summary>
+		/// Unique pointer to locked output array.
+		/// </summary>
+		std::unique_ptr<bool[]> locked_outputs;
 
 		/// <summary>
 		/// Unique pointer to the pin map array.
@@ -224,6 +230,8 @@ namespace cgp {
 		/// <param name="position">The position in the chromosome.</param>
 		/// <returns>True if the position represents an output, otherwise false.</returns>
 		bool is_output(int position) const;
+
+		int get_output_position(int chromosome_position) const;
 
 		/// <summary>
 		/// Method for setting up the initial state of the chromosome randomly.
@@ -494,6 +502,8 @@ namespace cgp {
 		/// <param name="input">Vector of shared pointers to an array of input values.</param>
 		/// <returns>Vector of shared pointers to an array of infered weights associated with specific inputs</returns>
 		std::vector<weight_output_t> get_weights(const std::vector<weight_input_t>& input);
+
+		void find_direct_solutions(const dataset_t &dataset);
 	};
 
 	std::string to_string(const Chromosome& chromosome);

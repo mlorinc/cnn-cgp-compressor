@@ -91,6 +91,10 @@ bool Chromosome::is_output(int position) const
 	return position >= cgp_configuration.blocks_chromosome_size();
 }
 
+int Chromosome::get_output_position(int chromosome_position) const
+{
+	return chromosome_position - cgp_configuration.blocks_chromosome_size();
+}
 
 void Chromosome::setup_chromosome()
 {
@@ -208,7 +212,10 @@ void Chromosome::setup_maps()
 
 void Chromosome::setup_maps(const decltype(chromosome)& chromosome)
 {
+	int locket_output_size = cgp_configuration.output_count() * cgp_configuration.dataset_size();
 	this->chromosome = std::make_unique<gene_t[]>(cgp_configuration.chromosome_size());
+	locked_outputs = std::make_unique<bool[]>(locket_output_size);
+	std::copy(locked_outputs.get(), locked_outputs.get() + locket_output_size, locked_outputs.get());
 	if (chromosome != nullptr)
 	{
 		std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), this->chromosome.get());
@@ -231,6 +238,7 @@ void Chromosome::setup_maps(Chromosome&& that)
 	chromosome = std::move(that.chromosome);
 	pin_map = std::move(that.pin_map);
 	gate_visit_map = std::move(that.gate_visit_map);
+	locked_outputs = std::move(that.locked_outputs);
 	std::swap(output_start, that.output_start);
 	std::swap(output_end, that.output_end);
 	std::swap(output_pin_start, that.output_pin_start);
@@ -360,8 +368,8 @@ const std::unique_ptr<Chromosome::gene_t[]>& Chromosome::get_chromosome() const
 void Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 {
 	// Number of genes to mutate
-	auto genes_to_mutate = (rand() % cgp_configuration.max_genes_to_mutate()) + 1;
-	for (auto i = 0; i < genes_to_mutate; i++) {
+	int genes_to_mutate = (rand() % cgp_configuration.max_genes_to_mutate()) + 1;
+	for (int i = 0; i < genes_to_mutate; i++) {
 		// Select a random gene
 		auto random_gene_index = rand() % cgp_configuration.chromosome_size();
 		auto random_number = rand();
@@ -377,6 +385,12 @@ void Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 			that->chromosome[random_gene_index] = (random_number % (max - min)) + min;
 		}
 		else if (is_output(random_gene_index)) {
+			// output is locked, try again
+			if (locked_outputs[get_output_position(random_gene_index)])
+			{
+				i--;
+				continue;
+			}
 			const auto& output_values = minimum_output_indicies[cgp_configuration.col_count()];
 			auto min = std::get<0>(output_values);
 			auto max = std::get<1>(output_values);
@@ -1081,6 +1095,30 @@ std::vector<Chromosome::weight_output_t> Chromosome::get_weights(const std::vect
 		weight_vector.push_back(get_weights(input[i], i));
 	}
 	return weight_vector;
+}
+
+void cgp::Chromosome::find_direct_solutions(const dataset_t& dataset)
+{
+	const auto& inputs = get_dataset_input(dataset);
+	const auto& no_care = get_dataset_no_care(dataset);
+	const auto& outputs = get_dataset_output(dataset);
+	gene_t *chromosome_outputs = get_outputs();
+
+	for (int i = 0; i < inputs.size(); i++)
+	{
+		for (int j = 0; j < cgp_configuration.input_count(); j++)
+		{
+			for (int k = 0; k < no_care[i]; k++)
+			{
+				if (inputs[i][j] == outputs[i][k])
+				{
+					locked_outputs[cgp_configuration.dataset_size() * i + k] = true;
+					chromosome_outputs[cgp_configuration.dataset_size() * i + k] = j;
+					break;
+				}
+			}
+		}
+	}
 }
 
 std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)

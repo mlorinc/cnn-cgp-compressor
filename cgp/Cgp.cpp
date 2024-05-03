@@ -164,7 +164,7 @@ void CGP::build_indices()
 	return;
 }
 
-void CGP::generate_population()
+void CGP::generate_population(const dataset_t &dataset)
 {
 	const auto& best_chromosome = get_best_chromosome();
 
@@ -173,7 +173,17 @@ void CGP::generate_population()
 	// Create new population
 	for (int i = 0; i < end; i++)
 	{
-		chromosomes[i] = (best_chromosome) ? (best_chromosome->mutate(chromosomes[i])) : (std::make_shared<Chromosome>(*this, minimum_output_indicies));
+		if (best_chromosome)
+		{
+			chromosomes[i] = best_chromosome->mutate(chromosomes[i]);
+		}
+		else
+		{
+			chromosomes[i] = std::make_shared<Chromosome>(*this, minimum_output_indicies);
+#ifndef __NO_DIRECT_SOLUTIONS
+			chromosomes[i]->find_direct_solutions(dataset);
+#endif // !__NO_DIRECT_SOLUTIONS
+		}
 	}
 }
 

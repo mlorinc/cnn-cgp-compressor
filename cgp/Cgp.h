@@ -420,7 +420,7 @@ namespace cgp {
 		/// <summary>
 		/// Build the initial population.
 		/// </summary>
-		void generate_population();
+		void generate_population(const dataset_t& dataset);
 
 		/// <summary>
 		/// Mutate the current population.
