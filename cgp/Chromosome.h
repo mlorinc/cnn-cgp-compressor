@@ -116,6 +116,11 @@ namespace cgp {
 		std::unique_ptr<bool[]> locked_outputs;
 
 		/// <summary>
+		/// Unique pointer to locked gates array.
+		/// </summary>
+		std::unique_ptr<bool[]> locked_nodes;
+
+		/// <summary>
 		/// Unique pointer to the pin map array.
 		/// </summary>
 		std::unique_ptr<weight_value_t[]> pin_map;
@@ -254,7 +259,7 @@ namespace cgp {
 		/// Given chromosome is reused, otherwise new chromosome array is created.
 		/// </summary>
 		/// <param name="chromosome">The chromosome to be reused or null.</param>
-		void setup_maps(const decltype(chromosome)& chromosome);
+		void setup_maps(const Chromosome& chromosome);
 
 		/// <summary>
 		/// Method for allocating required maps in order to perform evaluating.
@@ -279,13 +284,14 @@ namespace cgp {
 		weight_value_t bit_neg(weight_value_t a);
 		weight_value_t neg(weight_value_t a);
 
-		void mutate_genes(std::shared_ptr<Chromosome> that) const;
+		bool mutate_genes(std::shared_ptr<Chromosome> that) const;
 		weight_value_t get_pin_value(int index) const;
 		bool move_block_to_the_start(int gate_index);
 		void move_gate(int src_gate_index, int dst_gate_index);
 		int get_gate_index_from_output_pin(int pin) const;
 		int get_gate_index_from_input_pin(int pin) const;
 		void invalidate();
+		int find_free_index(int from) const;
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -384,6 +390,11 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
 		std::shared_ptr<Chromosome> mutate(std::shared_ptr<Chromosome> that);
+
+		/// <summary>
+		/// Swap visits maps.
+		/// </summary>
+		void swap_visit_map(Chromosome &chromosome);
 
 		/// <summary>
 		/// Method to set the input for the chromosome.
@@ -504,6 +515,7 @@ namespace cgp {
 		std::vector<weight_output_t> get_weights(const std::vector<weight_input_t>& input);
 
 		void find_direct_solutions(const dataset_t &dataset);
+		void add_2pow_circuits(const dataset_t& dataset);
 	};
 
 	std::string to_string(const Chromosome& chromosome);

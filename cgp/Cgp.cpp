@@ -183,6 +183,9 @@ void CGP::generate_population(const dataset_t &dataset)
 #ifndef __NO_DIRECT_SOLUTIONS
 			chromosomes[i]->find_direct_solutions(dataset);
 #endif // !__NO_DIRECT_SOLUTIONS
+#ifndef __NO_POW_SOLUTIONS
+			chromosomes[i]->add_2pow_circuits(dataset);
+#endif // !__NO_DIRECT_SOLUTIONS
 		}
 	}
 }
@@ -607,8 +610,14 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 			// check whether mutation was not neutral
 			if (!std::get<1>(result)) {
 				generations_without_change = 0;
+				best_solution = std::move(best_solutions[i]);
 			}
-			best_solution = std::move(best_solutions[i]);
+			else
+			{
+				// steal visit map
+				get_chromosome(best_solutions[i])->swap_visit_map(*get_chromosome(best_solution));
+				best_solution = std::move(best_solutions[i]);
+			}
 			best_solution_changed = true;
 		}
 	}
@@ -623,6 +632,11 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 		CGP::ensure_depth(best_solution);
 		CGP::ensure_gate_count(best_solution);
 	}
+
+	//if ((evolution_steps_made + 1) % 1000000 == 0)
+	//{
+	//	get_chromosome(best_solution)->tight_layout();
+	//}
 
 	return best_solution;
 }

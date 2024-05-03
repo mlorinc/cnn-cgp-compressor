@@ -1,6 +1,7 @@
 #include "CGPStream.h"
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 
 using namespace cgp;
 
@@ -58,6 +59,7 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 
 	const auto& chromosome = CGP::get_chromosome(solution);
 	*this
+		<< std::setprecision(12)
 		<< "[" << (run + 1)
 		<< ", " << (generation + 1) << "] MSE: "
 		<< error_to_string(CGP::get_error(solution))
@@ -109,6 +111,7 @@ void CGPOutputStream::log_csv(size_t run, size_t generation, const std::string& 
 		return;
 	}
 	*this
+		<< std::setprecision(12)
 		<< (run + 1)
 		<< "," << (generation + 1)
 		<< ",\"" << timestamp << "\","
@@ -406,7 +409,9 @@ std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load
 			CGPConfiguration::set_delay_parameter(parameters, delay);
 			costs[i] = parameters;
 			// Print all parameters in a single row
-			std::cout << "Quantized Energy: " << quantized_energy << ", "
+			std::cout 
+				<< std::setprecision(12)
+				<< "Quantized Energy: " << quantized_energy << ", "
 				<< "Energy: " << energy << ", "
 				<< "Area: " << area << ", "
 				<< "Quantized Delay: " << quantized_delay << ", "
@@ -431,6 +436,7 @@ std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load
 			CGPConfiguration::set_delay_parameter(parameters, delay);
 			costs[end + j] = parameters;
 			std::cout 
+				<< std::setprecision(12)
 				<< "Loading " << (Chromosome::is_mux(end + j) ? ("mux") : ("demux")) << "[" << (end + j) << "]\n\t"
 				<< "Quantized Energy: " << quantized_energy << ", "
 				<< "Energy: " << energy << ", "
