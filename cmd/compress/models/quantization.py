@@ -19,7 +19,7 @@ def _tensor_iterator_helper(tensor: torch.Tensor, selector):
 def tensor_iterator(tensor: torch.Tensor, selectors, input_size: int =None):
     for sel in selectors:    
         if isinstance(sel, ConstantSelector):
-            yield torch.tensor(sel.get_values() ,size=(sel.get_size(),)), sel.get_size(), None  
+            yield torch.tensor(sel.get_values()), sel.get_size(), None  
             continue
 
         if not sel:

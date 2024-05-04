@@ -1,14 +1,21 @@
+from pathlib import Path
+
+from torch.nn.modules import Conv2d
+from commands.datastore import Datastore
 from models.adapters.model_adapter import ModelAdapter
 from models.base_model import BaseModel
 from models.lenet import LeNet5
 from models.qat_quantized_lenet import QATQuantizedLeNet5
 from models.ptq_quantized_lenet import PTQQuantizedLeNet5
-from typing import Optional, Self
-import copy
+from typing import Iterable, Optional, Self
+from abc import ABC, abstractmethod
 
-class BaseAdapter(ModelAdapter):
+class BaseAdapter(ModelAdapter, ABC):
     def __init__(self, model: BaseModel) -> None:
         super().__init__(model)
+    
+    def get_convolution_layers(self) -> Iterable[Conv2d]:
+        raise NotImplementedError()
     
     def get_test_data(self, **kwargs):
         assert isinstance(self.model, BaseModel)
@@ -23,19 +30,6 @@ class BaseAdapter(ModelAdapter):
         model = self.model._create_self()
         model.load()
         return BaseAdapter(model)
-        # cloned_adapter = copy.deepcopy(self)
-        # cloned_adapter.device = self.device
-        # cloned_adapter.model = copy.deepcopy(self.model)
-        
-        # if isinstance(cloned_adapter.model, BaseModel) and isinstance(self.model, BaseModel):
-        #     cloned_adapter.model.load_state(self.model.get_state())
-        # else:
-        #     cloned_adapter.model.load_state_dict(self.model.state_dict())
-
-        # if hasattr(cloned_adapter.model, "backend"):
-        #     cloned_adapter.model.backend = self.model.backend
-        # cloned_adapter.model.to(self.device)
-        # return cloned_adapter
 
     def load(self, path: str = None, inline: Optional[bool] = True) -> Self:
         model = self.model if inline else self.model.clone()
@@ -50,6 +44,15 @@ class BaseAdapter(ModelAdapter):
 
     @classmethod
     def from_base_model(cls, name: str, path: str) -> Self:
+        datastore = Datastore()
+        
+        if path:
+            util_path = Path(path)
+            if not util_path.exists() and datastore.derive(f"models/{path}").exists():
+                path = str(datastore.derive(f"models/{path}").absolute())
+        else:
+            raise ValueError("path must not be none")
+        
         if name == LeNet5.name:
             return cls(LeNet5(path))
         if name == QATQuantizedLeNet5.name:
@@ -61,7 +64,15 @@ class BaseAdapter(ModelAdapter):
 
     @staticmethod
     def load_base_model(name: str, path: str) -> Self:
-        adapter = BaseAdapter.from_base_model(name, path)
+        if "lenet" not in name:
+            adapter = BaseAdapter.from_base_model(name, path)
+        else:
+            adapter = LeNet5Adapater.from_base_model(name, path)
         adapter.load()
         return adapter
 
+class LeNet5Adapater(BaseAdapter):
+    def __init__(self, model: LeNet5) -> None:
+        super().__init__(model)
+    def get_convolution_layers(self):
+        return [self.model.conv1, self.model.conv2]

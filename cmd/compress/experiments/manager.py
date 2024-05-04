@@ -3,6 +3,7 @@ from experiments.composite.experiment import MultiExperiment
 from experiments.all_layers.experiment import AllLayersExperiment
 from experiments.layer_bypass.experiment import LayerBypassExperiment
 from experiments.le_selector.experiment import LeSelectorExperiment
+from experiments.worst_case.experiment import WorstCaseExperiment
 from experiments.grid_size.experiment import GridSizeExperiment 
 from experiments.reversed_single_filter.experiment import ReversedSingleFilterExperiment
 from experiments.single_channel.experiment import SingleChannelExperiment
@@ -10,8 +11,9 @@ from experiments.single_filter_zero_outter.experiment import SingleFilterZeroOut
 from experiments.single_filter.experiment import SingleFilterExperiment
 
 import experiments.all_layers.cli as al
-from experiments.layer_bypass.cli import lb
+import experiments.layer_bypass.cli as lb
 import experiments.le_selector.cli as le
+import experiments.worst_case.cli as wc
 import experiments.grid_size.cli as gs
 import experiments.reversed_single_filter.cli as rs
 import experiments.single_channel.cli as sc
@@ -23,6 +25,7 @@ experiments_classes = {
     AllLayersExperiment.name:               AllLayersExperiment,
     LayerBypassExperiment.name:             LayerBypassExperiment,
     LeSelectorExperiment.name:              LeSelectorExperiment,
+    WorstCaseExperiment.name:               WorstCaseExperiment,
     GridSizeExperiment.name:                GridSizeExperiment,
     ReversedSingleFilterExperiment.name:    ReversedSingleFilterExperiment,
     SingleChannelExperiment.name:           SingleChannelExperiment,
@@ -34,6 +37,7 @@ experiment_cli = {
     AllLayersExperiment.name:               al.get_argument_parser,
     LayerBypassExperiment.name:             lb.get_argument_parser,
     LeSelectorExperiment.name:              le.get_argument_parser,
+    WorstCaseExperiment.name:               wc.get_argument_parser,
     GridSizeExperiment.name:                gs.get_argument_parser,
     ReversedSingleFilterExperiment.name:    rs.get_argument_parser,
     SingleChannelExperiment.name:           sc.get_argument_parser,

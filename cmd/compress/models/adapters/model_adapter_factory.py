@@ -6,9 +6,10 @@ from models.adapters.base import BaseAdapter
 
 
 def create_adapter(name: str, model_path: Optional[str]) -> ModelAdapter:
-    try:
-        adapter = BaseAdapter.load_base_model(name, model_path)
+    if name != MobileNetV2Adapter.name:
+        return BaseAdapter.load_base_model(name, model_path)
+    else:
+        adapter = MobileNetV2Adapter()
+        if model_path:
+            adapter.load(model_path)        
         return adapter
-    except ValueError:
-        if name == MobileNetV2Adapter.name:
-            return MobileNetV2Adapter()    

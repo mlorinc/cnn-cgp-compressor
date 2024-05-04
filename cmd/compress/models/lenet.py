@@ -1,5 +1,6 @@
 from typing import Optional, Self
 from models.base_model import BaseModel
+from commands.datastore import Datastore
 import torch.nn as nn
 import torch
 from torch.utils.data import Dataset, random_split, DataLoader
@@ -26,10 +27,10 @@ class LeNet5(BaseModel):
         return LeNet5(self.model_path)
 
     def get_train_data(self):
-        return torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=LeNet5.transforms)
+        return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=True, download=True, transform=LeNet5.transforms)
 
     def get_test_data(self):
-        return torchvision.datasets.MNIST(root="./data", train=False, download=True, transform=LeNet5.transforms)
+        return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=False, download=True, transform=LeNet5.transforms)
 
     def get_validation_data(self):
         raise ValueError("not supported")

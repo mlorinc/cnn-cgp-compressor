@@ -371,8 +371,21 @@ class Experiment(object):
     def get_number_of_experiment_results(self) -> int:
         return len(os.listdir(self.result_configs.parent)) if self.result_configs.parent.exists() else 0
 
-    def get_number_of_train_statistic_file(self) -> int:
-        return len(os.listdir(self.train_statistics.parent)) if self.train_statistics.parent.exists() else 0
+    def get_experiment_results_run_list(self) -> List[int]:
+        def f(x, extension=""):
+            result = parse(self.result_configs.name + extension, x)
+            return result["run"] if result else None
+            
+        runs = [int(f(file)) for file in os.listdir(self.result_configs.parent) if f(file)]       
+        return runs or [int(f(file, extension=".zip")) for file in os.listdir(self.result_configs.parent) if f(file, extension=".zip")]
+
+    def get_number_of_train_statistic_file(self, fmt: str = None) -> int:
+        fmt = fmt or self.train_statistics.name
+        def f(x):
+            result = parse(fmt, x)
+            return result["run"] if result else None        
+        
+        return [int(f(file)) for file in os.listdir(self.train_statistics.parent) if f(file)]
 
     def get_infered_weights_run_list(self) -> List[int]:
         runs = []
@@ -441,9 +454,11 @@ class Experiment(object):
         return None
                 
 
-    def get_train_statistics(self, runs: Optional[Union[List[int], int]] = None) -> List[Path]:
-        runs = runs if isinstance(runs, list) else [runs] if runs is not None else self.get_infered_weights_run_list()
-        return [self.train_statistics.parent / (self.train_statistics.name.format(run=run)) for run in runs]
+    def get_train_statistics(self, runs: Optional[Union[List[int], int]] = None, extension: Optional[str] = "", fmt: Optional[str] = None) -> List[Path]:
+        if extension and not extension.startswith("."): extension = "." + extension
+        
+        runs = runs if isinstance(runs, list) else [runs] if runs is not None else self.get_experiment_results_run_list()
+        return [self.train_statistics.parent / ((fmt or self.train_statistics.name).format(run=run) + extension) for run in runs]
 
     def get_learn_rate_statistics(self, runs: Optional[Union[List[int], int]] = None) -> List[Path]:
         runs = runs if isinstance(runs, list) else [runs] if runs is not None else self.get_infered_weights_run_list()

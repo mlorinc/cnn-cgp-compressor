@@ -6,17 +6,20 @@ from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
 from typing import List, Union, Self, Iterable, Optional, Callable
 from functools import reduce
-
+from models.adapters.model_adapter_interface import ModelAdapterInterface
 from models.base_model import BaseModel
 from models.quantization import dequantize_per_tensor, tensor_iterator
-from models.selector import FilterSelector, FilterSelectorCombinations
+from models.selector import FilterSelectorCombinations
 from tqdm import tqdm
 
-class ModelAdapter(ABC):
+class ModelAdapter(ModelAdapterInterface, ABC):
     def __init__(self, model: nn.Module) -> None:
         self.model = model
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model.to(self.device)
+
+    def save(self, path: str):
+        torch.save(self.model.state_dict(), path)
 
     @abstractmethod
     def load(self, path: str = None, inline: Optional[bool] = True) -> Self:
@@ -28,6 +31,10 @@ class ModelAdapter(ABC):
 
     @abstractmethod
     def get_criterion(self, **kwargs):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_convolution_layers(self) -> Iterable[nn.Conv2d]:
         raise NotImplementedError()
 
     def get_layer(self, selector: Union[str, Callable[[Self], nn.Conv2d]]) -> nn.Module:
@@ -64,15 +71,17 @@ class ModelAdapter(ABC):
                  max_batches: int = None,
                  top: Union[List[int], int] = 1,
                  include_loss: bool =True,
-                 show_top_k: int = 2
+                 show_top_k: int = 2,
+                 num_workers: int = 1,
+                 **kwargs
                  ):
         top = set([1] + top) if isinstance(top, Iterable) else set([1, top])
         original_train_mode = self.model.training
-        dataset = self.get_test_data()
-        criterion = self.get_criterion()
+        dataset = self.get_test_data(**kwargs)
+        criterion = self.get_criterion(**kwargs)
         try:
             self.model.eval()
-            loader = DataLoader(dataset, batch_size=batch_size or len(dataset), shuffle=False)
+            loader = DataLoader(dataset, batch_size=batch_size or len(dataset), shuffle=False, num_workers=num_workers)
             running_loss = 0
             total_samples = 0
             running_topk_correct = dict([(k, 0) for k in top])

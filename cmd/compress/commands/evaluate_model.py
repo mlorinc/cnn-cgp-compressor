@@ -8,9 +8,9 @@ def get_model_adapter(model_name: str, model_path: Optional[str] = None) -> Mode
     return BaseAdapter.load_base_model(model_name, model_path)
 
 
-def evaluate_base_model(model_name: str, model_path: str, weights: str):
+def evaluate_base_model(model_name: str, model_path: str, weights: str, args):
     print(f"Evaluating model: {model_name}")
     model: ModelAdapter = create_adapter(model_name, model_path)
-    acc, loss = model.evaluate(max_batches=None)
-    print(f"acc: {acc:.12f}%, loss {loss:.12f}")
+    acc, loss = model.evaluate(max_batches=None, **vars(args))
+    print(acc, loss)
     return acc, loss

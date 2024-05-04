@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 from typing import List, Union, Callable
 from abc import ABC, abstractmethod
-from models.adapters.model_adapter import ModelAdapter
+from models.adapters.model_adapter_interface import ModelAdapterInterface
 
 class FilterSelector(object):
-    def __init__(self, selector: Union[str, Callable[[ModelAdapter], nn.Conv2d]], inp: List, out: List) -> None:
+    def __init__(self, selector: Union[str, Callable[[ModelAdapterInterface], nn.Conv2d]], inp: List, out: List) -> None:
         self.selector = selector
         self.inp = inp
         self.out = out
@@ -45,18 +45,20 @@ class ConstantSelector(ABC):
     def get_size(self) -> int:
         raise NotImplementedError()
 
-class ZeroSelector(ConstantSelector):
+class ValuesSelector(ConstantSelector):
+    def __init__(self, values: List[int]) -> None:
+        self.values = values
+    def get_values(self) -> List:
+        return self.values
+    def get_size(self) -> int:
+        return len(self.values)
+
+class ZeroSelector(ValuesSelector):
     def __init__(self, size: int) -> None:
-        self.size = size
-    def get_values(self) -> List:
-        return [0] * self.size
-    def get_size(self) -> int:
-        return self.size
-class ByteSelector(ConstantSelector):
+        super().__init__([0] * size)
+        
+class ByteSelector(ValuesSelector):
     def __init__(self, size: int, zero=False) -> None:
-        self.size = size
-        self._zero  =zero
-    def get_values(self) -> List:
-        return [-128 / 2**i for i in range(0, self.size if not self._zero else self.size - 1)] + ([0] if self._zero else [])   
-    def get_size(self) -> int:
-        return self.size    
+        super().__init__([-128 / 2**i for i in range(0, size if not zero else size - 1)] + ([0] if zero else []) )
+        self._zero  = zero
+

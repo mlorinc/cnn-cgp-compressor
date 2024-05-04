@@ -83,7 +83,7 @@ def sample(top: int, f: str):
 
 def pick_top(top: int, f: str):
     df = pd.read_csv(f)
-    return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
+    return df[-top:]
 
 def evaluate_model_metrics(args):
     experiment_list = args.experiment
@@ -98,8 +98,8 @@ def evaluate_model_metrics(args):
     for case in experiment_list:
         x = experiment.get_experiment(case, from_filesystem = True) if isinstance(experiment, experiments.MultiExperiment) else experiment
         
-        for run in (args.runs or x.get_infered_weights_run_list()):
-            df = pd.concat([df_factory(file) for file in x.get_train_statistics(runs=run)])
+        for run in (args.runs or x.get_number_of_train_statistic_file(fmt=args.statistics_file_format)):
+            df = pd.concat([df_factory(file) for file in x.get_train_statistics(runs=run, fmt=args.statistics_file_format)])
 
             df.drop(columns="depth", inplace=True, errors="ignore")
             df = df[~(

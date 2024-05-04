@@ -8,6 +8,7 @@ from commands.optimize_model import optimize_model
 from commands.evaluate_cgp_model import evaluate_cgp_model, evaluate_model_metrics
 from commands.train_model import train_model
 from commands.evaluate_model import evaluate_base_model
+from commands.evaluate_model_sensitivity import model_sensitivity
 from commands.quantize_model import quantize_model
 from cgp.cgp_configuration import CGPConfiguration
 from commands.datastore import Datastore
@@ -27,22 +28,35 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     # model:train
     train_parser = subparsers.add_parser("model:train", help="Train a model")
     train_parser.add_argument("model_name", help="Name of the model to train")
-    train_parser.add_argument("model_path", help="Path where trained model will be saved")
+    train_parser.add_argument("-m", "--model-path", help="Path where trained model will be saved")
     train_parser.add_argument("-b", "--base", type=str, help="Path to the baseline model")
 
     # model:evaluate
     evaluate_parser = subparsers.add_parser("model:evaluate", help="Evaluate a model")
     evaluate_parser.add_argument("model_name", help="Name of the model to evaluate")
-    evaluate_parser.add_argument("model_path", help="Path to the model to evaluate")
+    evaluate_parser.add_argument("-m", "--model-path", help="Path to the model to evaluate")
     evaluate_parser.add_argument("--weights", nargs="?", type=str, help="", default=[], required=False)
+    evaluate_parser.add_argument("--batch_size", type=int, default=None, help="Batch size for evaluation")
+    evaluate_parser.add_argument("--top", nargs="+", type=int, default=[1, 5], help="Top-k accuracy to compute")
+    evaluate_parser.add_argument("-l", "--include-loss", action="store_true", help="Whether to include loss in evaluation")
+    evaluate_parser.add_argument("--show-top-k", type=int, default=2, help="Number of top-k accuracies to display")
 
     # model:evaluate
-    evaluate_parser = subparsers.add_parser("model:mobilenet_v2", help="Evaluate mobilenet_v2")
+    sensitivity_parser = subparsers.add_parser("model:sensitivity", help="Evaluate a model sensitivity")
+    sensitivity_parser.add_argument("model_name", help="Name of the model to evaluate")
+    sensitivity_parser.add_argument("-e", "--error-type", nargs="+", type=str, default=["inner", "outter", "all"], help="Weight error types")
+    sensitivity_parser.add_argument("-m", "--model-path", help="Path to the model to evaluate")
+    sensitivity_parser.add_argument("--batch-size", type=int, default=None, help="Batch size for evaluation")
+    sensitivity_parser.add_argument("--top", nargs="+", type=int, default=[1, 5], help="Top-k accuracy to compute")
+    sensitivity_parser.add_argument("-l", "--include-loss", action="store_true", help="Whether to include loss in evaluation")
+    sensitivity_parser.add_argument("--show-top-k", type=int, default=2, help="Number of top-k accuracies to display")
+    sensitivity_parser.add_argument("--num-workers", type=int, default=None, help="Worker count for data loader")
+    sensitivity_parser.add_argument("--num-proc", type=int, default=None, help="Proccesor count for dataset")
 
     # model:quantize
     quantize_parser = subparsers.add_parser("model:quantize", help="Quantize a model")
     quantize_parser.add_argument("model_name", help="Name of the model to quantize")
-    quantize_parser.add_argument("model_path", help="Path where trained model is saved")
+    quantize_parser.add_argument("-m", "--model-path", help="Path where trained model is saved")
     quantize_parser.add_argument("new_path", help="Path of the new quantized model where it will be stored")    
 
     # model:debug
@@ -58,22 +72,25 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
     for command, help in zip(experiment_commands, [help_train, help_metacentrum, help_evaluate, "", ""]):
         for experiment_name in experiment_names:
             experiment_parser = subparsers.add_parser(f"{experiment_name}:{command}", help=help.format(experiment_name=experiment_name))
+            experiment_parser.add_argument("--cgp", help="Path to the CGP binary", type=str, default=os.environ.get("cgp", None), required=("cgp" not in os.environ and required_cgp[command]))
+            experiment_parser.add_argument("--experiment", help="Specific sub-experiments", type=str, nargs="+", default=[])
+            CGPConfiguration.get_cgp_arguments(experiment_parser.add_argument_group("Cartesian Genetic Programming"))
+            
             if command != "fix-train-stats":
                 experiment_parser.add_argument("model_name", help="Name of the model to optimize")
-                experiment_parser.add_argument("model_path", help="Path to the model to optimize")
-            experiment_parser.add_argument("--cgp", help="Path to the CGP binary", type=str, default=os.environ.get("cgp", None), required=("cgp" not in os.environ and required_cgp[command]))
-            experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=os.environ.get("experiments_root", "cmd/compress/experiments/"))
-            experiment_parser.add_argument("--experiment", help="Specific sub-experiments", type=str, nargs="+", default=[])
-
-            cgp_group = experiment_parser.add_argument_group("Cartesian Genetic Programming")
-            CGPConfiguration.get_cgp_arguments(cgp_group)
-
+                experiment_parser.add_argument("model_path", help="Path to the model to optimize")            
+            
             experiment_group = experiment_parser.add_argument_group("Experiment")
-            experiment_group.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
+            if command in ["train", "train-pbs"]:
+                experiment_group.add_argument("--experiment-env", help="Create a new isolated environment", nargs="?", default="experiment_results")
 
             if command == "model-metrics":
                 experiment_group.add_argument("--runs", help="Specific runs to evaluate", nargs="+", default=None)
                 experiment_group.add_argument("--top", help="Evaluate only the best", type=int, default=None)
+                experiment_group.add_argument("-s", "--statistics-file-format", help="Specify statistics filename", type=str, default=None)
+                experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=str(Datastore().derive(experiment_name)))
+            else:
+                experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=os.environ.get("experiments_root", "cmd/compress/experiments/"))
 
             experiments.get_experiment_arguments(experiment_name, experiment_group)
             experiments.get_base_argument_parser(experiment_group)
@@ -112,9 +129,9 @@ def dispatch(args):
         if args.command == "model:train":
             return lambda: train_model(args.model_name, args.model_path, args.base)
         elif args.command == "model:evaluate":
-            return lambda: evaluate_base_model(args.model_name, args.model_path, args.weights)
-        elif args.command == "model:mobilenet_v2":
-            return lambda: evaluate_base_model("mobilenet_v2", None, None)
+            return lambda: evaluate_base_model(args.model_name, args.model_path, args.weights, args)
+        elif args.command == "model:sensitivity":
+            return lambda: model_sensitivity(**vars(args))
         elif args.command == "model:quantize":
             return lambda: quantize_model(args.model_name, args.model_path, args.new_path)
         elif args.command == "model:debug":
