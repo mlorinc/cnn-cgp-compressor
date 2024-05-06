@@ -143,8 +143,10 @@ bool cgp::CGP::is_multiplexing() const
 void cgp::CGP::remove_multiplexing(const dataset_t &dataset, int new_generations_without_change)
 {
 	auto chromosome = get_chromosome(best_solution);
-	chromosome->perform_corrections(dataset, 3);
-
+	if (mse_threshold() == 0)
+	{
+		chromosome->perform_corrections(dataset, 512);
+	}
 	chromosome->remove_multiplexing();
 	solution_t new_solution = evaluate(dataset, chromosome);
 	best_solution = std::move(new_solution);

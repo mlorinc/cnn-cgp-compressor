@@ -379,7 +379,7 @@ int main(int argc, const char** args) {
 		arguments.erase(arguments.begin(), arguments.begin() + consumed_arguments);
 		auto train_dataset = init_dataset(cgp_file, arguments);
 		auto cgp_model = init_cgp(cgp_file, arguments, train_dataset);
-
+		
 		// Read two values from the standard input
 		if (cgp_model->input_count() == 0 || cgp_model->output_count() == 0)
 		{

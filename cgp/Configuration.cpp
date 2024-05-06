@@ -126,47 +126,47 @@ namespace cgp {
 		}
 	}
 
-	std::string error_to_string(CGPConfiguration::error_t value)
+	const std::string error_to_string(CGPConfiguration::error_t value)
 	{
 		return (value != CGPConfiguration::error_nan) ? (std::to_string(value)) : (CGPConfiguration::error_nan_string);
 	}
 
-	std::string quantized_energy_to_string(CGPConfiguration::quantized_energy_t value)
+	const std::string quantized_energy_to_string(CGPConfiguration::quantized_energy_t value)
 	{
 		return (value != CGPConfiguration::quantized_energy_nan) ? (std::to_string(value)) : (CGPConfiguration::quantized_energy_nan_string);
 	}
 
-	std::string energy_to_string(CGPConfiguration::energy_t value)
+	const std::string energy_to_string(CGPConfiguration::energy_t value)
 	{
 		return (value != CGPConfiguration::energy_nan) ? (std::to_string(value)) : (CGPConfiguration::energy_nan_string);
 	}
 
-	std::string quantized_delay_to_string(CGPConfiguration::quantized_delay_t value)
+	const std::string quantized_delay_to_string(CGPConfiguration::quantized_delay_t value)
 	{
 		return (value != CGPConfiguration::quantized_delay_nan) ? (std::to_string(value)) : (CGPConfiguration::quantized_delay_nan_string);
 	}
 
-	std::string delay_to_string(CGPConfiguration::delay_t value)
+	const std::string delay_to_string(CGPConfiguration::delay_t value)
 	{
 		return (value != CGPConfiguration::delay_nan) ? (std::to_string(value)) : (CGPConfiguration::delay_nan_string);
 	}
 
-	std::string depth_to_string(CGPConfiguration::depth_t value)
+	const std::string depth_to_string(CGPConfiguration::depth_t value)
 	{
 		return (value != CGPConfiguration::depth_nan) ? (std::to_string(value)) : (CGPConfiguration::depth_nan_string);
 	}
 
-	std::string gate_count_to_string(CGPConfiguration::gate_count_t value)
+	const std::string gate_count_to_string(CGPConfiguration::gate_count_t value)
 	{
 		return (value != CGPConfiguration::gate_count_nan) ? (std::to_string(value)) : (CGPConfiguration::gate_count_nan_string);
 	}
 
-	std::string weight_to_string(CGPConfiguration::weight_value_t value)
+	const std::string weight_to_string(CGPConfiguration::weight_value_t value)
 	{
 		return std::to_string(static_cast<CGPConfiguration::weight_repr_value_t>(value));
 	}
 
-	std::string area_to_string(CGPConfiguration::area_t value)
+	const std::string area_to_string(CGPConfiguration::area_t value)
 	{
 		return (value != CGPConfiguration::area_nan) ? (std::to_string(value)) : (CGPConfiguration::area_nan_string);
 	}
@@ -455,7 +455,11 @@ namespace cgp {
 	}
 
 	int CGPConfiguration::pin_map_size() const {
-		return row_count() * col_count() * function_output_arity() + output_count() * ((virtual_selector()) ? (dataset_size()) : (1));
+#ifdef __VIRTUAL_SELECTOR
+		return row_count() * col_count() * function_output_arity() + output_count() * dataset_size();
+#else
+		return row_count() * col_count() * function_output_arity() + output_count();
+#endif // __VIRTUAL_SELECTOR
 	}
 
 	int CGPConfiguration::block_chromosome_size() const
@@ -468,7 +472,11 @@ namespace cgp {
 	}
 
 	int CGPConfiguration::chromosome_size() const {
-		return blocks_chromosome_size() + output_count() * ((virtual_selector()) ? (dataset_size()) : (1));
+#ifdef __VIRTUAL_SELECTOR
+		return blocks_chromosome_size() + output_count() * dataset_size();
+#else
+		return blocks_chromosome_size() + output_count();
+#endif // __VIRTUAL_SELECTOR
 	}
 
 	const decltype(CGPConfiguration::function_costs_value)& CGPConfiguration::function_costs() const
@@ -578,11 +586,6 @@ namespace cgp {
 	decltype(CGPConfiguration::patience_value) CGPConfiguration::patience() const
 	{
 		return patience_value;
-	}
-
-	decltype(CGPConfiguration::virtual_selector_value) CGPConfiguration::virtual_selector() const
-	{
-		return virtual_selector_value;
 	}
 
 	decltype(CGPConfiguration::learning_rate_value) CGPConfiguration::learning_rate() const

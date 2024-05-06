@@ -193,6 +193,18 @@ void Chromosome::setup_chromosome(const std::string& serialized_chromosome)
 					throw std::invalid_argument("invalid format of the chromosome gate definition\n" + serialized_chromosome);
 				}
 			}
+
+#if defined(__OLD_NOOP_OPERATION_SUPPORT)
+			if (it[target_block + block_size - 1] == 0)
+			{
+				it[target_block + block_size - 1] = CGPOperator::ID;
+			}
+			else
+			{
+				// Back then ID function was assgined 0
+				it[target_block + block_size - 1] -= 1;
+			}
+#endif // __OLD_NOOP_OPERATION_SUPPORT
 		}
 	}
 
@@ -235,7 +247,12 @@ void Chromosome::setup_maps()
 	absolute_output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size();
 	absolute_output_end = absolute_output_start + cgp_configuration.output_count() * cgp_configuration.dataset_size();
 	absolute_pin_start = pin_map.get() + cgp_configuration.row_count() * cgp_configuration.col_count() * cgp_configuration.function_output_arity();
-	absolute_pin_end = absolute_pin_start + cgp_configuration.output_count() * ((cgp_configuration.virtual_selector()) ? (cgp_configuration.dataset_size()) : (1));
+
+#if defined(__VIRTUAL_SELECTOR)
+	absolute_pin_end = absolute_pin_start + cgp_configuration.output_count() * cgp_configuration.dataset_size();
+#else
+	absolute_pin_end = absolute_pin_start + cgp_configuration.output_count();
+#endif // __VIRTUAL_SELECTOR
 }
 
 void Chromosome::setup_maps(const Chromosome& that)
@@ -415,22 +432,20 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 		{
 			int gate_index = random_gene_index / (cgp_configuration.function_input_arity() + 1);
 			auto func = *get_block_function(gate_index);
+			// Let ID functions mutate as they serve optimisation purpose
 			if (locked_nodes[gate_index] && func != CGPOperator::ID)
 			{
 				continue;
-			}
-
-			if (neutral_mutation && gate_visit_map[gate_index])
-			{
-				neutral_mutation = false;
 			}
 
 			int column_index = get_column(gate_index);
 			const auto& column_values = minimum_output_indicies[column_index];
 			auto min = std::get<0>(column_values);
 			auto max = std::get<1>(column_values);
+			auto new_pin = (random_number % (max - min)) + min;
 
-			that->chromosome[random_gene_index] = (random_number % (max - min)) + min;
+			neutral_mutation = neutral_mutation && (new_pin == that->chromosome[random_gene_index] || !gate_visit_map[gate_index]);	
+			that->chromosome[random_gene_index] = new_pin;
 		}
 		else if (is_output(random_gene_index)) {
 			// output is locked, try again
@@ -439,23 +454,18 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 				continue;
 			}
 
-			neutral_mutation = false;
-
 			const auto& output_values = minimum_output_indicies[cgp_configuration.col_count()];
 			auto min = std::get<0>(output_values);
 			auto max = std::get<1>(output_values);
-			that->chromosome[random_gene_index] = (random_number % (max - min)) + min;
+			auto new_pin = (random_number % (max - min)) + min;
+			neutral_mutation = neutral_mutation && that->chromosome[random_gene_index] == new_pin;
+			that->chromosome[random_gene_index] = new_pin;
 		}
 		else {
 			int gate_index = random_gene_index / (cgp_configuration.function_input_arity() + 1);
 			if (locked_nodes[gate_index])
 			{
 				continue;
-			}
-
-			if (neutral_mutation && gate_visit_map[gate_index])
-			{
-				neutral_mutation = false;
 			}
 
 			int func = random_number % (cgp_configuration.function_count() + 1);
@@ -465,6 +475,13 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 				func = CGPOperator::ID;
 			}
 
+			if (is_multiplexing() && (func == CGPOperator::MUX || func == CGPOperator::DEMUX))
+			{
+				// Do not use MUX and D-MUX when multiplexing
+				continue;
+			}
+
+			neutral_mutation = neutral_mutation && (func == that->chromosome[random_gene_index] || !gate_visit_map[gate_index]);
 			that->chromosome[random_gene_index] = func;
 		}
 	}
@@ -540,11 +557,9 @@ void Chromosome::set_input(const weight_value_t* input, int selector)
 	{
 		need_evaluation = true;
 	}
-
-	if (cgp_configuration.virtual_selector())
-	{
-		setup_output_iterators(selector);
-	}
+#if defined(__VIRTUAL_SELECTOR)
+	setup_output_iterators(selector);
+#endif // __VIRTUAL_SELECTOR
 }
 
 inline static void set_value(CGPConfiguration::weight_value_t& target, const CGPConfiguration::weight_value_t& value)
@@ -554,7 +569,7 @@ inline static void set_value(CGPConfiguration::weight_value_t& target, const CGP
 
 bool Chromosome::is_mux(int func)
 {
-#ifdef CNN_FP32_WEIGHTS
+#if defined(CNN_FP32_WEIGHTS)
 	return func == 9;
 #else
 	return func == CGPOperator::MUX;
@@ -573,6 +588,60 @@ bool Chromosome::is_demux(int func)
 Chromosome::weight_value_t Chromosome::get_pin_value(int index) const
 {
 	return (index < cgp_configuration.input_count()) ? (input[index]) : (pin_map[index - cgp_configuration.input_count()]);
+}
+
+Chromosome::weight_value_t Chromosome::get_gate_output(int gate_index) const
+{
+	return get_pin_value(get_gate_output_used_pin(gate_index));
+}
+
+Chromosome::weight_value_t Chromosome::get_gate_input(int gate_index, int pin) const
+{
+	assert(("pin is out of bounds", pin < cgp_configuration.function_input_arity()));
+	if (pin != 0)
+	{
+		return get_pin_value(get_block_inputs(gate_index)[pin]);
+	}
+	else
+	{
+		return get_pin_value(get_gate_input_used_pin(gate_index));
+	}
+}
+
+int Chromosome::get_gate_output_used_pin(int gate_index) const
+{
+	const auto func = *get_block_function(gate_index);
+
+	if (func != CGPOperator::DEMUX)
+	{
+		return get_output_pin_from_gate_index(gate_index);
+	}
+	else if (func == CGPOperator::DEMUX)
+	{
+		return get_output_pin_from_gate_index(gate_index, selector);
+	}
+	else
+	{
+		throw std::runtime_error("unexpected state");
+	}
+}
+
+int Chromosome::get_gate_input_used_pin(int gate_index) const
+{
+	const auto func = *get_block_function(gate_index);
+
+	if (func != CGPOperator::MUX)
+	{
+		return get_block_inputs(gate_index)[0];
+	}
+	else if (func == CGPOperator::MUX)
+	{
+		return get_block_inputs(gate_index)[selector];
+	}
+	else
+	{
+		throw std::runtime_error("unexpected state");
+	}
 }
 
 void Chromosome::evaluate()
@@ -1441,24 +1510,17 @@ int cgp::Chromosome::relative_mulitplexed_index_to_value(int index) const
 	return index - 128;
 }
 
-int cgp::Chromosome::get_id_output_from_index(int index) const
-{
-	assert(("cannot use get_mx_output_from_index without multiplexing mode", multiplexing));
-	assert(("index out of range", start_id_index <= index && index < start_id_index + 256));
-	return pin_map[index * cgp_configuration.function_output_arity()];
-}
-
 int cgp::Chromosome::get_relative_id_output_from_index(int index) const
 {
 	assert(("cannot use get_relative_mx_output_from_index without multiplexing mode", multiplexing));
 	assert(("index out of range", 0 <= index && index < 256));
-	return get_id_output_from_index(start_id_index + index);
+	return get_gate_output(start_id_index + index);
 }
 
 int cgp::Chromosome::get_id_output_for(int value) const
 {
 	assert(("cannot use get_id_output_for without multiplexing mode", multiplexing));
-	return get_id_output_from_index(mulitplexed_value_to_index(value));
+	return get_gate_output(mulitplexed_value_to_index(value));
 }
 
 void cgp::Chromosome::use_multiplexing(const dataset_t& dataset)
@@ -1580,6 +1642,12 @@ void cgp::Chromosome::remove_multiplexing()
 				if (id_pin >= cgp_configuration.input_count())
 				{
 					int id_index = get_gate_index_from_output_pin(id_pin);
+
+					if (*get_block_function(id_index) != CGPOperator::ID)
+					{
+						continue;
+					}
+
 					auto id_inputs = get_block_inputs(id_index);
 					outputs[j] = id_inputs[0];
 				}
@@ -1593,6 +1661,12 @@ void cgp::Chromosome::remove_multiplexing()
 			if (pin >= cgp_configuration.input_count())
 			{
 				int id_index = get_gate_index_from_output_pin(pin);
+
+				if (*get_block_function(id_index) != CGPOperator::ID)
+				{
+					continue;
+				}
+
 				auto inputs = get_block_inputs(id_index);
 				get_outputs()[j] = inputs[0];
 			}
@@ -1627,104 +1701,109 @@ void cgp::Chromosome::copy_gate_function(int src_index, int dst_index)
 
 void cgp::Chromosome::perform_corrections(const dataset_t& dataset, int threshold)
 {
+	if (need_evaluation)
+	{
+		throw std::invalid_argument("chromosome must be evaluated fisrt");
+	}
+
 	bool valid = true;
 	const auto& inputs = get_dataset_input(dataset);
+
 	for (int i = start_id_index; i < start_id_index + 256; i++)
 	{
-		const int num = mulitplexed_index_to_value(i);
+		const int expected_value = mulitplexed_index_to_value(i);
+		const int col = get_column(i);
 
-		// The pin is correct
-		if (num == get_id_output_for(num))
+		// The pin is correct, nothing to do
+		if (expected_value == get_id_output_for(expected_value))
 		{
 			continue;
 		}
 
-		if (cgp_configuration.dataset_size() == 1)
-		{
-			bool ok = false;
-			for (int i = 0; i < cgp_configuration.input_count(); i++)
-			{
-				if (inputs[0][i] == num)
-				{
-					get_block_inputs(i)[0] = i;
-					ok = true;
-					break;
-				}
-			}
-			if (ok)
-			{
-				continue;
-			}
-		}
-
-		if (num != 0 && num == get_id_output_for(-num))
-		{
-			auto pos_function = get_block_function(i);
-			*pos_function = CGPOperator::NEG;
-			copy_gate_input_pins(mulitplexed_value_to_index(-num), i);
-			valid = false;
-			continue;
-		}
-
-		const int delta = get_id_output_from_index(i) - num;
+		const int actual_value = get_gate_output(i);
+		const int delta = actual_value - expected_value;
 		const int abs_delta = std::abs(delta);
-		const auto& inputs = get_dataset_input(dataset);
-		int best_delta = abs_delta, best_index = -1;
+		int best_delta = std::min(abs_delta, threshold), best_pin_index = -1, best_function = -1;
 
+		// If there is only 1 data pairing, an input shortcircuit optimisation can be done
 		if (cgp_configuration.dataset_size() == 1)
 		{
-			for (int i = 0; i < cgp_configuration.input_count(); i++)
+			for (int j = 0; j < cgp_configuration.input_count() && (best_function != CGPOperator::ID || best_delta != 0); j++)
 			{
-				if (std::abs(inputs[0][i] - num) < best_delta)
+				const int id_abs_delta = std::abs(inputs[0][j] - expected_value);
+				const int neg_abs_delta = std::abs(-inputs[0][j] - expected_value);
+				const int plus_abs_delta = std::abs(plus(actual_value, inputs[0][j]) - expected_value);
+				const int sub_abs_delta = std::abs(minus(actual_value, inputs[0][j]) - expected_value);
+				if (id_abs_delta <= abs_delta)
 				{
-					best_delta = std::abs(inputs[0][i] - num);
-					best_index = i;
+					best_delta = id_abs_delta;
+					best_pin_index = j;
+					best_function = CGPOperator::ID;
+				}
+				else if (neg_abs_delta < abs_delta || (neg_abs_delta == abs_delta && best_function != CGPOperator::ID))
+				{
+					best_delta = neg_abs_delta;
+					best_pin_index = j;
+					best_function = CGPOperator::NEG;
+				}
+				else if (plus_abs_delta < abs_delta)
+				{
+					best_delta = plus_abs_delta;
+					best_pin_index = j;
+					best_function = CGPOperator::ADD;
+				}
+				else if (sub_abs_delta < abs_delta)
+				{
+					best_delta = sub_abs_delta;
+					best_pin_index = j;
+					best_function = CGPOperator::SUB;
 				}
 			}
 		}
 
-		for (int i = 0; i < threshold; i++)
+		for (int gate_index = 0, end = cgp_configuration.row_count() * (col - 1); best_function != CGPOperator::ID && gate_index < end; gate_index++)
 		{
-			int values[] = { -abs_delta + i, -abs_delta - i, abs_delta + i, abs_delta - i };
-
-			for (int i = 0; i < 4; i++)
+			const auto& value = get_gate_output(gate_index);
+			const int id_abs_delta = std::abs(value - expected_value);
+			const int neg_abs_delta = std::abs(-value - expected_value);
+			const int plus_abs_delta = std::abs(plus(actual_value, value) - expected_value);
+			const int sub_abs_delta = std::abs(minus(actual_value, value) - expected_value);
+			if (id_abs_delta <= abs_delta)
 			{
-				int new_delta = std::abs(num - get_id_output_for(values[i]));
-				if (get_id_output_for(values[i]) == values[i] && new_delta < best_delta)
-				{
-					best_delta = new_delta;
-					best_index = mulitplexed_value_to_index(values[i]);
-				}
+				best_delta = id_abs_delta;
+				best_pin_index = gate_index;
+				best_function = CGPOperator::ID;
+			}
+			else if (neg_abs_delta < abs_delta || (neg_abs_delta == abs_delta && best_function != CGPOperator::ID))
+			{
+				best_delta = neg_abs_delta;
+				best_pin_index = gate_index;
+				best_function = CGPOperator::NEG;
+			}
+			else if (plus_abs_delta < abs_delta)
+			{
+				best_delta = plus_abs_delta;
+				best_pin_index = gate_index;
+				best_function = CGPOperator::ADD;
+			}
+			else if (sub_abs_delta < abs_delta)
+			{
+				best_delta = sub_abs_delta;
+				best_pin_index = gate_index;
+				best_function = CGPOperator::SUB;
 			}
 		}
-		
-		if (best_index != -1 && best_delta < abs_delta)
+
+		if (best_pin_index != -1)
 		{
-			if (best_index < cgp_configuration.input_count())
+			*get_block_function(i) = best_function;
+			if (best_function == CGPOperator::ID || best_function == CGPOperator::NEG)
 			{
-				int correction_value = inputs[0][best_index];
-				get_block_inputs(i)[0] = best_index;
-				if (delta > 0)
-				{
-					*get_block_function(i) = (correction_value < 0) ? CGPOperator::ADD : CGPOperator::SUB;
-				}
-				else
-				{
-					*get_block_function(i) = (correction_value < 0) ? CGPOperator::SUB : CGPOperator::ADD;
-				}
+				get_block_inputs(i)[0] = best_pin_index;
 			}
 			else
 			{
-				int correction_value = mulitplexed_index_to_value(best_index);
-				copy_gate_input_pins(best_index, i, 0, 1);
-				if (delta > 0)
-				{
-					*get_block_function(i) = (correction_value < 0) ? CGPOperator::ADD : CGPOperator::SUB;
-				}
-				else
-				{
-					*get_block_function(i) = (correction_value < 0) ? CGPOperator::SUB : CGPOperator::ADD;
-				}
+				get_block_inputs(i)[1] = best_pin_index;
 			}
 			valid = false;
 		}
@@ -1741,6 +1820,12 @@ cgp::Chromosome::gate_parameters_t cgp::Chromosome::get_function_cost(gene_t fun
 	{
 		return id_gate_parameters;
 	}
+
+#if defined(__OLD_NOOP_OPERATION_SUPPORT)
+	// todo: remove after virtual selector is retired
+	// Skip old ID function at index 0
+	function++;
+#endif // __OLD_NOOP_OPERATION_SUPPORT
 
 	const auto& costs = cgp_configuration.function_costs();
 	return costs[function];

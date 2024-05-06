@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <map>
 
+#define __VIRTUAL_SELECTOR 1
+
 namespace cgp {
 	long long parse_integer_argument(const std::string& arg);
 	long double parse_decimal_argument(const std::string& arg);
@@ -617,8 +619,6 @@ namespace cgp {
 		/// </summary>
 		double learning_rate_value = 0.05;
 
-		bool virtual_selector_value = false;
-
 		/// <summary>
 		/// Sets the starting generation value for Cartesian Genetic Programming (CGP) configuration.
 		/// </summary>
@@ -640,11 +640,6 @@ namespace cgp {
 		/// Sets configuration parameters according to given command line arguments.
 		/// </summary>
 		void set_from_arguments(const std::vector<std::string>& arguments);
-
-		/// <summary>
-		/// Legacy virtual selector mode.
-		/// </summary>
-		decltype(virtual_selector_value) virtual_selector() const;
 
 		/// <summary>
 		/// Learning rate threshold after which the training process is terminated.
@@ -1044,15 +1039,15 @@ namespace cgp {
 
 	};
 
-	std::string error_to_string(CGPConfiguration::error_t value);
-	std::string quantized_energy_to_string(CGPConfiguration::quantized_energy_t value);
-	std::string energy_to_string(CGPConfiguration::energy_t value);
-	std::string quantized_delay_to_string(CGPConfiguration::quantized_delay_t value);
-	std::string delay_to_string(CGPConfiguration::delay_t value);
-	std::string depth_to_string(CGPConfiguration::depth_t value);
-	std::string gate_count_to_string(CGPConfiguration::gate_count_t value);
-	std::string weight_to_string(CGPConfiguration::weight_value_t value);
-	std::string area_to_string(CGPConfiguration::area_t value);
+	const std::string error_to_string(CGPConfiguration::error_t value);
+	const std::string quantized_energy_to_string(CGPConfiguration::quantized_energy_t value);
+	const std::string energy_to_string(CGPConfiguration::energy_t value);
+	const std::string quantized_delay_to_string(CGPConfiguration::quantized_delay_t value);
+	const std::string delay_to_string(CGPConfiguration::delay_t value);
+	const std::string depth_to_string(CGPConfiguration::depth_t value);
+	const std::string gate_count_to_string(CGPConfiguration::gate_count_t value);
+	const std::string weight_to_string(CGPConfiguration::weight_value_t value);
+	const std::string area_to_string(CGPConfiguration::area_t value);
 	CGPConfiguration::error_t string_to_error(const std::string& value);
 	CGPConfiguration::quantized_energy_t string_to_quantized_energy(const std::string& value);
 	CGPConfiguration::energy_t string_to_energy(const std::string& value);

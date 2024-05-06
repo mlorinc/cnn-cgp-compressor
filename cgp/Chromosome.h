@@ -342,6 +342,11 @@ namespace cgp {
 
 		bool mutate_genes(std::shared_ptr<Chromosome> that) const;
 		weight_value_t get_pin_value(int index) const;
+		weight_value_t get_gate_output(int gate_index) const;
+		int get_gate_output_used_pin(int gate_index) const;
+		weight_value_t get_gate_input(int gate_index, int pin = 0) const;
+		int get_gate_input_used_pin(int gate_index) const;
+
 		bool move_block_to_the_start(int gate_index);
 		void move_gate(int src_gate_index, int dst_gate_index);
 		int get_gate_index_from_output_pin(int pin) const;
@@ -359,7 +364,6 @@ namespace cgp {
 		int mulitplexed_value_to_relative_index(int value) const;
 		int mulitplexed_index_to_value(int index) const;
 		int relative_mulitplexed_index_to_value(int index) const;
-		int get_id_output_from_index(int index) const;
 		int get_id_output_for(int value) const;
 
 	public:

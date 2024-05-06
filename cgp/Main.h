@@ -3,8 +3,6 @@
 
 #pragma once
 
-#define _DEPTH_DISABLED
-
 #include <iostream>
 #include <chrono>
 #include <functional>
