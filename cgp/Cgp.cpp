@@ -4,6 +4,7 @@
 #include <omp.h>
 #include <fstream>
 #include <sstream>
+#include <cassert>
 
 using namespace cgp;
 
@@ -133,6 +134,28 @@ std::map<std::string, std::string> CGP::load(std::istream& in, const std::vector
 	return remaining_data;
 }
 
+bool cgp::CGP::is_multiplexing() const
+{
+	const auto& chromosome = get_chromosome(best_solution);
+	return chromosome && chromosome->is_multiplexing();
+}
+
+void cgp::CGP::remove_multiplexing(const dataset_t &dataset, int new_generations_without_change)
+{
+	auto chromosome = get_chromosome(best_solution);
+	chromosome->perform_corrections(dataset, 3);
+
+	chromosome->remove_multiplexing();
+	solution_t new_solution = evaluate(dataset, chromosome);
+	best_solution = std::move(new_solution);
+	generations_without_change = new_generations_without_change;
+}
+
+void cgp::CGP::set_generations_without_change(decltype(generations_without_change) new_value)
+{
+	generations_without_change = new_value;
+}
+
 void CGP::build_indices()
 {
 	const auto input_column_pins = input_count();
@@ -180,13 +203,19 @@ void CGP::generate_population(const dataset_t &dataset)
 		else
 		{
 			chromosomes[i] = std::make_shared<Chromosome>(*this, minimum_output_indicies);
-#ifndef __NO_DIRECT_SOLUTIONS
-			chromosomes[i]->find_direct_solutions(dataset);
-#endif // !__NO_DIRECT_SOLUTIONS
 #ifndef __NO_POW_SOLUTIONS
-			chromosomes[i]->add_2pow_circuits(dataset);
+			//chromosomes[i]->add_2pow_circuits(dataset);
 #endif // !__NO_DIRECT_SOLUTIONS
 		}
+
+		if (output_count() > 256 || dataset_size() == 1)
+		{
+			chromosomes[i]->use_multiplexing(dataset);
+		}
+
+#ifndef __NO_DIRECT_SOLUTIONS
+		chromosomes[i]->find_direct_solutions(dataset);
+#endif // !__NO_DIRECT_SOLUTIONS
 	}
 }
 
@@ -207,23 +236,12 @@ CGP::error_t CGP::mse_without_division(const weight_value_t* predictions, const 
 	return sum;
 }
 
-void CGP::set_best_chromosome(const std::string& solution, const dataset_t& dataset)
-{
-	if (minimum_output_indicies == nullptr)
-	{
-		build_indices();
-	}
-
-	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, solution);
-	best_solution = evaluate(dataset, chromosome);
-}
-
 // MSE loss function implementation;
 // for reference see https://en.wikipedia.org/wiki/Mean_squared_error
 CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const
 {
 	error_t sum = 0;
-	#pragma omp parallel for reduction(+:sum)
+#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < no_care; i++)
 	{
 		const int a = predictions[i];
@@ -236,18 +254,64 @@ CGP::error_t CGP::mse(const weight_value_t* predictions, const weight_output_t& 
 	return sum / no_care;
 }
 
+CGP::error_t CGP::multiplexed_error_fitness(const std::shared_ptr<Chromosome> chromosome, std::array<int, 256> weights) const
+{
+	assert(("chromosome is not multiplexed!", chromosome->is_multiplexing()));
+	CGP::error_t sum = 0;
+	#pragma omp parallel for reduction(+:sum)
+	for (int i = 0; i < 256; i++)
+	{
+		const int a = chromosome->get_relative_id_output_from_index(i);
+		const int b = i - 128;
+		const int delta = a - b;
+		const int delta_squared = delta * delta;
+		sum += delta_squared * weights[i];
+	}
+	return sum;
+}
+
+void CGP::set_best_chromosome(const std::string& solution, const dataset_t& dataset)
+{
+	if (minimum_output_indicies == nullptr)
+	{
+		build_indices();
+	}
+
+	auto chromosome = std::make_shared<Chromosome>(*this, minimum_output_indicies, solution);
+	best_solution = evaluate(dataset, chromosome);
+}
+
 CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const dataset_t& dataset)
 {
 	const auto& input = get_dataset_input(dataset);
 	const auto& expected_output = get_dataset_output(dataset);
 	const auto& no_cares = get_dataset_no_care(dataset);
-	const size_t end = input.size();
+	const int end = input.size();
 	error_t mse_accumulator = 0;
-	for (int i = 0; i < end; i++)
+
+	if (!chrom->is_multiplexing())
 	{
-		chrom->set_input(input[i], i);
-		chrom->evaluate();
-		mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i], no_cares[i], i);
+		for (int i = 0; i < end; i++)
+		{
+			chrom->set_input(input[i], i);
+			chrom->evaluate();
+#if defined(__MEAN_SQUARED_ERROR_METRIC)
+			mse_accumulator += error_fitness(*chrom, expected_output[i], no_cares[i], i);
+#elif defined(__ABSOLUTE_ERROR_METRIC)
+			mse_accumulator += error_fitness_absolute(*chrom, expected_output[i], no_cares[i], i);
+#else
+			mse_accumulator += error_fitness_without_aggregation(*chrom, expected_output[i], no_cares[i], i);
+#endif
+		}
+	}
+	else 
+	{
+		for (int i = 0; i < end; i++)
+		{
+			chrom->set_input(input[i], i);
+			chrom->evaluate();
+			mse_accumulator += multiplexed_error_fitness(chrom, get_dataset_needed_quant_values(dataset));
+		}
 	}
 
 	return CGP::create_solution(chrom, mse_accumulator);
@@ -291,6 +355,20 @@ CGP::error_t CGP::error_fitness(Chromosome& chrom, const weight_output_t &expect
 
 CGP::error_t CGP::error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer) {
 	return mse_without_division(chrom.begin_output(), expected_output, no_care, layer);
+}
+
+CGP::error_t CGP::error_fitness_absolute(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer)
+{
+	CGP::error_t sum = 0;
+	const auto& output = chrom.begin_output();
+#pragma omp parallel for reduction(+:sum)
+	for (int i = 0; i < no_care; i++)
+	{
+		const int a = output[i];
+		const int b = expected_output[i];
+		sum += std::abs(a - b);
+	}
+	return sum;
 }
 
 CGP::solution_t CGP::get_default_solution()
@@ -530,6 +608,7 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 	const auto& b_error_fitness = CGP::get_error(b);
 	if (mse_t < a_error_fitness || mse_t < b_error_fitness)
 	{
+
 		return std::make_tuple(a_error_fitness <= b_error_fitness, a_error_fitness == b_error_fitness);
 	}
 	else
@@ -541,6 +620,8 @@ std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
 		ensure_area(a); ensure_area(b);
 		// Real energy detto
 		ensure_energy(a); ensure_energy(b);
+		// Gate Count too
+		ensure_gate_count(a); ensure_gate_count(b);
 
 		if (a_energy_fitness != b_energy_fitness)
 		{
@@ -622,21 +703,22 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 		}
 	}
 
-	if (last_chromosome != CGP::get_chromosome(best_solution))
+	if (get_chromosome(best_solution)->is_multiplexing() && get_error(best_solution) == 0)
 	{
-		CGP::ensure_quantized_energy(best_solution);
-		CGP::ensure_energy(best_solution);
-		CGP::ensure_area(best_solution);
-		CGP::ensure_quantized_delay(best_solution);
-		CGP::ensure_delay(best_solution);
-		CGP::ensure_depth(best_solution);
-		CGP::ensure_gate_count(best_solution);
-	}
+		energy_t energy = 0;
 
-	//if ((evolution_steps_made + 1) % 1000000 == 0)
-	//{
-	//	get_chromosome(best_solution)->tight_layout();
-	//}
+		// Uses multiplexer
+		if (function_count() > CGPOperator::MUX)
+		{
+			auto mux_cost = get_quantized_energy_parameter(function_costs()[CGPOperator::MUX]);
+			energy = mux_cost * output_count() + 1e-12;
+		}
+
+		if (get_energy(best_solution) <= energy)
+		{
+			remove_multiplexing(dataset, 0);
+		}
+	}
 
 	return best_solution;
 }

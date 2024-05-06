@@ -17,6 +17,11 @@ const std::vector<int>& cgp::get_dataset_no_care(const dataset_t& dataset)
 	return std::get<2>(dataset);
 }
 
+const std::array<int, 256>& cgp::get_dataset_needed_quant_values(const dataset_t& dataset)
+{
+	return std::get<3>(dataset);
+}
+
 static std::vector<weight_input_t> get_dataset_input_helper(const dataset_t& dataset)
 {
 	return std::get<0>(dataset);

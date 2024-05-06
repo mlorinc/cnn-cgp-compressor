@@ -8,40 +8,9 @@
 #include <set>
 #include <map>
 
-enum CGPOperator {
-	REVERSE_MAX_A = 0,
-	ADD = 1,
-	SUB = 2,
-	MUL = 3,
-	NEG = 4,
-	REVERSE_MIN_B = 5,
-	QUARTER = 6,
-	HALF = 7,
-	BIT_AND = 8,
-	BIT_OR = 9,
-	BIT_XOR = 10,
-	BIT_NEG = 11,
-	DOUBLE = 12,
-	BIT_INC = 13,
-	BIT_DEC = 14,
-	R_SHIFT_3 = 15,
-	R_SHIFT_4 = 16,
-	R_SHIFT_5 = 17,
-	L_SHIFT_2 = 18,
-	L_SHIFT_3 = 19,
-	L_SHIFT_4 = 20,
-	L_SHIFT_5 = 21,
-	ONE_CONST = 22,
-	MINUS_ONE_CONST = 23,
-	ZERO_CONST = 24,
-	EXPECTED_VALUE_MIN = 25,
-	EXPECTED_VALUE_MAX = 26,
-	MUX = 27,
-	DEMUX = 28
-};
-
 using namespace cgp;
 
+Chromosome::gate_parameters_t Chromosome::id_gate_parameters = std::make_tuple(0, 0, 0, 0, 0);
 const std::string Chromosome::nan_chromosome_string = "null";
 
 Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies) :
@@ -67,12 +36,11 @@ Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::str
 Chromosome::Chromosome(const Chromosome& that) noexcept :
 	cgp_configuration(that.cgp_configuration),
 	minimum_output_indicies(that.minimum_output_indicies) {
+	need_evaluation = that.need_evaluation;
 	need_energy_evaluation = that.need_energy_evaluation;
 	need_delay_evaluation = that.need_delay_evaluation;
 	need_depth_evaluation = that.need_depth_evaluation;
 	selector = that.selector;
-	setup_maps(that);
-	setup_output_iterators(that.selector);
 	estimated_quantized_energy_consumption = that.estimated_quantized_energy_consumption;
 	estimated_energy_consumption = that.estimated_energy_consumption;
 	estimated_area_utilisation = that.estimated_area_utilisation;
@@ -81,12 +49,21 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 	estimated_depth = that.estimated_depth;
 	phenotype_node_count = that.phenotype_node_count;
 	input = that.input;
-	invalidate();
+	start_id_index = that.start_id_index;
+	start_mux_index = that.start_mux_index;
+	multiplexing = that.multiplexing;
+	setup_maps(that);
+	setup_output_iterators(0);
+}
 
-	//if (!need_evaluation)
-	//{
-	//	std::copy(that.absolute_pin_start, that.absolute_pin_end, absolute_pin_start);
-	//}
+int cgp::Chromosome::get_column(int gate_index) const
+{
+	return gate_index / cgp_configuration.row_count();
+}
+
+int cgp::Chromosome::get_row(int gate_index) const
+{
+	return gate_index % cgp_configuration.row_count();
 }
 
 Chromosome::Chromosome(Chromosome&& that) noexcept :
@@ -97,7 +74,6 @@ Chromosome::Chromosome(Chromosome&& that) noexcept :
 	need_delay_evaluation = that.need_delay_evaluation;
 	need_depth_evaluation = that.need_depth_evaluation;
 	selector = that.selector;
-	setup_maps(std::move(that));
 	estimated_quantized_energy_consumption = that.estimated_quantized_energy_consumption;
 	estimated_energy_consumption = that.estimated_energy_consumption;
 	estimated_area_utilisation = that.estimated_area_utilisation;
@@ -106,6 +82,10 @@ Chromosome::Chromosome(Chromosome&& that) noexcept :
 	estimated_depth = that.estimated_depth;
 	phenotype_node_count = that.phenotype_node_count;
 	input = std::move(that.input);
+	start_id_index = that.start_id_index;
+	start_mux_index = that.start_mux_index;
+	multiplexing = that.multiplexing;
+	setup_maps(std::move(that));
 }
 
 bool Chromosome::is_function(int position) const
@@ -228,8 +208,8 @@ void Chromosome::setup_chromosome(const std::string& serialized_chromosome)
 
 		int gate_index = (pin - input_count) / cgp_configuration.function_output_arity();
 		int pin_delta = (pin - input_count) - gate_index * cgp_configuration.function_output_arity();
-		int row = gate_index % row_count;
-		int col = gate_index / row_count;
+		int row = get_row(gate_index);
+		int col = get_column(gate_index);
 		int transformed_index = col * target_row + row;
 		*it = input_count + transformed_index * cgp_configuration.function_output_arity() + pin_delta;
 	}
@@ -247,13 +227,15 @@ void Chromosome::setup_maps()
 	chromosome = std::make_unique<gene_t[]>(cgp_configuration.chromosome_size());
 	locked_outputs = std::make_unique<bool[]>(locket_output_size);
 	locked_nodes = std::make_unique<bool[]>(nodes_count);
+	quantized_delay_distance_map = std::make_unique<quantized_delay_t[]>(nodes_count);
+	depth_distance_map = std::make_unique<depth_t[]>(nodes_count);
 
 	pin_map = std::make_unique<weight_value_t[]>(cgp_configuration.pin_map_size());
 	gate_visit_map = std::make_unique<bool[]>(nodes_count);
 	absolute_output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size();
 	absolute_output_end = absolute_output_start + cgp_configuration.output_count() * cgp_configuration.dataset_size();
 	absolute_pin_start = pin_map.get() + cgp_configuration.row_count() * cgp_configuration.col_count() * cgp_configuration.function_output_arity();
-	absolute_pin_end = absolute_pin_start + cgp_configuration.output_count() * cgp_configuration.dataset_size();
+	absolute_pin_end = absolute_pin_start + cgp_configuration.output_count() * ((cgp_configuration.virtual_selector()) ? (cgp_configuration.dataset_size()) : (1));
 }
 
 void Chromosome::setup_maps(const Chromosome& that)
@@ -264,6 +246,23 @@ void Chromosome::setup_maps(const Chromosome& that)
 	std::copy(that.chromosome.get(), that.chromosome.get() + cgp_configuration.chromosome_size(), this->chromosome.get());
 	std::copy(that.locked_outputs.get(), that.locked_outputs.get() + locket_output_size, locked_outputs.get());
 	std::copy(that.locked_nodes.get(), that.locked_nodes.get() + nodes_count, locked_nodes.get());
+
+	if (!that.need_energy_evaluation)
+	{
+		std::copy(that.gate_visit_map.get(), that.gate_visit_map.get() + nodes_count, gate_visit_map.get());
+	}
+
+	if (!need_evaluation)
+	{
+		if (!multiplexing)
+		{
+			std::copy(that.absolute_pin_start, that.absolute_pin_end, absolute_pin_start);
+		}
+		else
+		{
+			std::copy(that.begin_multiplexed_output(), that.end_multiplexed_output(), begin_multiplexed_output());
+		}
+	}
 }
 
 void Chromosome::setup_maps(Chromosome&& that)
@@ -273,6 +272,8 @@ void Chromosome::setup_maps(Chromosome&& that)
 	gate_visit_map = std::move(that.gate_visit_map);
 	locked_outputs = std::move(that.locked_outputs);
 	locked_nodes = std::move(that.locked_nodes);
+	quantized_delay_distance_map = std::move(that.quantized_delay_distance_map);
+	depth_distance_map = std::move(that.depth_distance_map);
 	std::swap(output_start, that.output_start);
 	std::swap(output_end, that.output_end);
 	std::swap(output_pin_start, that.output_pin_start);
@@ -403,7 +404,8 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 {
 	// Number of genes to mutate
 	int genes_to_mutate = (rand() % cgp_configuration.max_genes_to_mutate()) + 1;
-	bool neutral_mutation = true;
+	// Only and only if gate_visit_map was fille
+	bool neutral_mutation = !need_energy_evaluation;
 	for (int i = 0; i < genes_to_mutate; i++) {
 		// Select a random gene
 		auto random_gene_index = rand() % cgp_configuration.chromosome_size();
@@ -412,18 +414,18 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 		if (is_input(random_gene_index))
 		{
 			int gate_index = random_gene_index / (cgp_configuration.function_input_arity() + 1);
-
-			if (locked_nodes[gate_index])
+			auto func = *get_block_function(gate_index);
+			if (locked_nodes[gate_index] && func != CGPOperator::ID)
 			{
 				continue;
 			}
 
-			if (!need_evaluation && neutral_mutation && gate_visit_map[gate_index])
+			if (neutral_mutation && gate_visit_map[gate_index])
 			{
 				neutral_mutation = false;
 			}
 
-			int column_index = (int)(gate_index / cgp_configuration.row_count());
+			int column_index = get_column(gate_index);
 			const auto& column_values = minimum_output_indicies[column_index];
 			auto min = std::get<0>(column_values);
 			auto max = std::get<1>(column_values);
@@ -436,7 +438,9 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 			{
 				continue;
 			}
+
 			neutral_mutation = false;
+
 			const auto& output_values = minimum_output_indicies[cgp_configuration.col_count()];
 			auto min = std::get<0>(output_values);
 			auto max = std::get<1>(output_values);
@@ -449,20 +453,24 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 				continue;
 			}
 
-			if (!need_evaluation && neutral_mutation && gate_visit_map[gate_index])
+			if (neutral_mutation && gate_visit_map[gate_index])
 			{
 				neutral_mutation = false;
 			}
 
-			that->chromosome[random_gene_index] = random_number % (cgp_configuration.function_count());
+			int func = random_number % (cgp_configuration.function_count() + 1);
+
+			if (func == cgp_configuration.function_count())
+			{
+				func = CGPOperator::ID;
+			}
+
+			that->chromosome[random_gene_index] = func;
 		}
 	}
 	if (!neutral_mutation)
 	{
-		that->need_evaluation = true;
-		that->need_energy_evaluation = true;
-		that->need_delay_evaluation = true;
-		that->need_depth_evaluation = true;
+		that->invalidate();
 		that->estimated_quantized_energy_consumption = CGPConfiguration::quantized_energy_nan;
 		that->estimated_energy_consumption = CGPConfiguration::energy_nan;
 		that->estimated_area_utilisation = CGPConfiguration::area_nan;
@@ -506,8 +514,14 @@ std::shared_ptr<Chromosome> cgp::Chromosome::mutate(std::shared_ptr<Chromosome> 
 	{
 		return mutate();
 	}
-	
+
+	if (!multiplexing && that->multiplexing)
+	{
+		that->remove_multiplexing();
+	}
+
 	std::copy(chromosome.get(), chromosome.get() + cgp_configuration.chromosome_size(), that->chromosome.get());
+
 	mutate_genes(that);
 	return that;
 }
@@ -519,15 +533,23 @@ void cgp::Chromosome::swap_visit_map(Chromosome& chromosome)
 
 void Chromosome::set_input(const weight_value_t* input, int selector)
 {
+	bool valid = this->input == input && this->selector == selector;
 	this->input = input;
 	this->selector = selector;
-	invalidate();
-	setup_output_iterators(selector);
+	if (!valid)
+	{
+		need_evaluation = true;
+	}
+
+	if (cgp_configuration.virtual_selector())
+	{
+		setup_output_iterators(selector);
+	}
 }
 
 inline static void set_value(CGPConfiguration::weight_value_t& target, const CGPConfiguration::weight_value_t& value)
 {
-	target = (value != CGPConfiguration::invalid_value) ? (value) : (CGPConfiguration::invalid_value);
+	target = value;
 }
 
 bool Chromosome::is_mux(int func)
@@ -535,7 +557,7 @@ bool Chromosome::is_mux(int func)
 #ifdef CNN_FP32_WEIGHTS
 	return func == 9;
 #else
-	return func == 27;
+	return func == CGPOperator::MUX;
 #endif
 }
 
@@ -544,7 +566,7 @@ bool Chromosome::is_demux(int func)
 #ifdef CNN_FP32_WEIGHTS
 	return func == 10;
 #else
-	return func == 28;
+	return func == CGPOperator::DEMUX;
 #endif
 }
 
@@ -568,10 +590,11 @@ void Chromosome::evaluate()
 	const auto expected_value_min = cgp_configuration.expected_value_min();
 	const auto expected_value_max = cgp_configuration.expected_value_max();
 	int used_pin = 0;
+
 	for (int i = 0; i < cgp_configuration.col_count() * cgp_configuration.row_count(); i++)
 	{
+		gate_visit_map[i] = !need_energy_evaluation && gate_visit_map[i];
 		auto block_output_pins = output_pin;
-		gate_visit_map[i] = false;
 		switch (*func) {
 		case CGPOperator::REVERSE_MAX_A:
 			set_value(block_output_pins[0], minus(expected_value_max, get_pin_value(input_pin[0])));
@@ -676,6 +699,9 @@ void Chromosome::evaluate()
 			set_value(block_output_pins[selector], get_pin_value(input_pin[0]));
 			used_pin = selector;
 			break;
+		case CGPOperator::ID:
+			set_value(block_output_pins[0], get_pin_value(input_pin[0]));
+			break;
 #else
 		case 8:
 			set_value(block_output_pins[0], get_pin_value(input_pin[0]) * 1.05);
@@ -737,6 +763,21 @@ Chromosome::weight_value_t* Chromosome::end_output()
 	assert(("Chromosome::end_output cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 	return output_pin_end;
 }
+
+
+Chromosome::weight_value_t* Chromosome::begin_multiplexed_output() const
+{
+	assert(("Chromosome::begin_multiplexed_output cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	return pin_map.get() + start_id_index * cgp_configuration.function_output_arity();
+}
+
+Chromosome::weight_value_t* Chromosome::end_multiplexed_output() const
+{
+	assert(("Chromosome::end_multiplexed_output cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	const auto end = begin_multiplexed_output() + 256 * cgp_configuration.function_output_arity();
+	return end;
+}
+
 
 std::string Chromosome::to_string() const
 {
@@ -864,10 +905,10 @@ bool cgp::Chromosome::move_block_to_the_start(int gate_index)
 	else
 	{
 		const int index = get_gate_index_from_output_pin(max_pin);
-		const int col = index / cgp_configuration.row_count() + 1;
+		const int col = get_column(index) + 1;
 		start_gate_index = col * cgp_configuration.row_count();
 	}
-	const int end_index = (gate_index / cgp_configuration.row_count()) * cgp_configuration.row_count();
+	const int end_index = get_column(gate_index) * cgp_configuration.row_count();
 	int target_gate_index;
 	for (target_gate_index = start_gate_index; target_gate_index < end_index && gate_visit_map[target_gate_index]; target_gate_index++)
 	{
@@ -907,12 +948,19 @@ void cgp::Chromosome::tight_layout()
 
 int cgp::Chromosome::get_gate_index_from_output_pin(int pin) const
 {
+	assert(("pin is not gate ping, but input pin", pin >= cgp_configuration.input_count()));
 	return (pin - cgp_configuration.input_count()) / cgp_configuration.function_output_arity();
 }
 
 int cgp::Chromosome::get_gate_index_from_input_pin(int pin) const
 {
+	assert(("pin is not gate ping, but input pin", pin >= cgp_configuration.input_count()));
 	return (pin - cgp_configuration.input_count()) / cgp_configuration.function_input_arity();
+}
+
+int cgp::Chromosome::get_output_pin_from_gate_index(int gate_index, int pin) const
+{
+	return gate_index * cgp_configuration.function_output_arity() + cgp_configuration.input_count() + pin;
 }
 
 void cgp::Chromosome::invalidate()
@@ -925,7 +973,7 @@ void cgp::Chromosome::invalidate()
 
 decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::get_estimated_quantized_energy_usage()
 {
-	assert(("Chromosome::estimate_energy_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	//assert(("Chromosome::estimate_energy_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
 
 	if (!need_energy_evaluation)
 	{
@@ -947,7 +995,6 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 	top_row = 0;
 	first_col = cgp_configuration.col_count();
 	last_col = 0;
-	const auto& reference_costs = cgp_configuration.function_costs();
 
 	while (!pins_to_visit.empty())
 	{
@@ -964,19 +1011,20 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 		if (!gate_visit_map[gate_index])
 		{
 #ifndef _DISABLE_ROW_COL_STATS
-			int row = gate_index / cgp_configuration.col_count();
-			int col = gate_index / cgp_configuration.row_count();
+			int row = get_row(gate_index);
+			int col = get_column(gate_index);
 			top_row = std::min(row, top_row);
 			bottom_row = std::max(row, bottom_row);
 			first_col = std::min(col, first_col);
 			last_col = std::max(col, last_col);
 #endif
 			gene_t func = *get_block_function(gate_index);
+			auto function_cost = get_function_cost(func);
 			gate_visit_map[gate_index] = true;
 			phenotype_node_count += 1;
-			estimated_energy_consumption += CGPConfiguration::get_energy_parameter(reference_costs[func]);
-			estimated_quantized_energy_consumption += CGPConfiguration::get_quantized_energy_parameter(reference_costs[func]);
-			estimated_area_utilisation += CGPConfiguration::get_area_parameter(reference_costs[func]);
+			estimated_energy_consumption += CGPConfiguration::get_energy_parameter(function_cost);
+			estimated_quantized_energy_consumption += CGPConfiguration::get_quantized_energy_parameter(function_cost);
+			estimated_area_utilisation += CGPConfiguration::get_area_parameter(function_cost);
 			gene_t* inputs = get_block_inputs(gate_index);
 
 			for (int i = 0; i < cgp_configuration.function_input_arity(); i++)
@@ -992,28 +1040,28 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 
 decltype(Chromosome::estimated_energy_consumption) Chromosome::get_estimated_energy_usage()
 {
-	assert(("Chromosome::get_estimated_energy_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	//assert(("Chromosome::get_estimated_energy_usage cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return estimated_energy_consumption;
 }
 
 decltype(Chromosome::estimated_area_utilisation) Chromosome::get_estimated_area_usage()
 {
-	assert(("Chromosome::get_estimated_area_usage cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_estimated_area_usage cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return estimated_area_utilisation;
 }
 
 decltype(Chromosome::estimated_delay) Chromosome::get_estimated_delay()
 {
-	assert(("Chromosome::get_estimated_delay cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_estimated_delay cannot be called without calling Chromosome::evaluate before", !need_delay_evaluation || !need_evaluation));
 	get_estimated_quantized_delay();
 	return estimated_delay;
 }
 
 decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quantized_delay()
 {
-	assert(("Chromosome::get_estimated_quantized_delay cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_estimated_quantized_delay cannot be called without calling Chromosome::evaluate before", !need_delay_evaluation || !need_evaluation));
 
 	if (!need_delay_evaluation)
 	{
@@ -1022,7 +1070,12 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 
 	std::stack<gene_t> pins_to_visit;
 	std::stack<std::tuple<quantized_delay_t, delay_t>> current_delays;
-	auto distance_map = std::make_unique<quantized_delay_t[]>(cgp_configuration.col_count() * cgp_configuration.row_count());
+	const int grid_size = cgp_configuration.col_count() * cgp_configuration.row_count();
+
+	for (int i = 0; i < grid_size; i++)
+	{
+		quantized_delay_distance_map[i] = std::numeric_limits<quantized_delay_t>::max();
+	}
 
 	estimated_quantized_delay = 0;
 	estimated_delay = 0;
@@ -1032,7 +1085,6 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 		current_delays.push(std::make_tuple(0, 0));
 	}
 
-	const auto& reference_costs = cgp_configuration.function_costs();
 	while (!pins_to_visit.empty())
 	{
 		gene_t pin = pins_to_visit.top();
@@ -1052,12 +1104,13 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 
 		const int gate_index = get_gate_index_from_output_pin(pin);
 		gene_t func = *get_block_function(gate_index);
-		const auto new_quantized_cost = current_quantized_delay + CGPConfiguration::get_quantized_delay_parameter(reference_costs[func]);
-		const auto new_real_cost = current_delay + CGPConfiguration::get_delay_parameter(reference_costs[func]);
+		auto function_cost = get_function_cost(func);
+		const auto new_quantized_cost = current_quantized_delay + CGPConfiguration::get_quantized_delay_parameter(function_cost);
+		const auto new_real_cost = current_delay + CGPConfiguration::get_delay_parameter(function_cost);
 
-		if (new_quantized_cost > distance_map[gate_index])
+		if (new_quantized_cost > quantized_delay_distance_map[gate_index] || quantized_delay_distance_map[gate_index] == std::numeric_limits<quantized_delay_t>::max())
 		{
-			distance_map[gate_index] = new_quantized_cost;
+			quantized_delay_distance_map[gate_index] = new_quantized_cost;
 			gene_t* inputs = get_block_inputs(gate_index);
 			for (int i = 0; i < cgp_configuration.function_input_arity(); i++)
 			{
@@ -1077,7 +1130,7 @@ decltype(Chromosome::estimated_depth) Chromosome::get_estimated_depth()
 	return CGPConfiguration::depth_nan;
 #endif
 
-	assert(("Chromosome::get_estimated_depth cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_estimated_depth cannot be called without calling Chromosome::evaluate before", !need_depth_evaluation || !need_evaluation));
 
 	if (!need_depth_evaluation)
 	{
@@ -1086,7 +1139,11 @@ decltype(Chromosome::estimated_depth) Chromosome::get_estimated_depth()
 
 	std::stack<gene_t> pins_to_visit;
 	std::stack<depth_t> current_depths;
-	auto distance_map = std::make_unique<quantized_delay_t[]>(cgp_configuration.col_count() * cgp_configuration.row_count());
+
+	for (int i = 0; i < cgp_configuration.col_count() * cgp_configuration.row_count(); i++)
+	{
+		depth_distance_map[i] = 0;
+	}
 
 	estimated_depth = 0;
 	for (auto it = absolute_output_start; it != absolute_output_end; it++)
@@ -1112,9 +1169,9 @@ decltype(Chromosome::estimated_depth) Chromosome::get_estimated_depth()
 		const int gate_index = get_gate_index_from_output_pin(pin);
 		const auto new_cost = current_depth + 1;
 
-		if (new_cost > distance_map[gate_index])
+		if (new_cost > depth_distance_map[gate_index])
 		{
-			distance_map[gate_index] = new_cost;
+			depth_distance_map[gate_index] = new_cost;
 			gene_t* inputs = get_block_inputs(gate_index);
 			for (int i = 0; i < cgp_configuration.function_input_arity(); i++)
 			{
@@ -1130,37 +1187,42 @@ decltype(Chromosome::estimated_depth) Chromosome::get_estimated_depth()
 
 decltype(Chromosome::phenotype_node_count) cgp::Chromosome::get_node_count()
 {
-	assert(("Chromosome::get_node_count cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_node_count cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return phenotype_node_count;
 }
 
 decltype(Chromosome::top_row) Chromosome::get_top_row()
 {
-	assert(("Chromosome::get_top_row cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_top_row cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return top_row;
 }
 
 decltype(Chromosome::bottom_row) Chromosome::get_bottom_row()
 {
-	assert(("Chromosome::get_bottom_row cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_bottom_row cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return bottom_row;
 }
 
 decltype(Chromosome::first_col) Chromosome::get_first_column()
 {
-	assert(("Chromosome::get_first_column cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_first_column cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return first_col;
 }
 
 decltype(Chromosome::last_col) Chromosome::get_last_column()
 {
-	assert(("Chromosome::get_last_column cannot be called without calling Chromosome::evaluate before", !need_evaluation));
+	assert(("Chromosome::get_last_column cannot be called without calling Chromosome::evaluate before", !need_energy_evaluation || !need_evaluation));
 	get_estimated_quantized_energy_usage();
 	return last_col;
+}
+
+decltype(cgp::Chromosome::multiplexing) cgp::Chromosome::is_multiplexing() const
+{
+	return multiplexing;
 }
 
 Chromosome::weight_output_t Chromosome::get_weights(const weight_input_t& input, int selector)
@@ -1195,7 +1257,19 @@ void cgp::Chromosome::find_direct_solutions(const dataset_t& dataset)
 		{
 			for (int k = 0; k < no_care[i]; k++)
 			{
-				if (inputs[i][j] == outputs[i][k])
+				int output = 256;
+				bool can_have_direct_solution = true;
+				for (int l = 0; l < outputs.size(); l++)
+				{
+					if (outputs[l][k] != output && output != 256)
+					{
+						can_have_direct_solution = false;
+						break;
+					}
+					output = outputs[l][k];
+				}
+
+				if (can_have_direct_solution && inputs[i][j] == outputs[i][k])
 				{
 					locked_outputs[cgp_configuration.dataset_size() * i + k] = true;
 					chromosome_outputs[cgp_configuration.dataset_size() * i + k] = j;
@@ -1237,7 +1311,7 @@ void cgp::Chromosome::add_2pow_circuits(const dataset_t& dataset)
 	{
 		*get_block_function(free_index) = CGPOperator::ZERO_CONST;
 		locked_nodes[free_index] = true;
-		pin_mapping[0] = free_index * cgp_configuration.function_output_arity() + cgp_configuration.input_count();
+		pin_mapping[0] = get_output_pin_from_gate_index(free_index);
 		free_index = find_free_index(free_index);
 	}
 
@@ -1245,7 +1319,7 @@ void cgp::Chromosome::add_2pow_circuits(const dataset_t& dataset)
 	{
 		*get_block_function(free_index) = CGPOperator::ONE_CONST;
 		locked_nodes[free_index] = true;
-		pin_mapping[1] = free_index * cgp_configuration.function_output_arity() + cgp_configuration.input_count();
+		pin_mapping[1] = get_output_pin_from_gate_index(free_index);
 		free_index = find_free_index(free_index);
 		one_skip_col = true;
 	}
@@ -1254,7 +1328,7 @@ void cgp::Chromosome::add_2pow_circuits(const dataset_t& dataset)
 	{
 		*get_block_function(free_index) = CGPOperator::EXPECTED_VALUE_MIN;
 		locked_nodes[free_index] = true;
-		pin_mapping[-128] = free_index * cgp_configuration.function_output_arity() + cgp_configuration.input_count();
+		pin_mapping[-128] = get_output_pin_from_gate_index(free_index);
 	}
 
 	int index = (one_skip_col) ? (find_free_index(cgp_configuration.row_count())) : (find_free_index(free_index));
@@ -1263,7 +1337,7 @@ void cgp::Chromosome::add_2pow_circuits(const dataset_t& dataset)
 	{
 		if (num <= 1 || pin_mapping.find(num) != pin_mapping.end()) continue;
 		index = find_free_index(index);
-		int col = index / cgp_configuration.row_count();
+		int col = get_column(index);
 		int next_col_index;
 		switch (num)
 		{
@@ -1341,6 +1415,335 @@ int cgp::Chromosome::find_free_index(int from) const
 		}
 	}
 	throw std::invalid_argument("could not find free index after: " + std::to_string(from));
+}
+
+int cgp::Chromosome::mulitplexed_value_to_index(int value) const
+{
+	assert(("cannot use mulitplexed_value_to_index without multiplexing mode", multiplexing));
+	return value + 128 + start_id_index;
+}
+
+int cgp::Chromosome::mulitplexed_value_to_relative_index(int value) const
+{
+	assert(("cannot use relative_mulitplexed_value_to_index without multiplexing mode", multiplexing));
+	return value + 128;
+}
+
+int cgp::Chromosome::mulitplexed_index_to_value(int index) const
+{
+	assert(("cannot use mulitplexed_value_to_index without multiplexing mode", multiplexing));
+	return index - start_id_index - 128;
+}
+
+int cgp::Chromosome::relative_mulitplexed_index_to_value(int index) const
+{
+	assert(("cannot use relative_mulitplexed_index_to_value without multiplexing mode", multiplexing));
+	return index - 128;
+}
+
+int cgp::Chromosome::get_id_output_from_index(int index) const
+{
+	assert(("cannot use get_mx_output_from_index without multiplexing mode", multiplexing));
+	assert(("index out of range", start_id_index <= index && index < start_id_index + 256));
+	return pin_map[index * cgp_configuration.function_output_arity()];
+}
+
+int cgp::Chromosome::get_relative_id_output_from_index(int index) const
+{
+	assert(("cannot use get_relative_mx_output_from_index without multiplexing mode", multiplexing));
+	assert(("index out of range", 0 <= index && index < 256));
+	return get_id_output_from_index(start_id_index + index);
+}
+
+int cgp::Chromosome::get_id_output_for(int value) const
+{
+	assert(("cannot use get_id_output_for without multiplexing mode", multiplexing));
+	return get_id_output_from_index(mulitplexed_value_to_index(value));
+}
+
+void cgp::Chromosome::use_multiplexing(const dataset_t& dataset)
+{
+	if (multiplexing)
+	{
+		return;
+	}
+
+	multiplexing = true;
+	const int mux_count = cgp_configuration.output_count();
+	const int id_count = 256;
+	const auto& outputs = get_dataset_output(dataset);
+	int grid_size = cgp_configuration.row_count() * cgp_configuration.col_count();
+	gene_t function = (cgp_configuration.dataset_size() == 1) ? (CGPOperator::ID) : (CGPOperator::MUX);
+	start_id_index = grid_size - id_count;
+
+	if (function == CGPOperator::MUX)
+	{
+		start_mux_index = grid_size - mux_count;
+		int id_col = get_column(start_id_index);
+		int mux_col = get_column(start_mux_index);
+		while (id_col == mux_col || start_id_index + id_count > start_mux_index)
+		{
+			start_id_index -= cgp_configuration.row_count();
+			id_col = get_column(start_id_index);
+		}
+	}
+
+	for (int i = start_id_index; i < start_id_index + id_count; i++)
+	{
+		locked_nodes[i] = true;
+		*get_block_function(i) = CGPOperator::ID;
+
+		if (cgp_configuration.dataset_size() == 1)
+		{
+			const auto& inputs = get_dataset_input(dataset);
+			int num = mulitplexed_index_to_value(i);
+			for (int i = 0; i < cgp_configuration.input_count(); i++)
+			{
+				if (inputs[0][i] == num)
+				{
+					get_block_inputs(i)[0] = i;
+					break;
+				}
+			}
+		}
+	}
+
+	if (function == CGPOperator::MUX)
+	{
+		for (int i = start_mux_index; i < start_mux_index + mux_count; i++)
+		{
+			locked_nodes[i] = true;
+			*get_block_function(i) = CGPOperator::MUX;
+			get_outputs()[i - start_mux_index] = get_output_pin_from_gate_index(i);
+		}
+		for (int i = 0; i < outputs.size(); i++)
+		{
+			for (int j = 0; j < cgp_configuration.output_count(); j++)
+			{
+				locked_outputs[j] = true;
+				gene_t* mux_base_pin = get_block_inputs(start_mux_index + j);
+				mux_base_pin[i] = get_output_pin_from_gate_index(mulitplexed_value_to_index(outputs[i][j]));
+			}
+		}
+	}
+	else
+	{
+		assert(("Multiplexer must be enabled in order to use_multiplexing work with dataset size of larger than 1", outputs.size() == 1));
+		for (int i = 0; i < outputs.size(); i++)
+		{
+			for (int j = 0; j < cgp_configuration.output_count(); j++)
+			{
+				locked_outputs[j] = true;
+				get_outputs()[j] = get_output_pin_from_gate_index(mulitplexed_value_to_index(outputs[i][j]));
+			}
+		}
+	}
+}
+
+void cgp::Chromosome::remove_multiplexing()
+{
+	if (!multiplexing)
+	{
+		return;
+	}
+
+	multiplexing = false;
+
+	for (int i = 0; i < cgp_configuration.output_count(); i++)
+	{
+		locked_outputs[i] = false;
+	}
+
+	const int mux_count = cgp_configuration.output_count();
+	const int id_count = 256;
+	gene_t function = (cgp_configuration.dataset_size() == 1) ? (CGPOperator::ID) : (CGPOperator::MUX);
+
+	for (int i = start_id_index; i < start_id_index + id_count; i++)
+	{
+		locked_nodes[i] = false;
+	}
+
+	if (function == CGPOperator::MUX)
+	{
+		for (int i = start_mux_index; i < start_mux_index + mux_count; i++)
+		{
+			locked_nodes[i] = false;
+		}
+
+		for (int i = 0; i < cgp_configuration.dataset_size(); i++)
+		{
+			for (int j = 0; j < cgp_configuration.output_count(); j++)
+			{
+				gene_t* mux_base_pin = get_block_inputs(start_mux_index + j);
+				gene_t* outputs = get_outputs();
+				int id_pin = mux_base_pin[i];
+				if (id_pin >= cgp_configuration.input_count())
+				{
+					int id_index = get_gate_index_from_output_pin(id_pin);
+					auto id_inputs = get_block_inputs(id_index);
+					outputs[j] = id_inputs[0];
+				}
+			}
+		}
+	}
+	else {
+		for (int j = 0; j < cgp_configuration.output_count(); j++)
+		{
+			int pin = get_outputs()[j];
+			if (pin >= cgp_configuration.input_count())
+			{
+				int id_index = get_gate_index_from_output_pin(pin);
+				auto inputs = get_block_inputs(id_index);
+				get_outputs()[j] = inputs[0];
+			}
+		}
+	}
+	invalidate();
+}
+
+void cgp::Chromosome::copy_gate_input_pins(int src_index, int dst_index)
+{
+	auto src_inputs = get_block_inputs(src_index);
+	auto dst_inputs = get_block_inputs(dst_index);
+	for (int i = 0; i < cgp_configuration.function_input_arity(); i++)
+	{
+		dst_inputs[i] = src_inputs[i];
+	}
+}
+
+void cgp::Chromosome::copy_gate_input_pins(int src_index, int dst_index, int src_pin, int dst_pin)
+{
+	auto src_inputs = get_block_inputs(src_index);
+	auto dst_inputs = get_block_inputs(dst_index);
+	dst_inputs[dst_pin] = src_inputs[src_pin];
+}
+
+void cgp::Chromosome::copy_gate_function(int src_index, int dst_index)
+{
+	auto src_function = get_block_function(src_index);
+	auto dst_function = get_block_function(dst_index);
+	*dst_function = *src_function;
+}
+
+void cgp::Chromosome::perform_corrections(const dataset_t& dataset, int threshold)
+{
+	bool valid = true;
+	const auto& inputs = get_dataset_input(dataset);
+	for (int i = start_id_index; i < start_id_index + 256; i++)
+	{
+		const int num = mulitplexed_index_to_value(i);
+
+		// The pin is correct
+		if (num == get_id_output_for(num))
+		{
+			continue;
+		}
+
+		if (cgp_configuration.dataset_size() == 1)
+		{
+			bool ok = false;
+			for (int i = 0; i < cgp_configuration.input_count(); i++)
+			{
+				if (inputs[0][i] == num)
+				{
+					get_block_inputs(i)[0] = i;
+					ok = true;
+					break;
+				}
+			}
+			if (ok)
+			{
+				continue;
+			}
+		}
+
+		if (num != 0 && num == get_id_output_for(-num))
+		{
+			auto pos_function = get_block_function(i);
+			*pos_function = CGPOperator::NEG;
+			copy_gate_input_pins(mulitplexed_value_to_index(-num), i);
+			valid = false;
+			continue;
+		}
+
+		const int delta = get_id_output_from_index(i) - num;
+		const int abs_delta = std::abs(delta);
+		const auto& inputs = get_dataset_input(dataset);
+		int best_delta = abs_delta, best_index = -1;
+
+		if (cgp_configuration.dataset_size() == 1)
+		{
+			for (int i = 0; i < cgp_configuration.input_count(); i++)
+			{
+				if (std::abs(inputs[0][i] - num) < best_delta)
+				{
+					best_delta = std::abs(inputs[0][i] - num);
+					best_index = i;
+				}
+			}
+		}
+
+		for (int i = 0; i < threshold; i++)
+		{
+			int values[] = { -abs_delta + i, -abs_delta - i, abs_delta + i, abs_delta - i };
+
+			for (int i = 0; i < 4; i++)
+			{
+				int new_delta = std::abs(num - get_id_output_for(values[i]));
+				if (get_id_output_for(values[i]) == values[i] && new_delta < best_delta)
+				{
+					best_delta = new_delta;
+					best_index = mulitplexed_value_to_index(values[i]);
+				}
+			}
+		}
+		
+		if (best_index != -1 && best_delta < abs_delta)
+		{
+			if (best_index < cgp_configuration.input_count())
+			{
+				int correction_value = inputs[0][best_index];
+				get_block_inputs(i)[0] = best_index;
+				if (delta > 0)
+				{
+					*get_block_function(i) = (correction_value < 0) ? CGPOperator::ADD : CGPOperator::SUB;
+				}
+				else
+				{
+					*get_block_function(i) = (correction_value < 0) ? CGPOperator::SUB : CGPOperator::ADD;
+				}
+			}
+			else
+			{
+				int correction_value = mulitplexed_index_to_value(best_index);
+				copy_gate_input_pins(best_index, i, 0, 1);
+				if (delta > 0)
+				{
+					*get_block_function(i) = (correction_value < 0) ? CGPOperator::ADD : CGPOperator::SUB;
+				}
+				else
+				{
+					*get_block_function(i) = (correction_value < 0) ? CGPOperator::SUB : CGPOperator::ADD;
+				}
+			}
+			valid = false;
+		}
+	}
+	if (!valid)
+	{
+		invalidate();
+	}
+}
+
+cgp::Chromosome::gate_parameters_t cgp::Chromosome::get_function_cost(gene_t function) const
+{
+	if (function == CGPOperator::ID)
+	{
+		return id_gate_parameters;
+	}
+
+	const auto& costs = cgp_configuration.function_costs();
+	return costs[function];
 }
 
 std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)

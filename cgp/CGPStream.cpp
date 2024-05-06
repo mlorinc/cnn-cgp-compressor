@@ -77,6 +77,7 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 		<< depth_to_string(CGP::get_depth(solution))
 		<< ", Gates: "
 		<< gate_count_to_string(CGP::get_gate_count(solution))
+#ifdef _DISABLE_ROW_COL_STATS
 		<< ", Top row: "
 		<< ((chromosome) ? std::to_string(chromosome->get_top_row()) : ("nan"))
 		<< ", Bottom row: "
@@ -85,6 +86,7 @@ void CGPOutputStream::log_human(size_t run, size_t generation, const CGP::soluti
 		<< ((chromosome) ? std::to_string(chromosome->get_first_column()) : ("nan"))
 		<< ", Last col: "
 		<< ((chromosome) ? std::to_string(chromosome->get_last_column()) : ("nan"))
+#endif
 		<< ", Chromosome: "
 		<< ((chromosome && show_chromosome) ? chromosome->to_string() : (Chromosome::nan_chromosome_string))
 		<< std::endl;
@@ -370,7 +372,7 @@ dataset_t cgp::CGPInputStream::load_train_data()
 	std::vector<weight_input_t> inputs;
 	std::vector<weight_output_t> outputs;
 	std::vector<int> no_care;
-
+	std::array<int, 256> needed_values {0};
 	for (size_t i = 0; i < cgp_model->dataset_size(); i++)
 	{
 		inputs.push_back(load_input());
@@ -379,7 +381,15 @@ dataset_t cgp::CGPInputStream::load_train_data()
 		no_care.push_back(std::get<1>(output_data));
 	}
 
-	return std::make_tuple(inputs, outputs, no_care);
+	for (int i = 0; i < outputs.size(); i++)
+	{
+		for (int j = 0; j < no_care[i]; j++)
+		{
+			needed_values[outputs[i][j] + 128] += 1;
+		}
+	}
+
+	return std::make_tuple(inputs, outputs, no_care, needed_values);
 }
 
 std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load_gate_parameters()

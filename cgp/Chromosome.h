@@ -8,6 +8,39 @@
 #include "Configuration.h"
 #include "Dataset.h"
 
+enum CGPOperator {
+	REVERSE_MAX_A = 0,
+	ADD = 1,
+	SUB = 2,
+	MUL = 3,
+	NEG = 4,
+	REVERSE_MIN_B = 5,
+	QUARTER = 6,
+	HALF = 7,
+	BIT_AND = 8,
+	BIT_OR = 9,
+	BIT_XOR = 10,
+	BIT_NEG = 11,
+	DOUBLE = 12,
+	BIT_INC = 13,
+	BIT_DEC = 14,
+	R_SHIFT_3 = 15,
+	R_SHIFT_4 = 16,
+	R_SHIFT_5 = 17,
+	L_SHIFT_2 = 18,
+	L_SHIFT_3 = 19,
+	L_SHIFT_4 = 20,
+	L_SHIFT_5 = 21,
+	ONE_CONST = 22,
+	MINUS_ONE_CONST = 23,
+	ZERO_CONST = 24,
+	EXPECTED_VALUE_MIN = 25,
+	EXPECTED_VALUE_MAX = 26,
+	MUX = 27,
+	DEMUX = 28,
+	ID = 100
+};
+
 namespace cgp {
 	/// <summary>
 	/// Chromosome class representing an individual in Cartesian Genetic Programming (CGP).
@@ -75,6 +108,8 @@ namespace cgp {
 		static bool is_mux(int func);
 		static bool is_demux(int func);
 	private:
+		static gate_parameters_t id_gate_parameters;
+
 		/// <summary>
 		/// Reference to the CGP configuration used for chromosome setup.
 		/// </summary>
@@ -130,6 +165,9 @@ namespace cgp {
 		/// </summary>
 		std::unique_ptr<bool[]> gate_visit_map;
 
+		std::unique_ptr<depth_t[]> depth_distance_map;
+		std::unique_ptr<quantized_delay_t[]> quantized_delay_distance_map;
+
 		/// <summary>
 		/// Shared pointer to the input array.
 		/// </summary>
@@ -159,6 +197,21 @@ namespace cgp {
 		/// Flag indicating whether the genotype needs depth evaluation.
 		/// </summary>
 		bool need_depth_evaluation = true;
+
+		/// <summary>
+		/// Flag indicating multiplexing.
+		/// </summary>
+		bool multiplexing = false;
+
+		/// <summary>
+		/// Multiplexed ID gates start index.
+		/// </summary>
+		int start_id_index;
+
+		/// <summary>
+		/// Multiplexed MUX gates start index.
+		/// </summary>
+		int start_mux_index = -1;
 
 		/// <summary>
 		/// Cached energy consumption value.
@@ -284,14 +337,31 @@ namespace cgp {
 		weight_value_t bit_neg(weight_value_t a);
 		weight_value_t neg(weight_value_t a);
 
+		int get_column(int gate_index) const;
+		int get_row(int gate_index) const;
+
 		bool mutate_genes(std::shared_ptr<Chromosome> that) const;
 		weight_value_t get_pin_value(int index) const;
 		bool move_block_to_the_start(int gate_index);
 		void move_gate(int src_gate_index, int dst_gate_index);
 		int get_gate_index_from_output_pin(int pin) const;
 		int get_gate_index_from_input_pin(int pin) const;
+		int get_output_pin_from_gate_index(int gate_index, int pin = 0) const;
 		void invalidate();
 		int find_free_index(int from) const;
+		gate_parameters_t get_function_cost(gene_t function) const;
+
+		void copy_gate_input_pins(int src_index, int dst_index);
+		void copy_gate_input_pins(int src_index, int dst_index, int src_pin, int dst_pin);
+		void copy_gate_function(int src_index, int dst_index);
+
+		int mulitplexed_value_to_index(int value) const;
+		int mulitplexed_value_to_relative_index(int value) const;
+		int mulitplexed_index_to_value(int index) const;
+		int relative_mulitplexed_index_to_value(int index) const;
+		int get_id_output_from_index(int index) const;
+		int get_id_output_for(int value) const;
+
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -316,7 +386,6 @@ namespace cgp {
 		/// <param name="cgp_configuration">The CGP configuration to be used.</param>
 		/// <param name="serialized_chromosome">The serialized chromosome to be parsed.</param>
 		Chromosome(const CGPConfiguration& cgp_configuration, const std::string& serialized_chromosome);
-
 
 		/// <summary>
 		/// Copy constructor for the Chromosome class.
@@ -420,6 +489,18 @@ namespace cgp {
 		weight_value_t* end_output();
 
 		/// <summary>
+		/// Getter for the pointer to the beginning of the multiplexed output array.
+		/// </summary>
+		/// <returns>Pointer to the beginning of the output array.</returns>
+		weight_value_t* begin_multiplexed_output() const;
+
+		/// <summary>
+		/// Getter for the pointer to the end of the multiplexed output array.
+		/// </summary>
+		/// <returns>Pointer to the end of the output array.</returns>
+		weight_value_t* end_multiplexed_output() const;
+
+		/// <summary>
 		/// Convert the Chromosome to a string representation which can be used in cgpviewer.exe.
 		/// </summary>
 		/// <returns>The string representation of the Chromosome.</returns>
@@ -472,32 +553,38 @@ namespace cgp {
 		/// <summary>
 		/// Get quantity of used digital gates used by phenotype.
 		/// </summary>
-		/// <returns>Qunatity of used digital gates.</returns>
+		/// <returns>Quantity of used digital gates.</returns>
 		decltype(phenotype_node_count) get_node_count();
 
 		/// <summary>
 		/// Get the highest row used by phenotype.
 		/// </summary>
-		/// <returns>Qunatity of used digital gates.</returns>
+		/// <returns>Quantity of used digital gates.</returns>
 		decltype(top_row) get_top_row();
 
 		/// <summary>
 		/// Get the lowest row used by phenotype.
 		/// </summary>
-		/// <returns>Qunatity of used digital gates.</returns>
+		/// <returns>Quantity of used digital gates.</returns>
 		decltype(bottom_row) get_bottom_row();
 
 		/// <summary>
 		/// Get the first column used by phenotype.
 		/// </summary>
-		/// <returns>Qunatity of used digital gates.</returns>
+		/// <returns>Quantity of used digital gates.</returns>
 		decltype(first_col) get_first_column();
 
 		/// <summary>
 		/// Get the last column used by phenotype.
 		/// </summary>
-		/// <returns>Qunatity of used digital gates.</returns>
+		/// <returns>Quantity of used digital gates.</returns>
 		decltype(last_col) get_last_column();
+
+		/// <summary>
+		/// Get whether the chromosome is multiplexed.
+		/// </summary>
+		/// <returns>True when multiplexed, false otherwise.</returns>
+		decltype(multiplexing) is_multiplexing() const;
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return array of weights.
@@ -516,6 +603,10 @@ namespace cgp {
 
 		void find_direct_solutions(const dataset_t &dataset);
 		void add_2pow_circuits(const dataset_t& dataset);
+		void use_multiplexing(const dataset_t& dataset);
+		void remove_multiplexing();
+		void perform_corrections(const dataset_t& dataset, const int threshold = 0);
+		int get_relative_id_output_from_index(int index) const;
 	};
 
 	std::string to_string(const Chromosome& chromosome);

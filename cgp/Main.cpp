@@ -12,7 +12,6 @@ constexpr auto LOGGER_OUTPUT_FILE = ("-");
 #error "Critical error when compiling CGP. Learning should be disabled."
 #endif // _MEASURE_LEARNING_RATE
 
-
 using namespace cgp;
 using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
@@ -216,6 +215,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 	cgp_model->build_indices();
 	logger.dump();
 	cgp_model->generate_population(dataset);
+	
 	for (size_t run = start_run; run < end_run; run++)
 	{
 		double start_time = omp_get_wtime();
@@ -279,10 +279,29 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 #else
 			if (cgp_model->get_generations_without_change() > patience)
 			{
-				event_logger << "early stopping because of no change between " << patience << " generations" << std::endl;
-				logger.log_human(run, generation);
-				stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
-				break;
+				if (!cgp_model->is_multiplexing())
+				{
+					if (cgp_model->get_best_energy_fitness() == CGPConfiguration::energy_nan)
+					{
+						cgp_model->mse_threshold(cgp_model->get_best_error_fitness());
+						cgp_model->mse_chromosome_logging_threshold(cgp_model->get_best_error_fitness());
+						cgp_model->set_generations_without_change(0);
+					}
+					else {
+						event_logger << "early stopping because of no change between " << patience << " generations" << std::endl;
+						logger.log_human(run, generation);
+						stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
+						break;
+					}
+				}
+				else
+				{
+					event_logger << "removed multiplexing after " << (generation + 1) << "th generations when error was " << cgp_model->get_best_error_fitness() << std::endl;
+					cgp_model->remove_multiplexing(dataset, 0);
+					event_logger << "new error is " << cgp_model->get_best_error_fitness() << std::endl;
+					cgp_model->mse_threshold(cgp_model->get_best_error_fitness());
+					cgp_model->mse_chromosome_logging_threshold(cgp_model->get_best_error_fitness());
+				}
 			}
 #endif
 			cgp_model->mutate();
@@ -304,8 +323,6 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int r
 		generation = 0;
 		mode = std::ios::out | std::ios::app;
 	}
-
-	event_logger << std::endl << "exitting program with code 0" << std::endl;
 	return 0;
 }
 
@@ -318,6 +335,10 @@ int main(int argc, const char** args) {
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	std::vector<std::string> arguments(args + 1, args + argc);
+	//std::vector<std::string> arguments
+	//{
+	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_350_100/train_cgp.config"
+	//};
 
 #if defined __DATE__ && defined __TIME__
 	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;
@@ -399,5 +420,7 @@ int main(int argc, const char** args) {
 		code = 43;
 	}
 	delete_dataset(train_dataset);
+	OutputStream event_logger("-");
+	event_logger << std::endl << "exitting program with code " << code << std::endl;
 	return code;
 }

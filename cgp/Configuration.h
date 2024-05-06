@@ -617,6 +617,8 @@ namespace cgp {
 		/// </summary>
 		double learning_rate_value = 0.05;
 
+		bool virtual_selector_value = false;
+
 		/// <summary>
 		/// Sets the starting generation value for Cartesian Genetic Programming (CGP) configuration.
 		/// </summary>
@@ -638,6 +640,11 @@ namespace cgp {
 		/// Sets configuration parameters according to given command line arguments.
 		/// </summary>
 		void set_from_arguments(const std::vector<std::string>& arguments);
+
+		/// <summary>
+		/// Legacy virtual selector mode.
+		/// </summary>
+		decltype(virtual_selector_value) virtual_selector() const;
 
 		/// <summary>
 		/// Learning rate threshold after which the training process is terminated.

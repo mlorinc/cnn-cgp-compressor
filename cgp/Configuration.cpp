@@ -455,7 +455,7 @@ namespace cgp {
 	}
 
 	int CGPConfiguration::pin_map_size() const {
-		return row_count() * col_count() * function_output_arity() + output_count() * dataset_size();
+		return row_count() * col_count() * function_output_arity() + output_count() * ((virtual_selector()) ? (dataset_size()) : (1));
 	}
 
 	int CGPConfiguration::block_chromosome_size() const
@@ -468,7 +468,7 @@ namespace cgp {
 	}
 
 	int CGPConfiguration::chromosome_size() const {
-		return blocks_chromosome_size() + output_count() * dataset_size();
+		return blocks_chromosome_size() + output_count() * ((virtual_selector()) ? (dataset_size()) : (1));
 	}
 
 	const decltype(CGPConfiguration::function_costs_value)& CGPConfiguration::function_costs() const
@@ -578,6 +578,11 @@ namespace cgp {
 	decltype(CGPConfiguration::patience_value) CGPConfiguration::patience() const
 	{
 		return patience_value;
+	}
+
+	decltype(CGPConfiguration::virtual_selector_value) CGPConfiguration::virtual_selector() const
+	{
+		return virtual_selector_value;
 	}
 
 	decltype(CGPConfiguration::learning_rate_value) CGPConfiguration::learning_rate() const
