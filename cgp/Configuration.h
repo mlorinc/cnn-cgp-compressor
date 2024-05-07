@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <map>
 
-#define __VIRTUAL_SELECTOR 1
+//#define __VIRTUAL_SELECTOR 1
 
 namespace cgp {
 	long long parse_integer_argument(const std::string& arg);

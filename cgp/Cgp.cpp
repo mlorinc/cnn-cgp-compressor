@@ -143,9 +143,11 @@ bool cgp::CGP::is_multiplexing() const
 void cgp::CGP::remove_multiplexing(const dataset_t &dataset, int new_generations_without_change)
 {
 	auto chromosome = get_chromosome(best_solution);
-	if (mse_threshold() == 0)
+	if (mse_threshold() < get_error(best_solution) && dataset_size() == 1)
 	{
-		chromosome->perform_corrections(dataset, 512);
+		// Find better connections than found in grid, however do not tamper with energy if
+		// the threshold is not zero
+		chromosome->perform_corrections(dataset, 512, mse_threshold() != 0);
 	}
 	chromosome->remove_multiplexing();
 	solution_t new_solution = evaluate(dataset, chromosome);

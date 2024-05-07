@@ -340,6 +340,11 @@ int main(int argc, const char** args) {
 	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_350_100/train_cgp.config"
 	//};
 
+	//std::vector<std::string> arguments
+	//{
+	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/all_layers/mse_0.0_256_8/train_cgp.config"
+	//};
+
 #if defined __DATE__ && defined __TIME__
 	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;
 #endif // _COMPILE_TIME

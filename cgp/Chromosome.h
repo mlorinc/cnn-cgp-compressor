@@ -609,7 +609,7 @@ namespace cgp {
 		void add_2pow_circuits(const dataset_t& dataset);
 		void use_multiplexing(const dataset_t& dataset);
 		void remove_multiplexing();
-		void perform_corrections(const dataset_t& dataset, const int threshold = 0);
+		void perform_corrections(const dataset_t& dataset, const int threshold = 512, const bool zero_energy_only = false);
 		int get_relative_id_output_from_index(int index) const;
 	};
 
