@@ -95,6 +95,13 @@ namespace cgp
 		void log_weights(std::shared_ptr<Chromosome> chromosome, const std::vector<weight_input_t>& inputs);
 
 		/// <summary>
+		/// Logs gate usage information about the CGP model to the specified stream.
+		/// </summary>
+		/// <param name="stream">The output stream to log to.</param>
+		/// <param name="chromosome">The chromosome to log gate statistics.</param>
+		void log_gate_statistics(std::shared_ptr<Chromosome> chromosome);
+
+		/// <summary>
 		/// Dumps the current state of the CGP model to the output stream.
 		/// </summary>
 		void dump();

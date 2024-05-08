@@ -5,6 +5,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <map>
 #include "Configuration.h"
 #include "Dataset.h"
 
@@ -340,32 +341,163 @@ namespace cgp {
 		int get_column(int gate_index) const;
 		int get_row(int gate_index) const;
 
+		/// <summary>
+		/// Mutate genes of the chromosome represented by the provided pointer to a chromosome.
+		/// </summary>
+		/// <param name="that">A pointer to the chromosome to mutate genes.</param>
+		/// <returns>True if mutation was successful, false otherwise.</returns>
 		bool mutate_genes(std::shared_ptr<Chromosome> that) const;
+
+		/// <summary>
+		/// Get the value of the pin at the specified index.
+		/// </summary>
+		/// <param name="index">The index of the pin.</param>
+		/// <returns>The value of the pin.</returns>
 		weight_value_t get_pin_value(int index) const;
+
+		/// <summary>
+		/// Get the output value of the gate at the specified index.
+		/// </summary>
+		/// <param name="gate_index">The index of the gate.</param>
+		/// <returns>The output value of the gate.</returns>
 		weight_value_t get_gate_output(int gate_index) const;
+
+		/// <summary>
+		/// Get the used pin of the gate's output at the specified index.
+		/// </summary>
+		/// <param name="gate_index">The index of the gate.</param>
+		/// <returns>The used pin of the gate's output.</returns>
 		int get_gate_output_used_pin(int gate_index) const;
+
+		/// <summary>
+		/// Get the input value of the gate at the specified index and pin.
+		/// </summary>
+		/// <param name="gate_index">The index of the gate.</param>
+		/// <param name="pin">The index of the input pin.</param>
+		/// <returns>The input value of the gate.</returns>
 		weight_value_t get_gate_input(int gate_index, int pin = 0) const;
+
+		/// <summary>
+		/// Get the used pin of the gate's input at the specified index.
+		/// </summary>
+		/// <param name="gate_index">The index of the gate.</param>
+		/// <returns>The used pin of the gate's input.</returns>
 		int get_gate_input_used_pin(int gate_index) const;
 
+		/// <summary>
+		/// Move the gate at the gate index to the first free gate block.
+		/// </summary>
+		/// <param name="gate_index">The index of the gate.</param>
+		/// <returns>True if the block was successfully moved, false otherwise.</returns>
 		bool move_block_to_the_start(int gate_index);
+
+		/// <summary>
+		/// Move the gate from the source index to the destination index.
+		/// </summary>
+		/// <param name="src_gate_index">The source index of the gate.</param>
+		/// <param name="dst_gate_index">The destination index of the gate.</param>
 		void move_gate(int src_gate_index, int dst_gate_index);
+
+		/// <summary>
+		/// Get the gate index from the given output pin.
+		/// </summary>
+		/// <param name="pin">The output pin.</param>
+		/// <returns>The gate index corresponding to the output pin.</returns>
 		int get_gate_index_from_output_pin(int pin) const;
+
+		/// <summary>
+		/// Get the gate index from the given input pin.
+		/// </summary>
+		/// <param name="pin">The input pin.</param>
+		/// <returns>The gate index corresponding to the input pin.</returns>
 		int get_gate_index_from_input_pin(int pin) const;
+
+		/// <summary>
+		/// Get the output pin from the gate index and pin.
+		/// </summary>
+		/// <param name="gate_index">The index of the gate.</param>
+		/// <param name="pin">The index of the output pin.</param>
+		/// <returns>The output pin corresponding to the gate index and pin.</returns>
 		int get_output_pin_from_gate_index(int gate_index, int pin = 0) const;
+
+		/// <summary>
+		/// Invalidate the chromosome, indicating that it needs evaluation.
+		/// </summary>
 		void invalidate();
+
+		/// <summary>
+		/// Find a free index starting from the specified index.
+		/// </summary>
+		/// <param name="from">The index to start searching from.</param>
+		/// <returns>The index of the first free position found, or -1 if none is found.</returns>
 		int find_free_index(int from) const;
+
+		/// <summary>
+		/// Get the cost of the specified function.
+		/// </summary>
+		/// <param name="function">The function to get the cost for.</param>
+		/// <returns>The cost of the function.</returns>
 		gate_parameters_t get_function_cost(gene_t function) const;
 
+		/// <summary>
+		/// Copy input pins from the source gate to the destination gate.
+		/// </summary>
+		/// <param name="src_index">The index of the source gate.</param>
+		/// <param name="dst_index">The index of the destination gate.</param>
 		void copy_gate_input_pins(int src_index, int dst_index);
+
+		/// <summary>
+		/// Copy input pins from the source gate to the destination gate, starting from the specified pins.
+		/// </summary>
+		/// <param name="src_index">The index of the source gate.</param>
+		/// <param name="dst_index">The index of the destination gate.</param>
+		/// <param name="src_pin">The index of the starting input pin in the source gate.</param>
+		/// <param name="dst_pin">The index of the starting input pin in the destination gate.</param>
 		void copy_gate_input_pins(int src_index, int dst_index, int src_pin, int dst_pin);
+
+		/// <summary>
+		/// Copy the function of the source gate to the destination gate.
+		/// </summary>
+		/// <param name="src_index">The index of the source gate.</param>
+		/// <param name="dst_index">The index of the destination gate.</param>
 		void copy_gate_function(int src_index, int dst_index);
 
+		/// <summary>
+		/// Convert the multiplexed value to its index.
+		/// </summary>
+		/// <param name="value">The multiplexed value.</param>
+		/// <returns>The index corresponding to the multiplexed value.</returns>
 		int mulitplexed_value_to_index(int value) const;
+
+		/// <summary>
+		/// Convert the multiplexed value to its relative index.
+		/// </summary>
+		/// <param name="value">The multiplexed value.</param>
+		/// <returns>The relative index corresponding to the multiplexed value.</returns>
 		int mulitplexed_value_to_relative_index(int value) const;
+
+		/// <summary>
+		/// Convert the multiplexed index to its value.
+		/// </summary>
+		/// <param name="index">The multiplexed index.</param>
+		/// <returns>The value corresponding to the multiplexed index.</returns>
 		int mulitplexed_index_to_value(int index) const;
+
+		/// <summary>
+		/// Convert the relative multiplexed index to its value.
+		/// </summary>
+		/// <param name="index">The relative multiplexed index.</param>
+		/// <returns>The value corresponding to the relative multiplexed index.</returns>
 		int relative_mulitplexed_index_to_value(int index) const;
+
+		/// <summary>
+		/// Get the ID output for the given value.
+		/// </summary>
+		/// <param name="value">The value to get the ID output for.</param>
+		/// <returns>The ID output corresponding to the value.</returns>
 		int get_id_output_for(int value) const;
 
+		int get_function_input_arity(int gate_index) const;
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -516,6 +648,9 @@ namespace cgp {
 		/// <returns>The size of gene.</returns>
 		int get_serialized_chromosome_size() const;
 
+		/// <summary>
+		/// Shrink CGP circuit grid to minimal size.
+		/// </summary>
 		void tight_layout();
 
 		/// <summary>
@@ -605,12 +740,49 @@ namespace cgp {
 		/// <returns>Vector of shared pointers to an array of infered weights associated with specific inputs</returns>
 		std::vector<weight_output_t> get_weights(const std::vector<weight_input_t>& input);
 
-		void find_direct_solutions(const dataset_t &dataset);
+		/// <summary>
+		/// Find direct solutions for the given dataset.
+		/// </summary>
+		/// <param name="dataset">The dataset to find direct solutions for.</param>
+		void find_direct_solutions(const dataset_t& dataset);
+
+		/// <summary>
+		/// Add helper powers of 2 circuits for the given dataset.
+		/// </summary>
+		/// <param name="dataset">The dataset to add circuits to.</param>
 		void add_2pow_circuits(const dataset_t& dataset);
+
+		/// <summary>
+		/// Apply multiplexing optimisation.
+		/// </summary>
+		/// <param name="dataset">The dataset to build initial circuit.</param>
 		void use_multiplexing(const dataset_t& dataset);
+
+		/// <summary>
+		/// Remove multiplexing from the chromosome.
+		/// </summary>
 		void remove_multiplexing();
+
+		/// <summary>
+		/// Perform corrections on the chromosome based on the given dataset and threshold.
+		/// </summary>
+		/// <param name="dataset">The dataset to perform corrections with.</param>
+		/// <param name="threshold">The threshold value for corrections (default is determined automatically).</param>
+		/// <param name="zero_energy_only">Whether to consider only zero energy corrections (default is false).</param>
 		void perform_corrections(const dataset_t& dataset, const int threshold = 512, const bool zero_energy_only = false);
+
+		/// <summary>
+		/// Get the relative ID output from the given index.
+		/// </summary>
+		/// <param name="index">The index to get the relative ID output for.</param>
+		/// <returns>The relative ID output.</returns>
 		int get_relative_id_output_from_index(int index) const;
+
+		/// <summary>
+		/// Collect gate statistics and their quantity.
+		/// </summary>
+		/// <returns>Map mapping function number to statistics.</returns>
+		std::map<int, int> get_gate_statistics();
 	};
 
 	std::string to_string(const Chromosome& chromosome);

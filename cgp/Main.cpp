@@ -89,7 +89,7 @@ static int evaluate_chromosome(std::shared_ptr<CGP> cgp_model, const dataset_t& 
 	return 0;
 }
 
-static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
+static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, std::string gate_stats_file = "#")
 {
 	CGPInputStream in(cgp_model, cgp_model->cgp_statistics_file());
 	size_t counter = 1;
@@ -105,8 +105,12 @@ static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t&
 		auto solution = cgp_model->evaluate(dataset, chrom);
 		out.log_csv(counter, counter, "", solution);
 		counter++;
+
 		CGPOutputStream weight_logger(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
 		weight_logger.log_weights(chrom, get_dataset_input(dataset));
+
+		CGPOutputStream gate_stats_logger(cgp_model, gate_stats_file, std::ios::trunc, template_args);
+		gate_stats_logger.log_gate_statistics(chrom);
 		std::getline(in.get_stream(), chromosome);
 	}
 
@@ -368,7 +372,7 @@ int main(int argc, const char** args) {
 		int consumed_arguments = 2;
 		std::string command = arguments[0];
 		std::string cgp_file = arguments[1];
-		std::string chromosome;
+		std::string chromosome, gate_statistics_file = "#";
 
 		if (command == "evaluate:chromosome")
 		{
@@ -378,6 +382,17 @@ int main(int argc, const char** args) {
 				return 14;
 			}
 			chromosome = arguments[2];
+			consumed_arguments++;
+		}
+
+		if (command == "evaluate:chromosomes")
+		{
+			if (arguments.size() < 3)
+			{
+				std::cerr << "missing gate statistics file" << std::endl;
+				return 14;
+			}
+			gate_statistics_file = arguments[2];
 			consumed_arguments++;
 		}
 
@@ -402,7 +417,7 @@ int main(int argc, const char** args) {
 		}
 		else if (command == "evaluate:chromosomes")
 		{
-			code = evaluate_chromosomes(cgp_model, train_dataset);
+			code = evaluate_chromosomes(cgp_model, train_dataset, gate_statistics_file);
 		}
 		else if (command == "train")
 		{

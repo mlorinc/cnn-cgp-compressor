@@ -173,6 +173,20 @@ void CGPOutputStream::log_weights(std::shared_ptr<Chromosome> chromosome, const 
 	}
 }
 
+void CGPOutputStream::log_gate_statistics(std::shared_ptr<Chromosome> chromosome)
+{
+	if (is_ignoring_output())
+	{
+		return;
+	}
+	auto stats = chromosome->get_gate_statistics();
+	*this << "Function,Quantity" << std::endl;
+	for (auto it = stats.cbegin(), end = stats.cend(); it != end; it++)
+	{
+		*this << std::to_string(it->first) << "," << std::to_string(it->second) << std::endl;
+	}
+}
+
 void cgp::CGPOutputStream::dump()
 {
 	if (is_ignoring_output())
