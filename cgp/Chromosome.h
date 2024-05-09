@@ -111,6 +111,9 @@ namespace cgp {
 	private:
 		static gate_parameters_t id_gate_parameters;
 
+		int max_genes_to_mutate;
+		int chromosome_size;
+
 		/// <summary>
 		/// Reference to the CGP configuration used for chromosome setup.
 		/// </summary>
@@ -147,14 +150,9 @@ namespace cgp {
 		std::unique_ptr<gene_t[]> chromosome;
 
 		/// <summary>
-		/// Unique pointer to locked output array.
-		/// </summary>
-		std::unique_ptr<bool[]> locked_outputs;
-
-		/// <summary>
 		/// Unique pointer to locked gates array.
 		/// </summary>
-		std::unique_ptr<bool[]> locked_nodes;
+		int locked_nodes_index;
 
 		/// <summary>
 		/// Unique pointer to the pin map array.
@@ -205,14 +203,11 @@ namespace cgp {
 		bool multiplexing = false;
 
 		/// <summary>
-		/// Multiplexed ID gates start index.
+		/// Multiplexed gates start index.
 		/// </summary>
 		int start_id_index;
 
-		/// <summary>
-		/// Multiplexed MUX gates start index.
-		/// </summary>
-		int start_mux_index = -1;
+		int id_count;
 
 		/// <summary>
 		/// Cached energy consumption value.
@@ -268,6 +263,10 @@ namespace cgp {
 		/// Cached the highest used column.
 		/// </summary>
 		int last_col = 0;
+
+		size_t output_count;
+
+		bool is_locked_node(int gate_index) const;
 
 		/// <summary>
 		/// Predicate to check if a given position in the chromosome represents a function.
@@ -325,7 +324,9 @@ namespace cgp {
 		/// <summary>
 		/// Method for setting up output iterator pointer.
 		/// </summary>
-		void setup_output_iterators(int selector);
+		void setup_output_iterators(int selector, size_t output_count);
+
+		void update_mutation_variables(size_t output_count);
 
 		weight_value_t plus(int a, int b);
 		weight_value_t minus(int a, int b);
@@ -498,6 +499,11 @@ namespace cgp {
 		int get_id_output_for(int value) const;
 
 		int get_function_input_arity(int gate_index) const;
+		int get_function_output_arity(int gate_index) const;
+		int clip_pin(int pin) const;
+		bool is_used_pin(int pin) const;
+
+		void wire_multiplexed_id_to_output(const dataset_t& dataset);
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -594,7 +600,7 @@ namespace cgp {
 		/// Method to perform mutation on the chromosome while reusing given chromosome.
 		/// </summary>
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
-		std::shared_ptr<Chromosome> mutate(std::shared_ptr<Chromosome> that);
+		std::shared_ptr<Chromosome> mutate(std::shared_ptr<Chromosome> that, const dataset_t& dataset);
 
 		/// <summary>
 		/// Swap visits maps.
@@ -625,16 +631,10 @@ namespace cgp {
 		weight_value_t* end_output();
 
 		/// <summary>
-		/// Getter for the pointer to the beginning of the multiplexed output array.
-		/// </summary>
-		/// <returns>Pointer to the beginning of the output array.</returns>
-		weight_value_t* begin_multiplexed_output() const;
-
-		/// <summary>
 		/// Getter for the pointer to the end of the multiplexed output array.
 		/// </summary>
 		/// <returns>Pointer to the end of the output array.</returns>
-		weight_value_t* end_multiplexed_output() const;
+		weight_value_t* end_multiplexed_output();
 
 		/// <summary>
 		/// Convert the Chromosome to a string representation which can be used in cgpviewer.exe.
@@ -761,7 +761,7 @@ namespace cgp {
 		/// <summary>
 		/// Remove multiplexing from the chromosome.
 		/// </summary>
-		void remove_multiplexing();
+		void remove_multiplexing(const dataset_t& dataset);
 
 		/// <summary>
 		/// Perform corrections on the chromosome based on the given dataset and threshold.

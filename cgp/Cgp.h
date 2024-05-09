@@ -266,6 +266,8 @@ namespace cgp {
 		/// </summary>
 		std::map<std::string, std::string> other_config_attribitues;
 
+		uint32_t energy_threshold = 0;
+
 		/// <summary>
 		/// Calculate the accuracy (error) fitness of a chromosome.
 		/// </summary>
@@ -446,7 +448,9 @@ namespace cgp {
 		/// <summary>
 		/// Mutate the current population.
 		/// </summary>
-		void mutate();
+		void mutate(const dataset_t& dataset);
+
+		void calculate_energy_threshold();
 
 		/// <summary>
 		/// Evaluate the fitness of the population based on the given inputs and expected outputs.
@@ -571,7 +575,8 @@ namespace cgp {
 		std::map<std::string, std::string> load(std::istream& in, const std::vector<std::string>& arguments, const dataset_t &dataset);
 
 		bool is_multiplexing() const;
-		void remove_multiplexing(const dataset_t& dataset, int new_generations_without_change);
+		void remove_multiplexing(const dataset_t& dataset);
+		void perform_correction(const dataset_t& dataset);
 		void set_generations_without_change(decltype(generations_without_change) new_value);
 	};
 }

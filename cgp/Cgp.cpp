@@ -140,19 +140,38 @@ bool cgp::CGP::is_multiplexing() const
 	return chromosome && chromosome->is_multiplexing();
 }
 
-void cgp::CGP::remove_multiplexing(const dataset_t &dataset, int new_generations_without_change)
+void cgp::CGP::perform_correction(const dataset_t& dataset)
 {
 	auto chromosome = get_chromosome(best_solution);
+
+	if (!chromosome->is_multiplexing())
+	{
+		return;
+	}
+
 	if (mse_threshold() < get_error(best_solution) && dataset_size() == 1)
 	{
 		// Find better connections than found in grid, however do not tamper with energy if
 		// the threshold is not zero
 		chromosome->perform_corrections(dataset, 512, mse_threshold() != 0);
 	}
-	chromosome->remove_multiplexing();
+
 	solution_t new_solution = evaluate(dataset, chromosome);
 	best_solution = std::move(new_solution);
-	generations_without_change = new_generations_without_change;
+}
+
+void cgp::CGP::remove_multiplexing(const dataset_t &dataset)
+{
+	auto chromosome = get_chromosome(best_solution);
+
+	if (!chromosome->is_multiplexing())
+	{
+		return;
+	}
+
+	chromosome->remove_multiplexing(dataset);
+	solution_t new_solution = evaluate(dataset, chromosome);
+	best_solution = std::move(new_solution);
 }
 
 void cgp::CGP::set_generations_without_change(decltype(generations_without_change) new_value)
@@ -202,7 +221,7 @@ void CGP::generate_population(const dataset_t &dataset)
 	{
 		if (best_chromosome)
 		{
-			chromosomes[i] = best_chromosome->mutate(chromosomes[i]);
+			chromosomes[i] = best_chromosome->mutate(chromosomes[i], dataset);
 		}
 		else
 		{
@@ -210,16 +229,16 @@ void CGP::generate_population(const dataset_t &dataset)
 #ifndef __NO_POW_SOLUTIONS
 			//chromosomes[i]->add_2pow_circuits(dataset);
 #endif // !__NO_DIRECT_SOLUTIONS
-		}
-
-		if (output_count() > 256 || dataset_size() == 1)
-		{
-			chromosomes[i]->use_multiplexing(dataset);
-		}
-
+			if (output_count() >= 256)
+			{
+				chromosomes[i]->use_multiplexing(dataset);
+			}
+			else {
 #ifndef __NO_DIRECT_SOLUTIONS
-		chromosomes[i]->find_direct_solutions(dataset);
+				chromosomes[i]->find_direct_solutions(dataset);
 #endif // !__NO_DIRECT_SOLUTIONS
+			}
+		}
 	}
 }
 
@@ -262,10 +281,11 @@ CGP::error_t CGP::multiplexed_error_fitness(const std::shared_ptr<Chromosome> ch
 {
 	assert(("chromosome is not multiplexed!", chromosome->is_multiplexing()));
 	CGP::error_t sum = 0;
+	auto output = chromosome->begin_output();
 	#pragma omp parallel for reduction(+:sum)
 	for (int i = 0; i < 256; i++)
 	{
-		const int a = chromosome->get_relative_id_output_from_index(i);
+		const int a = output[i];
 		const int b = i - 128;
 		const int delta = a - b;
 		const int delta_squared = delta * delta;
@@ -293,7 +313,7 @@ CGP::solution_t CGP::analyse_chromosome(std::shared_ptr<Chromosome> chrom, const
 	const int end = input.size();
 	error_t mse_accumulator = 0;
 
-	if (!chrom->is_multiplexing())
+	if (!chrom->is_multiplexing() || dataset_size() > 1)
 	{
 		for (int i = 0; i < end; i++)
 		{
@@ -581,15 +601,28 @@ decltype(CGP::get_gate_count(CGP::solution_t())) CGP::ensure_gate_count(solution
 	return CGP::get_gate_count(solution);
 }
 
-void CGP::mutate() {
+void CGP::mutate(const dataset_t& dataset) {
 	auto best_chromosome = get_best_chromosome();
 	const int end = population_max();
 #pragma omp parallel for default(shared)
 	for (int i = 0; i < end; i++)
 	{
-		chromosomes[i] = best_chromosome->mutate(chromosomes[i]);
+		chromosomes[i] = best_chromosome->mutate(chromosomes[i], dataset);
 	}
 	evolution_steps_made++;
+}
+
+void cgp::CGP::calculate_energy_threshold()
+{
+	if (function_count() > CGPOperator::MUX)
+	{
+		auto mux_cost = get_quantized_energy_parameter(function_costs()[CGPOperator::MUX]);
+		energy_threshold = mux_cost * output_count();
+	}
+	else
+	{
+		energy_threshold = 0;
+	}
 }
 
 std::tuple<bool, bool> CGP::dominates(solution_t& a, solution_t& b) const
@@ -707,20 +740,12 @@ CGP::solution_t CGP::evaluate(const dataset_t &dataset)
 		}
 	}
 
-	if (get_chromosome(best_solution)->is_multiplexing() && get_error(best_solution) == 0)
+	if (get_chromosome(best_solution)->is_multiplexing() && dataset_size() > 1 && get_error(best_solution) == 0)
 	{
-		energy_t energy = 0;
-
-		// Uses multiplexer
-		if (function_count() > CGPOperator::MUX)
+		if (get_energy(best_solution) <= energy_threshold)
 		{
-			auto mux_cost = get_quantized_energy_parameter(function_costs()[CGPOperator::MUX]);
-			energy = mux_cost * output_count() + 1e-12;
-		}
-
-		if (get_energy(best_solution) <= energy)
-		{
-			remove_multiplexing(dataset, 0);
+			remove_multiplexing(dataset);
+			set_generations_without_change(0);
 		}
 	}
 
