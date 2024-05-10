@@ -326,7 +326,7 @@ namespace cgp {
 		/// </summary>
 		void setup_output_iterators(int selector, size_t output_count);
 
-		void update_mutation_variables(size_t output_count);
+		void update_mutation_variables();
 
 		weight_value_t plus(int a, int b);
 		weight_value_t minus(int a, int b);
@@ -777,6 +777,8 @@ namespace cgp {
 		/// <param name="index">The index to get the relative ID output for.</param>
 		/// <returns>The relative ID output.</returns>
 		int get_relative_id_output_from_index(int index) const;
+
+		bool needs_evaluation() const;
 
 		/// <summary>
 		/// Collect gate statistics and their quantity.

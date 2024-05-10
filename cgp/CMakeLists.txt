@@ -10,7 +10,7 @@ add_executable (CGP
     "Configuration.cpp" "Configuration.h"
     "CGPStream.h" "CGPStream.cpp"
     "Stream.cpp" "Stream.h"
-    "StringTemplate.h" "StringTemplate.cpp" "Dataset.h" "Dataset.cpp" "Learning.h" "Learning.cpp")
+    "StringTemplate.h" "StringTemplate.cpp" "Dataset.h" "Dataset.cpp" "Learning.h" "Learning.cpp" "Assert.h")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CGP PROPERTY CXX_STANDARD 20)

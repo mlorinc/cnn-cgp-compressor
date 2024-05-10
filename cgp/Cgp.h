@@ -266,37 +266,7 @@ namespace cgp {
 		/// </summary>
 		std::map<std::string, std::string> other_config_attribitues;
 
-		uint32_t energy_threshold = 0;
-
-		/// <summary>
-		/// Calculate the accuracy (error) fitness of a chromosome.
-		/// </summary>
-		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
-		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
-		/// <param name="no_care">A value after values will not be included in the fitness.</param>
-		/// <param name="layer">The CNN layer from which output originates.</param>		
-		/// <returns>The error fitness value.</returns>
-		error_t error_fitness(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer);
-
-		/// <summary>
-		/// Calculate the accuracy (error) fitness of a chromosome without aggregation.
-		/// </summary>
-		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
-		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
-		/// <param name="no_care">A value after values will not be included in the fitness.</param>
-		/// <param name="layer">The CNN layer from which output originates.</param>
-		/// <returns>The error fitness value.</returns>
-		error_t error_fitness_without_aggregation(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer);
-
-		/// <summary>
-		/// Calculate the absolute accuracy (error) fitness of a chromosome.
-		/// </summary>
-		/// <param name="chrom">The chromosome for which to calculate the fitness.</param>
-		/// <param name="expected_output">The expected output values against which to compare the chromosome's output.</param>
-		/// <param name="no_care">A value after values will not be included in the fitness.</param>
-		/// <param name="layer">The CNN layer from which output originates.</param>
-		/// <returns>The error fitness value.</returns>
-		error_t error_fitness_absolute(Chromosome& chrom, const weight_output_t& expected_output, const int no_care, const int layer);
+		uint64_t energy_threshold = 0;
 
 		/// <summary>
 		/// Calculate the energy fitness of a chromosome.
@@ -339,22 +309,44 @@ namespace cgp {
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
 		/// <returns>The MSE metric value.</returns>
-		error_t mse(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const;
+		error_t mse_error(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
 
 		/// <summary>
-		/// Calculate the Mean Squared Error (MSE) metric for made predictions without division.
+		/// Calculate theSquared Error (SE) metric for made predictions without division.
 		/// </summary>
 		/// <param name="predictions">The predictions made by the chromosome.</param>
 		/// <param name="expected_output">The expected output values.</param>
-		/// <returns>The MSE metric value without being divided.</returns>
-		error_t mse_without_division(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care, const int layer) const;
+		/// <returns>The SE metric value without being divided.</returns>
+		error_t se_error(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
+
+		/// <summary>
+		/// Calculate the Absolute Error (AE) metric for made predictions without division.
+		/// </summary>
+		/// <param name="predictions">The predictions made by the chromosome.</param>
+		/// <param name="expected_output">The expected output values.</param>
+		/// <returns>The SE metric value without being divided.</returns>
+		error_t ae_error(const weight_value_t* predictions, const weight_output_t& expected_output, const int no_care) const;
 
 		/// <summary>
 		/// Calculate the Mean Squared Error (MSE) metric to evaluate multiplexed approximation.
 		/// </summary>
 		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
 		/// <returns>The MSE metric value without being divided.</returns>
-		error_t multiplexed_error_fitness(const std::shared_ptr<Chromosome> chromosome, std::array<int, 256> weights) const;
+		error_t mx_mse_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
+
+		/// <summary>
+		/// Calculate the Absolute Error (AE) metric to evaluate multiplexed approximation.
+		/// </summary>
+		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
+		/// <returns>The AE metric value without being divided.</returns>
+		error_t mx_ae_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
+
+		/// <summary>
+		/// Calculate the Squared Error (SE) metric to evaluate multiplexed approximation.
+		/// </summary>
+		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
+		/// <returns>The MSE metric value without being divided.</returns>
+		error_t mx_se_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
 
 		/// <summary>
 		/// Analyze chromosome and calculate MSE metric for made predictions. It does not fill up other fitnesses due to performance.
@@ -458,6 +450,20 @@ namespace cgp {
 		/// <param name="dataset">Dataset to perform one evolution cycle on.</param>
 		/// <returns>A solution containing some of the fitness values.</returns>
 		CGP::solution_t evaluate(const dataset_t &dataset);
+
+		/// <summary>
+		/// Evaluate the fitness of the population based on the given inputs and expected outputs.
+		/// </summary>
+		/// <param name="dataset">Dataset to perform one evolution cycle on.</param>
+		/// <returns>A solution containing some of the fitness values.</returns>
+		CGP::solution_t evaluate_single_multiplexed(const dataset_t& dataset);
+
+		/// <summary>
+		/// Evaluate the fitness of the population based on the given inputs and expected outputs.
+		/// </summary>
+		/// <param name="dataset">Dataset to perform one evolution cycle on.</param>
+		/// <returns>A solution containing some of the fitness values.</returns>
+		CGP::solution_t evaluate_multi_multiplexed(const dataset_t& dataset);
 
 		/// <summary>
 		/// Evaluate the fitness of the chromosome based on the given inputs and expected outputs. Compared to the train variant,

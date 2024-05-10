@@ -1,5 +1,4 @@
 ﻿// Cgp.cpp : Defines the entry point for the application.
-
 #include "Main.h"
 
 #ifdef __DISABLE_COUT
@@ -11,6 +10,15 @@ constexpr auto LOGGER_OUTPUT_FILE = ("-");
 #ifdef _MEASURE_LEARNING_RATE
 #error "Critical error when compiling CGP. Learning should be disabled."
 #endif // _MEASURE_LEARNING_RATE
+
+
+#if defined(__SINGLE_MULTIPLEX)
+#define evaluate_cgp(cgp_model, dataset) cgp_model->evaluate_single_multiplexed(dataset)
+#elif defined(__MULTI_MULTIPLEX)
+#define evaluate_cgp(cgp_model, dataset) cgp_model->evaluate_multi_multiplexed(dataset)
+#else
+#define evaluate_cgp(cgp_model, dataset) cgp_model->evaluate(dataset)
+#endif
 
 using namespace cgp;
 using std::chrono::duration_cast;
@@ -163,7 +171,7 @@ bool early_stop_check(const T value, T early_stop_value, T nan)
 
 static int perform_evolution(const double start_time, const double now, std::shared_ptr<cgp::CGP>& cgp_model, const cgp::dataset_t& dataset, cgp::CGPOutputStream& logger, const size_t run, size_t i, cgp::CGPOutputStream& stats_out, size_t& log_counter, size_t generation_stop)
 {
-	const CGP::solution_t& solution = cgp_model->evaluate(dataset);
+	const CGP::solution_t& solution = evaluate_cgp(cgp_model, dataset);
 	const bool log_chromosome = cgp_model->mse_chromosome_logging_threshold() != CGPConfiguration::error_nan && CGP::get_error(solution) <= cgp_model->mse_chromosome_logging_threshold();
 
 	if (cgp_model->get_generations_without_change() == 0)
@@ -193,155 +201,137 @@ static int perform_evolution(const double start_time, const double now, std::sha
 	return 1;
 }
 
-static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run)
+static size_t train_run(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run, size_t generation)
 {
-#ifdef _MEASURE_LEARNING_RATE
-	const double LR = cgp_model->learning_rate();
-	const double LR_PERIOD = 0.001;
-#endif
 	size_t patience = cgp_model->patience();
 	if (patience == 0)
 	{
 		throw std::invalid_argument("patience cannot be 0");
 	}
 
-	size_t start_run = (run == -1) ? (cgp_model->start_run()) : (run);
-	size_t generation = cgp_model->start_generation();
-	int end_run = (run == -1) ? (cgp_model->number_of_runs()) : (run + 1);
+	generation = (generation == std::numeric_limits<size_t>::max()) ? (cgp_model->start_generation()) : (generation);
 	auto mode = (generation == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
 	CGPOutputStream logger(cgp_model, LOGGER_OUTPUT_FILE);
 	CGPOutputStream event_logger(cgp_model, "-");
+
+	double start_time = omp_get_wtime();
+	std::unordered_map<std::string, std::string> template_args{ {"run",  std::to_string(run + 1)} };
+	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, template_args);
+
+	event_logger << "performin run " << run + 1 << " and starting from generation " << (generation + 1) << std::endl;
+	for (size_t log_counter = cgp_model->periodic_log_frequency(); !stop_flag && generation < cgp_model->generation_count(); generation++)
+	{
+		auto now = omp_get_wtime();
+		int continue_evolution = perform_evolution(start_time, now, cgp_model, dataset, logger, run, generation, stats_out, log_counter, patience);
+
+		if (continue_evolution == 0 || cgp_model->get_generations_without_change() > patience)
+		{
+			return generation;
+		}
+
+		cgp_model->mutate(dataset);
+	}
+
+	event_logger << "finished evolution after " << (generation + 1) << " generations" << std::endl;
+	stats_out.close();
+
+	return generation;
+}
+
+static int train_generic(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run, bool remove_multiplex_on_patience, bool remove_multiplex_on_result, size_t generation = std::numeric_limits<size_t>::max())
+{
+	size_t start_run = (run == -1) ? (cgp_model->start_run()) : (run);
+	size_t end_run = (run == -1) ? (cgp_model->number_of_runs()) : (run + 1);
+	generation = (generation == std::numeric_limits<size_t>::max()) ? (cgp_model->start_generation()) : (generation);
 
 	if (generation != 0 && !cgp_model->get_best_chromosome())
 	{
 		throw std::invalid_argument("cannot resume evolution without starting chromosome");
 	}
-
-	cgp_model->build_indices();
+	CGPOutputStream logger(cgp_model, LOGGER_OUTPUT_FILE);
 	logger.dump();
-	cgp_model->generate_population(dataset);
-	
+	logger.close();
+
+	double start_time = omp_get_wtime();
 	for (size_t run = start_run; run < end_run; run++)
 	{
-		bool threshold_reset = true;
-		double start_time = omp_get_wtime();
 		std::unordered_map<std::string, std::string> template_args{ {"run",  std::to_string(run + 1)} };
-		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, template_args);
+		cgp_model->reset();
+		cgp_model->build_indices();
+		cgp_model->generate_population(dataset);
 
-#ifdef _MEASURE_LEARNING_RATE
-		OutputStream lr_stream(cgp_model->learning_rate_file(), mode, template_args);
-		OutputStream lr_period_stream(cgp_model->learning_rate_file() + ".period", mode, template_args);
-		if (cgp_model->start_generation() == 0)
+		auto generation = train_run(cgp_model, dataset, run, 0);
+
+		if (cgp_model->mse_threshold() < cgp_model->get_best_error_fitness())
 		{
-			stats_out.log_csv_header();
-			lr_stream << "lr_error,lr_energy,lr_delay,lr_gate_count" << std::endl;
-			lr_period_stream << "lr_error,lr_energy,lr_delay,lr_gate_count" << std::endl;
+			cgp_model->set_generations_without_change(0);
+			cgp_model->mse_threshold(cgp_model->get_best_error_fitness());
 		}
-		Learning lr(LR, patience, cgp_model->mse_threshold(), 5);
-#else
-		if (cgp_model->start_generation() == 0)
+		
+		if (remove_multiplex_on_patience)
 		{
-			stats_out.log_csv_header();
+			CGPOutputStream event_logger(cgp_model, "-");
+			cgp_model->remove_multiplexing(dataset);
+			event_logger << "early stopping patience multiplexing removed" << std::endl;
 		}
-#endif
+		
+		generation = train_run(cgp_model, dataset, run, generation + 1);
 
-		event_logger << "performin run " << run + 1 << " and starting from generation " << (generation + 1) << std::endl;
-		for (size_t log_counter = cgp_model->periodic_log_frequency(); !stop_flag && generation < cgp_model->generation_count(); generation++)
+		auto time_taken = omp_get_wtime() - start_time;
+		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::app, template_args);
+		stats_out.log_csv(run, generation, format_timestamp(time_taken), true);
+
+
+		CGPOutputStream event_logger(cgp_model, "-");
+		event_logger << "early stopping because of no change between " << cgp_model->patience() << " generations" << std::endl;
+		if (remove_multiplex_on_result)
 		{
-			auto now = omp_get_wtime();
-			int continue_evolution = perform_evolution(start_time, now, cgp_model, dataset, logger, run, generation, stats_out, log_counter, patience);
-
-			if (continue_evolution == 0)
-			{
-				event_logger << "early stopping because target fitness values were satisfied" << std::endl;
-				cgp_model->remove_multiplexing(dataset);
-				logger.log_human(run, generation, true);
-				stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
-				break;
-			}
-
-#ifdef _MEASURE_LEARNING_RATE
-			const CGP::solution_t best_solution = cgp_model->get_best_solution();
-			if (lr.tick(best_solution))
-			{
-				const LearningRates lr_rates = lr.get_average_learning_rates();
-				lr_stream << lr_rates.error << "," << lr_rates.energy << "," << lr_rates.delay << "," << lr_rates.gate_count << std::endl;
-				logger << "[GLOBAL] LR: " << LR << ", LR Error: " << lr_rates.error << ", LR Energy: " << lr_rates.energy << ", LR Delay: " << lr_rates.delay << ", LR Count: " << lr_rates.gate_count << std::endl;
-			}
-
-			if (lr.finished_period())
-			{
-				const LearningRates lr_rates = lr.get_average_period_learning_rates();
-				lr_period_stream << lr_rates.error << "," << lr_rates.energy << "," << lr_rates.delay << "," << lr_rates.gate_count << std::endl;
-				logger << "[AVERAGE PERIOD] LR: " << LR << ", LR Error: " << lr_rates.error << ", LR Energy: " << lr_rates.energy << ", LR Delay: " << lr_rates.delay << ", LR Count: " << lr_rates.gate_count << std::endl;
-
-				if (lr.is_stagnated() && lr.is_periodicaly_stagnated(LR_PERIOD))
-				{
-					event_logger << "no significant change made ... early stopping" << std::endl;
-					logger.log_human(run, generation);
-					stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
-					break;
-				}
-			}
-#else
-			if (cgp_model->get_generations_without_change() > patience)
-			{
-				if (!cgp_model->is_multiplexing() || !threshold_reset)
-				{
-					if (threshold_reset)
-					{
-						cgp_model->mse_threshold(cgp_model->get_best_error_fitness());
-						cgp_model->mse_chromosome_logging_threshold(cgp_model->get_best_error_fitness());
-						cgp_model->set_generations_without_change(0);
-						threshold_reset = false;
-					}
-					else {
-						stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
-						cgp_model->remove_multiplexing(dataset);
-						event_logger << "early stopping because of no change between " << patience << " generations" << std::endl;
-						logger.log_human(run, generation);
-						stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
-						break;
-					}
-				}
-				else
-				{
-					if (cgp_model->mse_threshold() < cgp_model->get_best_error_fitness())
-					{
-						cgp_model->set_generations_without_change(cgp_model->get_generations_without_change() / 2);
-						cgp_model->mse_threshold(cgp_model->get_best_error_fitness());
-						cgp_model->mse_chromosome_logging_threshold(cgp_model->get_best_error_fitness());
-					}
-					if (cgp_model->dataset_size() > 1)
-					{
-						event_logger << "removed multiplexing after " << (generation + 1) << "th generations when error was " << cgp_model->get_best_error_fitness() << std::endl;
-						stats_out.log_csv(run, generation, format_timestamp(now - start_time), true);
-						cgp_model->remove_multiplexing(dataset);
-					}
-					threshold_reset = false;
-				}
-			}
-#endif
-			cgp_model->mutate(dataset);
+			cgp_model->remove_multiplexing(dataset);
+			event_logger << "early stopping final multiplexing removed" << std::endl;
 		}
-		event_logger << "finished evolution after " << (generation + 1) << " generations" << std::endl;
-		stats_out.close();
 
+		logger.log_human(run, generation);
+		stats_out.log_csv(run, generation, format_timestamp(time_taken), true);
 
-		CGPOutputStream out(cgp_model, cgp_model->output_file(), template_args);
+		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
 		out.dump_all();
 		out.close();
 
-		CGPOutputStream weights_out(cgp_model, cgp_model->train_weights_file(), template_args);
+		CGPOutputStream weights_out(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
 		weights_out.log_weights(get_dataset_input(dataset));
 		weights_out.close();
-
-		cgp_model->reset();
-		cgp_model->generate_population(dataset);
-		generation = 0;
-		mode = std::ios::out | std::ios::app;
 	}
 	return 0;
+}
+
+static int train_with_dynamic_threshold(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run, size_t generation = std::numeric_limits<size_t>::max())
+{
+
+	return train_generic(cgp_model, dataset, run, false, false, generation);
+}
+
+static int train_multi_multiplex(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run, size_t generation = std::numeric_limits<size_t>::max())
+{
+
+	return train_generic(cgp_model, dataset, run, true, false, generation);
+}
+
+static int train_single_multiplex(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run, size_t generation = std::numeric_limits<size_t>::max())
+{
+
+	return train_generic(cgp_model, dataset, run, false, true, generation);
+}
+
+
+static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset, int run)
+{
+#if defined(__SINGLE_MULTIPLEX)
+	return train_single_multiplex(cgp_model, dataset, run);
+#elif defined(__MULTI_MULTIPLEX)
+	return train_multi_multiplex(cgp_model, dataset, run);
+#else
+	return train_with_dynamic_threshold(cgp_model, dataset, run);
+#endif
 }
 
 static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
@@ -350,19 +340,20 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
 }
 
 int main(int argc, const char** args) {
+	assert(("should not abort", false));
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	srand(time(NULL));
-	//std::vector<std::string> arguments(args + 1, args + argc);
+	std::vector<std::string> arguments(args + 1, args + argc);
 	//std::vector<std::string> arguments
 	//{
 	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_350_100/train_cgp.config"
 	//};
 
-	std::vector<std::string> arguments
-	{
-	"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/worst_case/mse_0_256_20/train_cgp.config"
-	};
+	//std::vector<std::string> arguments
+	//{
+	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/worst_case/mse_0_256_20/train_cgp.config"
+	//};
 
 	//std::vector<std::string> arguments
 	//{
@@ -372,10 +363,92 @@ int main(int argc, const char** args) {
 	//std::vector<std::string> arguments
 	//{ "evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\all_layers\\mse_0_50_10\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\all_layers\\mse_0_50_10\\gate_statistics\\statistics.1.{run}.txt", "--mse-threshold", "0", "--row-count", "50", "--col-count", "10", "--look-back-parameter", "10", "--input-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/train.data", "--cgp-statistics-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/chromosomes.txt", "--output-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/evaluate_statistics/statistics.1.csv", "--train-weights-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/all_weights/weights.1.{run}.txt", "--gate-parameters-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/gate_parameters.txt" }
 	//;
+
+	std::cout << "... INIT CONFIGURATION CHECK ..." << std::endl;
+
 #if defined __DATE__ && defined __TIME__
 	std::cout << "starting cgp optimiser with compiled " << __DATE__ << " at " << __TIME__ << std::endl;
 #endif // _COMPILE_TIME
 
+#ifdef __SINGLE_MULTIPLEX
+	std::cout << "SINGLE_MULTIPLEX: on" << std::endl;
+#else
+	std::cout << "SINGLE_MULTIPLEX: off" << std::endl;
+#endif
+
+#ifdef __SINGLE_OUTPUT_ARITY 
+	std::cout << "SINGLE_OUTPUT_ARITY: on" << std::endl;
+#else
+	std::cout << "SINGLE_OUTPUT_ARITY: off" << std::endl;
+#endif
+
+#ifdef __NO_POW_SOLUTIONS 
+	std::cout << "NO_POW_SOLUTIONS: on" << std::endl;
+#else
+	std::cout << "NO_POW_SOLUTIONS: off" << std::endl;
+#endif
+
+#ifdef __NO_DIRECT_SOLUTIONS 
+	std::cout << "NO_DIRECT_SOLUTIONS: on" << std::endl;
+#else
+	std::cout << "NO_DIRECT_SOLUTIONS: off" << std::endl;
+#endif
+
+#ifdef _DEPTH_ENABLED 
+	std::cout << "DEPTH_ENABLED: on" << std::endl;
+#else
+	std::cout << "DEPTH_ENABLED: off" << std::endl;
+#endif
+
+#ifdef _DISABLE_ROW_COL_STATS 
+	std::cout << "DISABLE_ROW_COL_STATS: on" << std::endl;
+#else
+	std::cout << "DISABLE_ROW_COL_STATS: off" << std::endl;
+#endif
+
+#ifdef __MULTI_MULTIPLEX 
+	std::cout << "MULTI_MULTIPLEX: on" << std::endl;
+#else
+	std::cout << "MULTI_MULTIPLEX: off" << std::endl;
+#endif
+
+#ifdef NDEBUG 
+	std::cout << "NDEBUG: on" << std::endl;
+#else
+	std::cout << "NDEBUG: off" << std::endl;
+#endif
+
+#ifdef __ABSOLUTE_ERROR_METRIC 
+	std::cout << "ABSOLUTE_ERROR_METRIC: on" << std::endl;
+#else
+	std::cout << "ABSOLUTE_ERROR_METRIC: off" << std::endl;
+#endif
+
+#ifdef __MEAN_SQUARED_ERROR_METRIC 
+	std::cout << "MEAN_SQUARED_ERROR_METRIC: on" << std::endl;
+#else
+	std::cout << "MEAN_SQUARED_ERROR_METRIC: off" << std::endl;
+#endif
+
+#if !defined(__MEAN_SQUARED_ERROR_METRIC) && !defined(__ABSOLUTE_ERROR_METRIC) 
+	std::cout << "SQUARED_ERROR_METRIC: on" << std::endl;
+#else
+	std::cout << "SQUARED_ERROR_METRIC: off" << std::endl;
+#endif
+
+#ifdef __VIRTUAL_SELECTOR 
+	std::cout << "VIRTUAL_SELECTOR: on" << std::endl;
+#else
+	std::cout << "VIRTUAL_SELECTOR: off" << std::endl;
+#endif
+
+#ifdef __OLD_NOOP_OPERATION_SUPPORT 
+	std::cout << "OLD_NOOP_OPERATION_SUPPORT: on" << std::endl;
+#else
+	std::cout << "OLD_NOOP_OPERATION_SUPPORT: off" << std::endl;
+#endif
+
+	std::cout << "... CONFIGURATION CHECK DONE ..." << std::endl;
 
 	if (arguments.size() == 0)
 	{
@@ -422,7 +495,7 @@ int main(int argc, const char** args) {
 		arguments.erase(arguments.begin(), arguments.begin() + consumed_arguments);
 		auto train_dataset = init_dataset(cgp_file, arguments);
 		auto cgp_model = init_cgp(cgp_file, arguments, train_dataset);
-		
+
 		// Read two values from the standard input
 		if (cgp_model->input_count() == 0 || cgp_model->output_count() == 0)
 		{

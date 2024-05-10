@@ -12,5 +12,6 @@
 #include "CGPStream.h"
 #include "Cgp.h"
 #include "Learning.h"
+#include "Assert.h"
 
 void signal_handler(int signum);
