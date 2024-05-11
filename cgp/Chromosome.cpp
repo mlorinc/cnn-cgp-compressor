@@ -174,11 +174,11 @@ void Chromosome::setup_chromosome()
 #else
 	for (int i = 0; i < output_count; i++) {
 #endif
-		*ite++ = _clip_pin((rand() % (max - min)) + min);
+		* ite++ = _clip_pin((rand() % (max - min)) + min);
 	}
 }
 
-void Chromosome::setup_chromosome(const std::string& serialized_chromosome)
+void Chromosome::setup_chromosome(const std::string & serialized_chromosome)
 {
 	std::istringstream input(serialized_chromosome);
 
@@ -261,16 +261,26 @@ void Chromosome::setup_maps()
 	pin_map.reset(new weight_value_t[cgp_configuration.pin_map_size()]);
 	gate_visit_map.reset(new bool[nodes_count]);
 	absolute_output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size();
-	absolute_pin_start = pin_map.get() + cgp_configuration.input_count() + nodes_count * cgp_configuration.function_output_arity();
+	absolute_pin_start = pin_map.get() + cgp_configuration.pin_map_output_start();
 
 #if defined(__VIRTUAL_SELECTOR)
 	const int output_size = cgp_configuration.output_count() * cgp_configuration.dataset_size();
 	output_start = absolute_output_start + output_size;
 	output_pin_start = absolute_pin_start + output_size;
+	estimated_quantized_energy_consumption_array = std::make_unique<quantized_energy_t[]>(output_size);
+	estimated_energy_consumption_array = std::make_unique<energy_t[]>(output_size);
+	estimated_area_utilisation_array = std::make_unique<area_t[]>(output_size);
+	phenotype_node_count_array = std::make_unique<gate_count_t[]>(output_size);
 #else
 	output_start = absolute_output_start;
 	output_pin_start = absolute_pin_start;
+	estimated_quantized_energy_consumption_array = std::make_unique<quantized_energy_t[]>(cgp_configuration.output_count());
+	estimated_energy_consumption_array = std::make_unique<energy_t[]>(cgp_configuration.output_count());
+	estimated_area_utilisation_array = std::make_unique<area_t[]>(cgp_configuration.output_count());
+	phenotype_node_count_array = std::make_unique<gate_count_t[]>(cgp_configuration.output_count());
 #endif // __VIRTUAL_SELECTOR
+
+
 }
 
 bool cgp::Chromosome::is_locked_node(int gate_index) const
@@ -278,7 +288,7 @@ bool cgp::Chromosome::is_locked_node(int gate_index) const
 	return locked_nodes_index <= gate_index;
 }
 
-void Chromosome::setup_maps(const Chromosome& that)
+void Chromosome::setup_maps(const Chromosome & that)
 {
 #if defined(__VIRTUAL_SELECTOR)
 	int output_size = output_count * cgp_configuration.dataset_size();
@@ -301,7 +311,7 @@ void Chromosome::setup_maps(const Chromosome& that)
 	}
 }
 
-void Chromosome::setup_maps(Chromosome&& that)
+void Chromosome::setup_maps(Chromosome && that)
 {
 	chromosome = std::move(that.chromosome);
 	pin_map = std::move(that.pin_map);
@@ -469,6 +479,8 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 	// Only and only if gate_visit_map was fille
 	int genes_to_mutate = rand() % max_genes_to_mutate;
 	bool neutral_mutation = !need_energy_evaluation;
+
+	#pragma omp parallel for
 	for (int i = 0; i < genes_to_mutate; i++) {
 		// Select a random gene
 		auto random_gene_index = rand() % chromosome_size;
@@ -483,6 +495,7 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 			auto max = std::get<1>(column_values);
 			auto new_pin = _clip_pin((random_number % (max - min)) + min);
 
+			#pragma critical
 			neutral_mutation = neutral_mutation && (new_pin == that->chromosome[random_gene_index] || !gate_visit_map[gate_index]);
 			that->chromosome[random_gene_index] = new_pin;
 		}
@@ -492,6 +505,7 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 			auto max = std::get<1>(output_values);
 			auto new_pin = _clip_pin((random_number % (max - min)) + min);
 
+			#pragma critical
 			neutral_mutation = neutral_mutation && that->chromosome[random_gene_index] == new_pin;
 			that->chromosome[random_gene_index] = new_pin;
 		}
@@ -509,6 +523,7 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 				func = CGPOperator::ID;
 			}
 
+			#pragma critical
 			neutral_mutation = neutral_mutation && (func == that->chromosome[random_gene_index] || !gate_visit_map[gate_index]);
 			that->chromosome[random_gene_index] = func;
 		}
@@ -553,24 +568,22 @@ std::shared_ptr<Chromosome> Chromosome::mutate() const
 	return chrom;
 }
 
-std::shared_ptr<Chromosome> cgp::Chromosome::mutate(std::shared_ptr<Chromosome> that, const dataset_t &dataset)
+std::shared_ptr<Chromosome> cgp::Chromosome::mutate(std::shared_ptr<Chromosome> that, const dataset_t & dataset)
 {
-	if (this == that.get())
-	{
-		return mutate();
-	}
+	// Actually, do not care anymore about having stricly lambda offsprings ...
+	assert(this != that.get());
 
 	std::copy(chromosome.get(), chromosome.get() + chromosome_size, that->chromosome.get());
 	mutate_genes(that);
 	return that;
 }
 
-void cgp::Chromosome::swap_visit_map(Chromosome& chromosome)
+void cgp::Chromosome::swap_visit_map(Chromosome & chromosome)
 {
 	std::swap(gate_visit_map, chromosome.gate_visit_map);
 }
 
-void Chromosome::set_input(const weight_value_t* input, int selector)
+void Chromosome::set_input(const weight_value_t * input, int selector)
 {
 	bool valid = this->input == input && this->selector == selector;
 	this->input = input;
@@ -584,7 +597,7 @@ void Chromosome::set_input(const weight_value_t* input, int selector)
 #endif // __VIRTUAL_SELECTOR
 }
 
-inline static void set_value(CGPConfiguration::weight_value_t& target, const CGPConfiguration::weight_value_t& value)
+inline static void set_value(CGPConfiguration::weight_value_t & target, const CGPConfiguration::weight_value_t & value)
 {
 	target = value;
 }
@@ -855,13 +868,13 @@ void Chromosome::evaluate()
 
 	auto it = output_start;
 	auto pin_it = output_pin_start;
-	#pragma omp parallel for
+#pragma omp parallel for
 	for (int i = 0; i < output_end - output_start; i++)
 	{
 		//assert(0 <= *it && *it < cgp_configuration.row_count() * cgp_configuration.col_count() * cgp_configuration.function_output_arity() + cgp_configuration.input_count());
 		pin_it[i] = get_pin_value(it[i]);
 	}
-	
+
 	need_evaluation = false;
 }
 
@@ -1266,18 +1279,33 @@ int cgp::Chromosome::get_gate_index_from_output_pin(int pin) const
 int cgp::Chromosome::get_gate_index_from_input_pin(int pin) const
 {
 	assert(("pin is not gate pin, but input pin", pin >= cgp_configuration.input_count()));
+#ifndef __SINGLE_OUTPUT_ARITY
 	return (pin - cgp_configuration.input_count()) / cgp_configuration.function_input_arity();
+#else
+	return pin - cgp_configuration.input_count();
+#endif
 }
 
 int cgp::Chromosome::get_output_pin_from_gate_index(int gate_index, int pin) const
 {
 	assert(0 <= pin && 0 <= gate_index && gate_index < cgp_configuration.row_count() * cgp_configuration.col_count());
+#ifndef __SINGLE_OUTPUT_ARITY
 	return gate_index * cgp_configuration.function_output_arity() + cgp_configuration.input_count() + pin;
+#else
+	return gate_index + cgp_configuration.input_count() + pin;
+#endif
 }
 
 void cgp::Chromosome::invalidate()
 {
 	need_evaluation = true;
+	need_energy_evaluation = true;
+	need_delay_evaluation = true;
+	need_depth_evaluation = true;
+}
+
+void cgp::Chromosome::invalidate_visit_map()
+{
 	need_energy_evaluation = true;
 	need_delay_evaluation = true;
 	need_depth_evaluation = true;
@@ -1292,67 +1320,99 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 		return estimated_quantized_energy_consumption;
 	}
 
-	std::stack<gene_t> pins_to_visit;
+	const int length = absolute_output_end - absolute_output_start;
 
-	for (auto it = absolute_output_start; it != absolute_output_end; it++)
+#pragma omp parallel for
+	for (int i = 0; i < length; i++)
 	{
-		pins_to_visit.push(*it);
-	}
+		std::stack<gene_t> pins_to_visit;
+		pins_to_visit.push(absolute_output_start[i]);
 
-	estimated_energy_consumption = 0;
-	estimated_quantized_energy_consumption = 0;
-	estimated_area_utilisation = 0;
-	phenotype_node_count = 0;
+		estimated_quantized_energy_consumption_array[i] = 0;
+		estimated_energy_consumption_array[i] = 0;
+		estimated_area_utilisation_array[i] = 0;
+		phenotype_node_count_array[i] = 0;
+
 #ifndef _DISABLE_ROW_COL_STATS
-	bottom_row = cgp_configuration.row_count();
-	top_row = 0;
-	first_col = cgp_configuration.col_count();
-	last_col = 0;
+		int bottom_row = cgp_configuration.row_count();
+		int top_row = 0;
+		int first_col = cgp_configuration.col_count();
+		int last_col = 0;
 #endif
 
-	while (!pins_to_visit.empty())
-	{
-		gene_t pin = pins_to_visit.top();
-		pins_to_visit.pop();
-
-		// if is CGP input pin
-		if (pin < cgp_configuration.input_count())
+		while (!pins_to_visit.empty())
 		{
-			continue;
-		}
+			gene_t pin = pins_to_visit.top();
+			pins_to_visit.pop();
 
-		const int gate_index = get_gate_index_from_output_pin(pin);
-		if (!gate_visit_map[gate_index])
-		{
-#ifndef _DISABLE_ROW_COL_STATS
-			int row = get_row(gate_index);
-			int col = get_column(gate_index);
-			top_row = std::min(row, top_row);
-			bottom_row = std::max(row, bottom_row);
-			first_col = std::min(col, first_col);
-			last_col = std::max(col, last_col);
-#endif
-			gene_t func = *get_block_function(gate_index);
-			auto function_cost = get_function_cost(func);
-			gate_visit_map[gate_index] = true;
-			phenotype_node_count += 1;
-			estimated_energy_consumption += CGPConfiguration::get_energy_parameter(function_cost);
-			estimated_quantized_energy_consumption += CGPConfiguration::get_quantized_energy_parameter(function_cost);
-			estimated_area_utilisation += CGPConfiguration::get_area_parameter(function_cost);
-			gene_t* inputs = get_block_inputs(gate_index);
-			const auto arity = get_function_input_arity(gate_index);
-			for (int i = 0; i < arity; i++)
+			// if is CGP input pin
+			if (pin < cgp_configuration.input_count())
 			{
-				pins_to_visit.push(inputs[i]);
+				continue;
 			}
 
-			// Just for documentation block, the semantic is here
-			//if (arity == 0)
-			//{
-			//	continue;
-			//}
+			const int gate_index = get_gate_index_from_output_pin(pin);
+			bool can_visit = false;
+			#pragma omp critical		
+			if (!gate_visit_map[gate_index])
+			{
+				gate_visit_map[gate_index] = true;
+				can_visit = true;
+			}
+			
+
+			if (can_visit)
+			{
+#ifndef _DISABLE_ROW_COL_STATS
+				int row = get_row(gate_index);
+				int col = get_column(gate_index);
+				top_row = std::min(row, top_row);
+				bottom_row = std::max(row, bottom_row);
+				first_col = std::min(col, first_col);
+				last_col = std::max(col, last_col);
+#endif
+				gene_t func = *get_block_function(gate_index);
+				auto function_cost = get_function_cost(func);
+
+				phenotype_node_count_array[i] += 1;
+				estimated_energy_consumption_array[i] += CGPConfiguration::get_energy_parameter(function_cost);
+				estimated_quantized_energy_consumption_array[i] += CGPConfiguration::get_quantized_energy_parameter(function_cost);
+				estimated_area_utilisation_array[i] += CGPConfiguration::get_area_parameter(function_cost);
+
+				gene_t* inputs = get_block_inputs(gate_index);
+				const auto arity = get_function_input_arity(gate_index);
+				for (int i = 0; i < arity; i++)
+				{
+					pins_to_visit.push(inputs[i]);
+				}
+
+				// Just for documentation block, the semantic is here
+				//if (arity == 0)
+				//{
+				//	continue;
+				//}
+			}
 		}
 	}
+
+	quantized_energy_t estimated_quantized_energy_consumption = 0;
+	energy_t estimated_energy_consumption = 0;
+	area_t estimated_area_utilisation = 0;
+	gate_count_t phenotype_node_count = 0;
+
+#pragma omp parallel for reduction(+:phenotype_node_count) reduction(+:estimated_energy_consumption) reduction(+:estimated_quantized_energy_consumption) reduction(+:estimated_area_utilisation)
+	for (int i = 0; i < length; i++)
+	{
+		phenotype_node_count += phenotype_node_count_array[i];
+		estimated_energy_consumption += estimated_energy_consumption_array[i];
+		estimated_quantized_energy_consumption += estimated_quantized_energy_consumption_array[i];
+		estimated_area_utilisation += estimated_area_utilisation_array[i];
+	}
+
+	this->estimated_quantized_energy_consumption = estimated_quantized_energy_consumption;
+	this->estimated_energy_consumption = estimated_energy_consumption;
+	this->estimated_area_utilisation = estimated_area_utilisation;
+	this->phenotype_node_count = phenotype_node_count;
 
 	need_energy_evaluation = false;
 	return estimated_quantized_energy_consumption;
@@ -1388,8 +1448,6 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 		return estimated_quantized_delay;
 	}
 
-	std::stack<gene_t> pins_to_visit;
-	std::stack<std::tuple<quantized_delay_t, delay_t>> current_delays;
 	const int grid_size = cgp_configuration.col_count() * cgp_configuration.row_count();
 
 	for (int i = 0; i < grid_size; i++)
@@ -1399,51 +1457,73 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 
 	estimated_quantized_delay = 0;
 	estimated_delay = 0;
-	for (auto it = absolute_output_start; it != absolute_output_end; it++)
-	{
-		pins_to_visit.push(*it);
+
+
+	const int length = absolute_output_end - absolute_output_start;
+
+#pragma omp parallel for
+	for (int i = 0; i < length; i++) {
+
+		std::stack<gene_t> pins_to_visit;
+		std::stack<std::tuple<quantized_delay_t, delay_t>> current_delays;
+
+		pins_to_visit.push(absolute_output_start[i]);
 		current_delays.push(std::make_tuple(0, 0));
-	}
 
-	while (!pins_to_visit.empty())
-	{
-		gene_t pin = pins_to_visit.top();
-		std::tuple<quantized_delay_t, delay_t> parameters = current_delays.top();
-		quantized_delay_t current_quantized_delay = std::get<0>(parameters);
-		delay_t current_delay = std::get<1>(parameters);
-		pins_to_visit.pop();
-		current_delays.pop();
-
-		// if is CGP input pin
-		if (pin < cgp_configuration.input_count())
+		while (!pins_to_visit.empty())
 		{
-			estimated_quantized_delay = std::max(estimated_quantized_delay, current_quantized_delay);
-			estimated_delay = std::max(estimated_delay, current_delay);
-			continue;
-		}
+			gene_t pin = pins_to_visit.top();
+			std::tuple<quantized_delay_t, delay_t> parameters = current_delays.top();
+			quantized_delay_t current_quantized_delay = std::get<0>(parameters);
+			delay_t current_delay = std::get<1>(parameters);
+			pins_to_visit.pop();
+			current_delays.pop();
 
-		const int gate_index = get_gate_index_from_output_pin(pin);
-		gene_t func = *get_block_function(gate_index);
-		auto function_cost = get_function_cost(func);
-		const auto new_quantized_cost = current_quantized_delay + CGPConfiguration::get_quantized_delay_parameter(function_cost);
-		const auto new_real_cost = current_delay + CGPConfiguration::get_delay_parameter(function_cost);
-
-		if (new_quantized_cost > quantized_delay_distance_map[gate_index] || quantized_delay_distance_map[gate_index] == std::numeric_limits<quantized_delay_t>::max())
-		{
-			quantized_delay_distance_map[gate_index] = new_quantized_cost;
-			gene_t* inputs = get_block_inputs(gate_index);
-			const auto arity = get_function_input_arity(gate_index);
-			for (int i = 0; i < arity; i++)
+			
+			// if is CGP input pin
+			if (pin < cgp_configuration.input_count() || get_function_input_arity(get_gate_index_from_output_pin(pin)) == 0)
 			{
-				pins_to_visit.push(inputs[i]);
-				current_delays.push(std::make_tuple(new_quantized_cost, new_real_cost));
+				// then it is constant node
+				if (pin >= cgp_configuration.input_count())
+				{
+					const int gate_index = get_gate_index_from_output_pin(pin);
+					gene_t func = *get_block_function(gate_index);
+					current_quantized_delay += CGPConfiguration::get_quantized_delay_parameter(get_function_cost(func));
+					current_delay += current_delay + CGPConfiguration::get_delay_parameter(get_function_cost(func));
+				}
+
+				#pragma omp critical
+				{
+					estimated_quantized_delay = std::max(estimated_quantized_delay, current_quantized_delay);
+					estimated_delay = std::max(estimated_delay, current_delay);
+				}
+				continue;
 			}
 
-			if (arity == 0)
+			const int gate_index = get_gate_index_from_output_pin(pin);
+			gene_t func = *get_block_function(gate_index);
+			auto function_cost = get_function_cost(func);
+			const auto new_quantized_cost = current_quantized_delay + CGPConfiguration::get_quantized_delay_parameter(function_cost);
+			const auto new_real_cost = current_delay + CGPConfiguration::get_delay_parameter(function_cost);
+
+			bool can_visit = false;
+
+			#pragma omp critical
+			if (new_quantized_cost > quantized_delay_distance_map[gate_index] || quantized_delay_distance_map[gate_index] == std::numeric_limits<quantized_delay_t>::max())
 			{
-				estimated_quantized_delay = std::max(estimated_quantized_delay, current_quantized_delay);
-				estimated_delay = std::max(estimated_delay, current_delay);
-				continue;
+				can_visit = true;
+				quantized_delay_distance_map[gate_index] = new_quantized_cost;
+			}
+
+			if (can_visit)
+			{
+				const auto arity = get_function_input_arity(gate_index);
+				gene_t* inputs = get_block_inputs(gate_index);
+				for (int i = 0; i < arity; i++)
+				{
+					pins_to_visit.push(inputs[i]);
+					current_delays.push(std::make_tuple(new_quantized_cost, new_real_cost));
+				}
 			}
 		}
 	}
@@ -1555,7 +1635,7 @@ int cgp::Chromosome::clip_pin(int pin) const
 	auto gate_base_pin = get_output_pin_from_gate_index(pin_gate_index);
 	auto new_relative_pin = pin - gate_base_pin;
 	int new_pin = get_output_pin_from_gate_index(pin_gate_index, std::min(get_function_output_arity(pin_gate_index) - 1, new_relative_pin));
-	
+
 	assert(gate_base_pin <= new_pin && new_pin < gate_base_pin + cgp_configuration.function_output_arity());
 	return new_pin;
 }
@@ -1592,7 +1672,7 @@ decltype(cgp::Chromosome::multiplexing) cgp::Chromosome::is_multiplexing() const
 	return multiplexing;
 }
 
-Chromosome::weight_output_t Chromosome::get_weights(const weight_input_t& input, int selector)
+Chromosome::weight_output_t Chromosome::get_weights(const weight_input_t & input, int selector)
 {
 	set_input(input, selector);
 	evaluate();
@@ -1601,7 +1681,7 @@ Chromosome::weight_output_t Chromosome::get_weights(const weight_input_t& input,
 	return weights;
 }
 
-std::vector<Chromosome::weight_output_t> Chromosome::get_weights(const std::vector<weight_input_t>& input)
+std::vector<Chromosome::weight_output_t> Chromosome::get_weights(const std::vector<weight_input_t>&input)
 {
 	std::vector<weight_output_t> weight_vector(input.size());
 	for (int i = 0; i < input.size(); i++)
@@ -1611,7 +1691,7 @@ std::vector<Chromosome::weight_output_t> Chromosome::get_weights(const std::vect
 	return weight_vector;
 }
 
-void cgp::Chromosome::find_direct_solutions(const dataset_t& dataset)
+void cgp::Chromosome::find_direct_solutions(const dataset_t & dataset)
 {
 	const auto& inputs = get_dataset_input(dataset);
 	const auto& no_care = get_dataset_no_care(dataset);
@@ -1645,13 +1725,13 @@ void cgp::Chromosome::find_direct_solutions(const dataset_t& dataset)
 					chromosome_outputs[k] = j;
 					break;
 #endif
-				}
 			}
 		}
 	}
 }
+}
 
-void cgp::Chromosome::add_2pow_circuits(const dataset_t& dataset)
+void cgp::Chromosome::add_2pow_circuits(const dataset_t & dataset)
 {
 	assert(("add_2pow_circuits does not support datasets with multiple combinatios", cgp_configuration.dataset_size() == 1));
 	const auto& inputs = get_dataset_input(dataset);
@@ -1760,9 +1840,9 @@ void cgp::Chromosome::add_2pow_circuits(const dataset_t& dataset)
 #else
 				chromosome_outputs[j] = result->second;
 #endif
-			}
 		}
 	}
+}
 }
 
 int cgp::Chromosome::find_free_index(int from) const
@@ -1839,7 +1919,17 @@ bool cgp::Chromosome::needs_evaluation() const
 	return need_evaluation;
 }
 
-void cgp::Chromosome::use_multiplexing(const dataset_t& dataset)
+bool cgp::Chromosome::needs_energy_evaluation() const
+{
+	return need_energy_evaluation;
+}
+
+bool cgp::Chromosome::needs_delay_evaluation() const
+{
+	return need_delay_evaluation;
+}
+
+void cgp::Chromosome::use_multiplexing(const dataset_t & dataset)
 {
 	if (multiplexing)
 	{
@@ -1901,7 +1991,7 @@ void cgp::Chromosome::use_multiplexing(const dataset_t& dataset)
 	invalidate();
 }
 
-void cgp::Chromosome::wire_multiplexed_id_to_output(const dataset_t& dataset)
+void cgp::Chromosome::wire_multiplexed_id_to_output(const dataset_t & dataset)
 {
 	const auto& outputs = get_dataset_output(dataset);
 	setup_output_iterators(selector, cgp_configuration.output_count());
@@ -1916,7 +2006,7 @@ void cgp::Chromosome::wire_multiplexed_id_to_output(const dataset_t& dataset)
 	invalidate();
 }
 
-void cgp::Chromosome::remove_multiplexing(const dataset_t& dataset)
+void cgp::Chromosome::remove_multiplexing(const dataset_t & dataset)
 {
 	if (!multiplexing)
 	{
@@ -1992,7 +2082,7 @@ void cgp::Chromosome::copy_gate_function(int src_index, int dst_index)
 	*dst_function = *src_function;
 }
 
-void cgp::Chromosome::perform_corrections(const dataset_t& dataset, const int threshold, const bool zero_energy_only)
+void cgp::Chromosome::perform_corrections(const dataset_t & dataset, const int threshold, const bool zero_energy_only)
 {
 	if (cgp_configuration.dataset_size() > 1)
 	{
@@ -2122,20 +2212,20 @@ cgp::Chromosome::gate_parameters_t cgp::Chromosome::get_function_cost(gene_t fun
 
 	const auto& costs = cgp_configuration.function_costs();
 	return costs[function];
-}
+	}
 
-std::ostream& cgp::operator<<(std::ostream& os, const Chromosome& chromosome)
+std::ostream& cgp::operator<<(std::ostream & os, const Chromosome & chromosome)
 {
 	os << chromosome.to_string();
 	return os;
 }
 
-std::string cgp::to_string(const cgp::Chromosome& chromosome)
+std::string cgp::to_string(const cgp::Chromosome & chromosome)
 {
 	return chromosome.to_string();
 }
 
-std::string cgp::to_string(const std::shared_ptr<Chromosome>& chromosome)
+std::string cgp::to_string(const std::shared_ptr<Chromosome>&chromosome)
 {
 	return (chromosome) ? (to_string(*chromosome)) : Chromosome::nan_chromosome_string;
 }

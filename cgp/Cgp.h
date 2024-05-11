@@ -73,6 +73,8 @@ namespace cgp {
 		/// <returns>The gate count value of the solution</returns>
 		static gate_count_t get_gate_count(const solution_t solution);
 
+		void set_chromosome(solution_t& solution, std::shared_ptr<Chromosome> value);
+
 		/// <summary>
 		/// Ensure that the energy value of the given solution is calculated.
 		/// </summary>
@@ -128,6 +130,14 @@ namespace cgp {
 		/// <param name="solution">The solution to retrieve the chromosome from</param>
 		/// <returns>The chromosome associated with the solution</returns>
 		static std::shared_ptr<Chromosome> get_chromosome(const solution_t solution);
+
+		/// <summary>
+		/// Get the chromosome associated with the given solution.
+		/// </summary>
+		/// <param name="solution">The solution to retrieve the chromosome from</param>
+		/// <returns>The chromosome associated with the solution</returns>
+		static std::shared_ptr<Chromosome>& get_chromosome_reference(const solution_t solution);
+
 		/// <summary>
 		/// Get default solution with invalid values.
 		/// </summary>
@@ -227,14 +237,9 @@ namespace cgp {
 		static const std::string default_solution_format;
 
 		/// <summary>
-		/// The best solution found by the CGP.
-		/// </summary>
-		solution_t best_solution;
-
-		/// <summary>
 		/// Collection of chromosomes representing individuals in the population.
 		/// </summary>
-		std::vector<std::shared_ptr<Chromosome>> chromosomes;
+		std::vector<solution_t> chromosomes;
 
 		/// <summary>
 		/// Array containing tuples specifying the minimum and maximum pin indices for output connections.
@@ -247,19 +252,9 @@ namespace cgp {
 		size_t generations_without_change;
 
 		/// <summary>
-		/// Best solutions found by each thread during parallel execution.
-		/// </summary>
-		std::unique_ptr<solution_t[]> best_solutions;
-
-		/// <summary>
 		/// Counter for the total evolution steps made during the process.
 		/// </summary>
 		size_t evolution_steps_made;
-
-		/// <summary>
-		/// Flag indicating that solution has been recently changed.
-		/// </summary>
-		bool best_solution_changed;
 
 		/// <summary>
 		/// Additional configuration attributes lefto by CGPConfiguration::load.
@@ -349,7 +344,15 @@ namespace cgp {
 		error_t mx_se_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
 
 		/// <summary>
-		/// Analyze chromosome and calculate MSE metric for made predictions. It does not fill up other fitnesses due to performance.
+		/// Analyze chromosome and calculate error metric for made predictions. It does not fill up other fitnesses due to performance.
+		/// </summary>
+		/// <param name="solution">The solution to analyze.</param>
+		/// <param name="dataset">Dataset to analyse chromosome on.</param>
+		/// <returns>The solution containing the chromosome and MSE metric. Other attributes can be accesed from the chromosome instance.</returns>
+		void analyse_solution(solution_t &solution, const dataset_t& dataset);
+
+		/// <summary>
+		/// Analyze chromosome and calculate error metric for made predictions. It does not fill up other fitnesses due to performance.
 		/// </summary>
 		/// <param name="chrom">The chromosome to analyze.</param>
 		/// <param name="dataset">Dataset to analyse chromosome on.</param>
@@ -544,11 +547,6 @@ namespace cgp {
 		/// </summary>
 		/// <returns>Number of generations without change.</returns>
 		decltype(generations_without_change) get_generations_without_change() const;
-
-		/// <summary>
-		/// Flag indicating that solution has been recently changed.
-		/// </summary>
-		decltype(best_solution_changed) has_best_solution_changed() const;
 
 		/// <summary>
 		/// Calculate size of the gene.

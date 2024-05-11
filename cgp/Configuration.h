@@ -746,6 +746,21 @@ namespace cgp {
 		int pin_map_size() const;
 
 		/// <summary>
+		/// Calculates the start of pin section.
+		/// </summary>
+		int pin_map_pins_start() const;
+
+		/// <summary>
+		/// Calculates the start of input pin section.
+		/// </summary>
+		int pin_map_input_start(int selector) const;
+
+		/// <summary>
+		/// Calculates the start of output pin section.
+		/// </summary>
+		int pin_map_output_start() const;
+
+		/// <summary>
 		/// Calculates the size of a chromosome block.
 		/// </summary>
 		int block_chromosome_size() const;

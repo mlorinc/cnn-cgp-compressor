@@ -340,7 +340,7 @@ static int train(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset)
 }
 
 int main(int argc, const char** args) {
-	assert(("should not abort", false));
+	//assert(("should not abort", false));
 	// Asserts floating point compatibility at compile time
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	srand(time(NULL));

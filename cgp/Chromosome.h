@@ -122,27 +122,27 @@ namespace cgp {
 		/// <summary>
 		/// Pointer to the start position of the chromosome output.
 		/// </summary>
-		gene_t* output_start, *absolute_output_start;
+		gene_t* output_start, * absolute_output_start;
 
 		/// <summary>
 		/// Pointer to the end position of the chromosome output.
 		/// </summary>
-		gene_t* output_end, *absolute_output_end;
+		gene_t* output_end, * absolute_output_end;
 
 		/// <summary>
 		/// Pointer to the start position of the output pins in the pin map.
 		/// </summary>
-		weight_value_t* output_pin_start, *absolute_pin_start;
+		weight_value_t* output_pin_start, * absolute_pin_start;
 
 		/// <summary>
 		/// Pointer to the end position of the output pins in the pin map.
 		/// </summary>
-		weight_value_t* output_pin_end, *absolute_pin_end;
+		weight_value_t* output_pin_end, * absolute_pin_end;
 
 		/// <summary>
 		/// Array containing tuples specifying the minimum and maximum pin indices for possible output connections based on the look-back parameter.
 		/// </summary>
-		const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies;
+		const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies;
 
 		/// <summary>
 		/// Unique pointer to the chromosome array.
@@ -243,6 +243,27 @@ namespace cgp {
 		/// Cached phenotype node count value. By node, it is understood as one digital gate.
 		/// </summary>
 		gate_count_t phenotype_node_count = CGPConfiguration::gate_count_nan;
+
+		/// <summary>
+		/// Cached energy consumption value.
+		/// </summary>
+		std::unique_ptr<quantized_energy_t[]> estimated_quantized_energy_consumption_array;
+
+		/// <summary>
+		/// Cached energy consumption value.
+		/// </summary>
+		std::unique_ptr<energy_t[]> estimated_energy_consumption_array;
+
+		/// <summary>
+		/// Cached area consumption value.
+		/// </summary>
+		std::unique_ptr<area_t[]> estimated_area_utilisation_array;
+
+		/// <summary>
+		/// Cached phenotype node count value. By node, it is understood as one digital gate.
+		/// </summary>
+		std::unique_ptr<gate_count_t[]> phenotype_node_count_array;
+
 
 		/// <summary>
 		/// Cached the lowest used row.
@@ -422,11 +443,6 @@ namespace cgp {
 		int get_output_pin_from_gate_index(int gate_index, int pin = 0) const;
 
 		/// <summary>
-		/// Invalidate the chromosome, indicating that it needs evaluation.
-		/// </summary>
-		void invalidate();
-
-		/// <summary>
 		/// Find a free index starting from the specified index.
 		/// </summary>
 		/// <param name="from">The index to start searching from.</param>
@@ -511,16 +527,16 @@ namespace cgp {
 		/// </summary>
 		/// <param name="cgp_configuration">Reference to the CGP configuration.</param>
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
-		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies);
-		
-		
+		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies);
+
+
 		/// <summary>
 		/// Constructor for the Chromosome class using string chromosome representation.
 		/// </summary>
 		/// <param name="cgp_configuration">Reference to the CGP configuration.</param>
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		/// <param name="serialized_chromosome">Serialized chromosome to be parsed.</param>
-		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]> &minimum_output_indicies, const std::string &serialized_chromosome);
+		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies, const std::string& serialized_chromosome);
 
 		/// <summary>
 		/// Constructs a Chromosome object using a string chromosome representation.
@@ -605,13 +621,13 @@ namespace cgp {
 		/// <summary>
 		/// Swap visits maps.
 		/// </summary>
-		void swap_visit_map(Chromosome &chromosome);
+		void swap_visit_map(Chromosome& chromosome);
 
 		/// <summary>
 		/// Method to set the input for the chromosome.
 		/// </summary>
 		/// <param name="input">Shared pointer to the input array.</param>
-		void set_input(const weight_value_t *input, int selector);
+		void set_input(const weight_value_t* input, int selector);
 
 		/// <summary>
 		/// Method to evaluate the chromosome based on its inputs.
@@ -731,7 +747,7 @@ namespace cgp {
 		/// <param name="input">Shared pointer to an array of input values.</param>
 		/// <param name="selector">Selector set to multipexor and de-multiplexor gates.</param>
 		/// <returns>Shared pointer to an array of infered weights</returns>
-		weight_output_t get_weights(const weight_input_t &input, int selector = 0);
+		weight_output_t get_weights(const weight_input_t& input, int selector = 0);
 
 		/// <summary>
 		/// Infer unknown weights using CGP genotype and return vector of weights arrays.
@@ -779,14 +795,26 @@ namespace cgp {
 		int get_relative_id_output_from_index(int index) const;
 
 		bool needs_evaluation() const;
+		bool needs_energy_evaluation() const;
+		bool needs_delay_evaluation() const;
 
 		/// <summary>
 		/// Collect gate statistics and their quantity.
 		/// </summary>
 		/// <returns>Map mapping function number to statistics.</returns>
 		std::map<int, int> get_gate_statistics();
+
+		/// <summary>
+		/// Invalidate the chromosome, indicating that it needs evaluation.
+		/// </summary>
+		void invalidate();
+
+		/// <summary>
+		/// Invalidate the chromosome, indicating that it needs to re-map energy.
+		/// </summary>
+		void invalidate_visit_map();
 	};
 
 	std::string to_string(const Chromosome& chromosome);
-	std::string to_string(const std::shared_ptr<Chromosome> &chromosome);
+	std::string to_string(const std::shared_ptr<Chromosome>& chromosome);
 }

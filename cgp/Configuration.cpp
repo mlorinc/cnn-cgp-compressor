@@ -456,10 +456,25 @@ namespace cgp {
 
 	int CGPConfiguration::pin_map_size() const {
 #ifdef __VIRTUAL_SELECTOR
-		return row_count() * col_count() * function_output_arity() + output_count() * dataset_size();
+		return row_count() * col_count() * function_output_arity() + output_count() * dataset_size() + pin_map_pins_start();
 #else
 		return row_count() * col_count() * function_output_arity() + output_count();
 #endif // __VIRTUAL_SELECTOR
+	}
+
+	int CGPConfiguration::pin_map_pins_start() const
+	{
+		return 0;
+	}
+
+	int CGPConfiguration::pin_map_input_start(int selector) const
+	{
+		return input_count() * selector;
+	}
+
+	int CGPConfiguration::pin_map_output_start() const
+	{
+		return row_count() * col_count() * function_output_arity();
 	}
 
 	int CGPConfiguration::block_chromosome_size() const
