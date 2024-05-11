@@ -11,6 +11,7 @@ EXPERIMENT_FOLDER=$(echo "$message" | awk '{print $16}')
 DATADIR=$(echo "$message" | awk '{print $20}')
 TIMESTAMP=${TIMESTAMP:-$(date '+%d_%m_%Y_%H_%M_%S')}
 
+
 if [ -z "$SCRATCHDIR" ]; then
     echo "could not find SCRATCHDIR"
     exit 1
@@ -18,6 +19,12 @@ fi
 
 if [ -z "$EXPERIMENT_FOLDER" ]; then
     DATADIR=/storage/brno12-cerit/home/mlorinc/cgp_workspace
+fi
+
+if [ -z "$3" ]; then
+    BACKUP_DIR=/storage/brno12-cerit/home/mlorinc/cgp_workspace/jobs_backups/
+else
+    BACKUP_DIR=$3
 fi
 
 echo "PBS_JOBID=$PBS_JOBID"
@@ -39,6 +46,17 @@ if [ -z "$EXPERIMENT_FOLDER" ] || [ -z "$EXPERIMENT" ]; then
     exit 2
 fi
 
-mkdir -p ~/cgp_workspace/jobs_backups/$EXPERIMENT_FOLDER/$1/$EXPERIMENT
-ssh $HOSTNAME "cd $SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT && zip -r data.zip *" || { echo "skipping $EXPERIMENT"; exit 0; }
-scp $HOSTNAME:$SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT/data.zip ~/cgp_workspace/jobs_backups/$EXPERIMENT_FOLDER/$1/$EXPERIMENT/${TIMESTAMP}_data.zip
+echo "backing up into: $BACKUP_DIR/$EXPERIMENT_FOLDER/$1/$EXPERIMENT"
+if [ ! -z "$2" ]; then
+    ssh $HOSTNAME \
+    "cd $SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT/train_statistics/fitness && \
+    for file in *.csv; do head -1 \$file > \$file.short && awk -F ',' -v OFS=',' '{ print \$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8, \$9, \$10, \$11, "\"\"" }' \$file |\
+    tail -n +2 >> \$file.short &&\
+    tail -$2 \$file >> \$file.short; done &&\
+    cd $SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT && zip -r data.zip cgp_configs train_statistics/fitness/*.short weights *.*" || { echo "skipping $EXPERIMENT"; exit 0; }
+else
+    ssh $HOSTNAME "cd $SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT && zip -r data.zip *" || { echo "skipping $EXPERIMENT"; exit 0; }
+fi
+
+mkdir -p $BACKUP_DIR/$EXPERIMENT_FOLDER/$1/$EXPERIMENT
+scp $HOSTNAME:$SCRATCHDIR/$EXPERIMENT_FOLDER/$EXPERIMENT/data.zip $BACKUP_DIR/$EXPERIMENT_FOLDER/$1/$EXPERIMENT/${TIMESTAMP}_data.zip

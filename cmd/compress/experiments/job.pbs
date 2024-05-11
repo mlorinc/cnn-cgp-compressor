@@ -31,7 +31,7 @@ echo $JOB_MESSAGE >> $DATADIR/$EXPERIMENTS_FOLDER/$EXPERIMENT/jobs_info.txt
 
 export OMP_NUM_THREADS=$PBS_NUM_PPN # set it equal to PBS variable PBS_NUM_PPN (number of CPUs in a chunk)
 
-/storage/brno12-cerit/home/mlorinc/jobs/compile_cgp.pbs.sh
+/storage/brno12-cerit/home/mlorinc/jobs/compile_cgp.pbs.sh || { echo >&2 "Failed C++ compilation!"; exit 1; }
 
 ml add intelcdk
 # ml add intelcdk cmake python python36-modules
@@ -41,12 +41,13 @@ mkdir -p $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT || { echo >&2 "Could not cr
 
 # if the copy operation fails, issue error message and exit
 cp -r $DATADIR/$EXPERIMENTS_FOLDER/$EXPERIMENT/* $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT || { echo >&2 "Error while copying experiment file(s)!"; exit 2; }
-cp $DATADIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $SCRATCHDIR/$CGP_BINARY || { echo >&2 "Error while copying C++ CGP file(s)!"; exit 2; }
+# cp $SCRATCHDIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $SCRATCHDIR/$CGP_BINARY || { echo >&2 "Error while copying C++ CGP file(s)!"; exit 2; }
 
 # move into scratch directory
 cd $SCRATCHDIR/$EXPERIMENTS_FOLDER/$EXPERIMENT || { echo >&2 "Error while moving to the experiment dir!"; exit 3; }
 
-$SCRATCHDIR/$CGP_BINARY $CGP_COMMAND $CGP_CONFIG $CGP_ARGS 2>> stderr.log 1>> stdout.log || { echo >&2 "Calculation ended up erroneously (with a code $?) !!"; exit 3; }
+# $SCRATCHDIR/$CGP_BINARY $CGP_COMMAND $CGP_CONFIG $CGP_ARGS 2>> stderr.log 1>> stdout.log || { echo >&2 "Calculation ended up erroneously (with a code $?) !!"; exit 3; }
+$SCRATCHDIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $CGP_COMMAND $CGP_CONFIG $CGP_ARGS 2>> stderr.log 1>> stdout.log || { echo >&2 "Calculation ended up erroneously (with a code $?) !!"; exit 3; }
 
 # move the output to user's DATADIR or exit in case of failure
 mkdir -p $DATADIR/$RESULTS_FOLDER/$EXPERIMENT

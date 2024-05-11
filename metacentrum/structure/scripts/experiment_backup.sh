@@ -5,7 +5,7 @@ for file in *; do
         pushd . > /dev/null
         cd $file 
         if [ -f jobs_info.txt ] && [ -f complete ]; then
-            ~/scripts/job_backup.sh "$1" "$2" "$3"
+            /storage/brno12-cerit/home/mlorinc/scripts/job_backup.sh "$1" "$2" "$3"
         fi        
         popd > /dev/null
 done
