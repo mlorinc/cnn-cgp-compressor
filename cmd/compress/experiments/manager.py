@@ -1,6 +1,7 @@
 import argparse
 from experiments.composite.experiment import MultiExperiment
 from experiments.all_layers.experiment import AllLayersExperiment
+from experiments.mobilenet.experiment import MobilenetExperiment
 from experiments.layer_bypass.experiment import LayerBypassExperiment
 from experiments.le_selector.experiment import LeSelectorExperiment
 from experiments.worst_case.experiment import WorstCaseExperiment
@@ -11,6 +12,7 @@ from experiments.single_filter_zero_outter.experiment import SingleFilterZeroOut
 from experiments.single_filter.experiment import SingleFilterExperiment
 
 import experiments.all_layers.cli as al
+import experiments.mobilenet.cli as mn
 import experiments.layer_bypass.cli as lb
 import experiments.le_selector.cli as le
 import experiments.worst_case.cli as wc
@@ -23,6 +25,7 @@ import experiments.composite.cli as composite_cli
 
 experiments_classes = {
     AllLayersExperiment.name:               AllLayersExperiment,
+    MobilenetExperiment.name:               MobilenetExperiment,
     LayerBypassExperiment.name:             LayerBypassExperiment,
     LeSelectorExperiment.name:              LeSelectorExperiment,
     WorstCaseExperiment.name:               WorstCaseExperiment,
@@ -35,6 +38,7 @@ experiments_classes = {
 
 experiment_cli = {
     AllLayersExperiment.name:               al.get_argument_parser,
+    MobilenetExperiment.name:               mn.get_argument_parser,
     LayerBypassExperiment.name:             lb.get_argument_parser,
     LeSelectorExperiment.name:              le.get_argument_parser,
     WorstCaseExperiment.name:               wc.get_argument_parser,
@@ -71,6 +75,8 @@ def get_pbs_default_arguments_parser(parser: argparse.ArgumentParser):
     parser.add_argument("--cpu", type=int, default=None, help="Number of CPUs")
     parser.add_argument("--mem", default="2gb", help="Memory")
     parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
+    parser.add_argument("--e-fitness", default="SE", type=str, help="Error fitness")
+    parser.add_argument("--multiplex", action="store_true", help="Use Multiplex Optimisation")
     return parser
 
 def get_train_pbs_argument_parser(parser: argparse.ArgumentParser):
