@@ -1,4 +1,4 @@
-from typing import Optional, Self, Union
+from typing import Callable, Optional, Self, Union
 
 import torch.quantization.utils
 from commands.datastore import Datastore
@@ -10,6 +10,7 @@ import torch.optim as optim
 import torchvision.models.quantization as quantization_models
 import datasets
 from torch.utils.data import Dataset
+import os
 
 from typing import Optional, Union
 
@@ -85,6 +86,7 @@ class MobileNetV2Adapter(ModelAdapter):
         # super().__init__(models.mobilenet_v2(weights=models.MobileNet_V2_QuantizedWeights, quantize=True, pretrained=True))
         # super().__init__(qunatization_models.mobilenet_v2(weights=qunatization_models.MobileNet_V2_QuantizedWeights, quantize=True, backend = "fbgemm"))
         super().__init__(quantization_models.mobilenet_v2(weights=quantization_models.MobileNet_V2_QuantizedWeights.IMAGENET1K_QNNPACK_V1, quantize=True))
+        self._set_attributes()
 
     def clone(self):
         state_dict = self.model.state_dict()
@@ -93,6 +95,14 @@ class MobileNetV2Adapter(ModelAdapter):
         new_instance.model = quantization_models.mobilenet_v2(weights=quantization_models.MobileNet_V2_QuantizedWeights.IMAGENET1K_QNNPACK_V1, quantize=True)
         new_instance.model.load_state_dict(state_dict)
         return new_instance
+
+    def get_layer(self, selector: Union[str, Callable[[Self], nn.Conv2d]]) -> nn.Module:
+        if isinstance(selector, str):
+            return getattr(self, selector)
+        elif isinstance(selector, nn.Module):
+            return selector
+        else:
+            return selector(self)
 
     def get_block(self, index: int) -> Union[Residual, ExpandedResidual, nn.Conv2d]:
         if index == 0 or len(self.inverted_residual_setting) < index:
@@ -109,9 +119,11 @@ class MobileNetV2Adapter(ModelAdapter):
             yield self.get_block(i) 
     
     def get_convolution_layers(self):
-        for i in range(len(self.model.features)):
+        for i in range(len(self.model.features)):            
             try:
                 m = self.get_block(i)
+                if i == 0 or i == len(self.model.features) - 1:
+                    yield m
                 
                 if isinstance(m, Residual):
                     yield m.dw
@@ -127,6 +139,45 @@ class MobileNetV2Adapter(ModelAdapter):
                 print(self.model.features[i])
                 raise e
             
+    def _set_attributes(self):
+        for i in range(len(self.model.features)):            
+            try:
+                m = self.get_block(i)
+                if i == 0 or i == len(self.model.features) - 1:
+                    setattr(self, f"features_{i}_0", m)                
+                elif isinstance(m, Residual):
+                    setattr(self, f"features_{i}_conv_0_0", m.dw)                
+                    setattr(self, f"features_{i}_1_0", m.pw)                
+                elif isinstance(m, ExpandedResidual):
+                    setattr(self, f"features_{i}_conv_0_0", m.expander)                
+                    setattr(self, f"features_{i}_conv_0_1", m.dw)                
+                    setattr(self, f"features_{i}_1_0", m.pw)                                                    
+                else:
+                    print(m)
+            except Exception as e:
+                print(f"error at index {i}")
+                print(self.model.features[i])
+                raise e        
+    
+    def get_all_layers(self):
+        for i in range(len(self.model.features)):            
+            try:
+                m = self.get_block(i)
+                if i == 0 or i == len(self.model.features) - 1:
+                    yield f"features_{i}_0", m                
+                elif isinstance(m, Residual):
+                    yield f"features_{i}_conv_0_0", m.dw                
+                    yield f"features_{i}_1_0", m.pw               
+                elif isinstance(m, ExpandedResidual):
+                    yield f"features_{i}_conv_0_0", m.expander                
+                    yield f"features_{i}_conv_0_1", m.dw               
+                    yield f"features_{i}_conv_1_0", m.pw                                                 
+                else:
+                    print(m)
+            except Exception as e:
+                print(f"error at index {i}")
+                print(self.model.features[i])
+                raise e        
     
     def load(self, path: str = None, inline: bool | None = True) -> Self:
         if inline:
@@ -144,6 +195,8 @@ class MobileNetV2Adapter(ModelAdapter):
                                    data_dir=Datastore().derive("datasets"),
                                    cache_dir=Datastore().derive(".cache"),
                                    trust_remote_code=True,
+                                   streaming=False,
+                                   token=os.environ.get("huggingface"),
                                    num_proc=num_proc
                                    ).with_format("torch", device=self.device)        
         return MobileNetDataset(ds)
@@ -158,8 +211,8 @@ class MobileNetV2Adapter(ModelAdapter):
         return self._load_dataset("validation", **kwargs)
     
     def get_criterion(self, **kwargs):
-        return None
-
+        return nn.CrossEntropyLoss()
+    
     def get_optimizer(self, **kwargs) -> optim.Optimizer:
         raise NotImplementedError()
 
