@@ -5,10 +5,12 @@ from abc import ABC, abstractmethod
 from models.adapters.model_adapter_interface import ModelAdapterInterface
 
 class FilterSelector(object):
-    def __init__(self, selector: Union[str, Callable[[ModelAdapterInterface], nn.Conv2d]], inp: List, out: List) -> None:
+    def __init__(self, selector: Union[str, Callable[[ModelAdapterInterface], nn.Conv2d]], inp: List, out: List, max_input_size=None, max_output_size=None) -> None:
         self.selector = selector
         self.inp = inp
         self.out = out
+        self.max_input_size = max_input_size
+        self.max_output_size = max_output_size
     def clone(self):
         cloned = FilterSelector(self.selector, self.inp[:], self.out[:])
         return cloned

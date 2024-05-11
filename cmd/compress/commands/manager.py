@@ -36,10 +36,13 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     evaluate_parser.add_argument("model_name", help="Name of the model to evaluate")
     evaluate_parser.add_argument("-m", "--model-path", help="Path to the model to evaluate")
     evaluate_parser.add_argument("--weights", nargs="?", type=str, help="", default=[], required=False)
-    evaluate_parser.add_argument("--batch_size", type=int, default=None, help="Batch size for evaluation")
+    evaluate_parser.add_argument("--batch-size", type=int, default=None, help="Batch size for evaluation")
     evaluate_parser.add_argument("--top", nargs="+", type=int, default=[1, 5], help="Top-k accuracy to compute")
     evaluate_parser.add_argument("-l", "--include-loss", action="store_true", help="Whether to include loss in evaluation")
     evaluate_parser.add_argument("--show-top-k", type=int, default=2, help="Number of top-k accuracies to display")
+    evaluate_parser.add_argument("-a", "--archive", action="store_true", help="Archive model in datastore")
+    evaluate_parser.add_argument("--num-workers", type=int, default=None, help="Worker count for data loader")
+    evaluate_parser.add_argument("--num-proc", type=int, default=None, help="Proccesor count for dataset")
 
     # model:evaluate
     sensitivity_parser = subparsers.add_parser("model:sensitivity", help="Evaluate a model sensitivity")
@@ -89,6 +92,7 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
                 experiment_group.add_argument("--top", help="Evaluate only the best", type=int, default=None)
                 experiment_group.add_argument("-s", "--statistics-file-format", help="Specify statistics filename", type=str, default=None)
                 experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=str(Datastore().derive(experiment_name)))
+                experiment_group.add_argument("-w", "--only-weights", help="Infer weights only", action="store_true")
             else:
                 experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=os.environ.get("experiments_root", "cmd/compress/experiments/"))
 
@@ -129,7 +133,7 @@ def dispatch(args):
         if args.command == "model:train":
             return lambda: train_model(args.model_name, args.model_path, args.base)
         elif args.command == "model:evaluate":
-            return lambda: evaluate_base_model(args.model_name, args.model_path, args.weights, args)
+            return lambda: evaluate_base_model(**vars(args))
         elif args.command == "model:sensitivity":
             return lambda: model_sensitivity(**vars(args))
         elif args.command == "model:quantize":

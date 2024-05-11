@@ -113,7 +113,7 @@ class CGPConfiguration:
             for line in f:
                 line = line.strip()
                 # Skip empty lines
-                if line:
+                if line != "":
                     colon_index = line.index(":")
                     key, value = line[:colon_index], line[colon_index+1:]
                     self._attributes[key.strip()] = self._parse_value(value.strip())

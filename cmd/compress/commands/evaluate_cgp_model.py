@@ -82,11 +82,18 @@ def sample(top: int, f: str):
     return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
 
 def pick_top(top: int, f: str):
-    df = pd.read_csv(f)
+    prev_chunk = pd.DataFrame()
+    last_chunk = pd.DataFrame()
+    for chunk in pd.read_csv(f, chunksize=2*top):
+        prev_chunk = last_chunk
+        last_chunk = chunk
+    
+    df = pd.concat([prev_chunk, last_chunk])
     return df[-top:]
 
 def evaluate_model_metrics(args):
     experiment_list = args.experiment
+    only_weights = args.only_weights
     experiment = create_experiment(args, prepare=False)
     data_store = store.Datastore()
     data_store.init_experiment_path(experiment)
@@ -96,68 +103,95 @@ def evaluate_model_metrics(args):
         experiment_list = [experiment]
 
     for case in experiment_list:
-        x = experiment.get_experiment(case, from_filesystem = True) if isinstance(experiment, experiments.MultiExperiment) else experiment
-        
-        for run in (args.runs or x.get_number_of_train_statistic_file(fmt=args.statistics_file_format)):
-            df = pd.concat([df_factory(file) for file in x.get_train_statistics(runs=run, fmt=args.statistics_file_format)])
+        sub_experiments = experiment.get_experiments_with_glob(case) if isinstance(experiment, experiments.MultiExperiment) else [experiment]
+        for x in sub_experiments:
+            for run in (args.runs or x.get_number_of_train_statistic_file(fmt=args.statistics_file_format)):
+                destination = data_store.derive_from_experiment(experiment) / "model_metrics" / (x.get_name(depth=1) + f".{run}.csv")
+                
+                if destination.exists():
+                    print(f"skipping {x.get_name(depth=1)} run {run}")
+                    continue
+                print(f"evaluating {x.get_name(depth=1)} run {run}")
+                file = x.get_train_statistics(runs=run, fmt=args.statistics_file_format)[0]
+                df = df_factory(file)
 
-            df.drop(columns="depth", inplace=True, errors="ignore")
-            df = df[~(
-                df["error"].duplicated() & df["quantized_energy"].duplicated() & 
-                df["energy"].duplicated() & df["quantized_delay"].duplicated() & 
-                df["delay"].duplicated() & df["area"].duplicated() &
-                df["gate_count"].duplicated() & df["chromosome"].duplicated())]   
+                df.drop(columns="depth", inplace=True, errors="ignore")
+                df = df[~(
+                    df["error"].duplicated() & df["quantized_energy"].duplicated() & 
+                    df["energy"].duplicated() & df["quantized_delay"].duplicated() & 
+                    df["delay"].duplicated() & df["area"].duplicated() &
+                    df["gate_count"].duplicated() & df["chromosome"].duplicated())]   
 
-            df = df.loc[~df["chromosome"].isna(), :].copy()
-            df["Top-1"] = None
-            df["Top-5"] = None
-            df["Loss"] = None        
-            
-            chromosomes_file = data_store.derive_from_experiment(x) / "chromosomes.txt"
-            stats_file = data_store.derive_from_experiment(x) / f"eval_statistics.{run}.csv"
-            weights_file = data_store.derive_from_experiment(x) / "all_weights" / (f"weights.{run}." + "{run}.txt")
-            weights_file.unlink(missing_ok=True)
-            
-            weights_file.parent.mkdir(exist_ok=True, parents=True)
-            
-            with open(chromosomes_file, "w") as f:
-                for _, row in df.iterrows():
-                    f.write(row["chromosome"] + "\n")
-            
-            x.evaluate_chromosomes(chromosomes_file, stats_file, weights_file)        
-            
-            def weight_iterator():
-                for f in os.listdir(weights_file.parent):
-                    yield x.get_weights(weights_file.parent / f)
-            
-            cached_top_k, cached_loss = None, None
-            top_1 = []; top_5 = []; losses = []
-            fitness_values = ["error", "quantized_energy", "energy", "area", "quantized_delay", "delay", "depth", "gate_count", "chromosome"]
-            with tqdm(zip(weight_iterator(), df.iterrows(), pd.read_csv(stats_file).iterrows()), unit="Record", total=len(df.index), leave=True) as records:
-                for (weights, plans), (index, row), (eval_index, eval_row) in records:
-                    df.loc[index, fitness_values] = eval_row[fitness_values]
-                    print("start error:", row["error"], "new error:", eval_row["error"])  
-                    if eval_row["error"] == 0:
-                        if cached_top_k is None:
-                            cached_top_k, cached_loss = x.get_reference_model_metrics(cache=False, batch_size=None, top=[1, 5])
-                        top_1.append(cached_top_k[1])
-                        top_5.append(cached_top_k[5])
-                        losses.append(cached_loss)
-                    else:          
-                        print("error:", eval_row["error"])   
-                        if eval_row["error"] == 0:
+                df = df.loc[~df["chromosome"].isna(), :].copy()
+                df["Top-1"] = None
+                df["Top-5"] = None
+                df["Loss"] = None        
+                
+                chromosomes_file = data_store.derive_from_experiment(x) / "chromosomes.txt"
+                stats_file = data_store.derive_from_experiment(x) / "evaluate_statistics" /  f"statistics.{run}.csv"
+                weights_file = data_store.derive_from_experiment(x) / "all_weights" / (f"weights.{run}." + "{run}.txt")
+                gate_statistics = data_store.derive_from_experiment(x) / "gate_statistics" / (f"statistics.{run}." + "{run}.txt")
+                weights_file.unlink(missing_ok=True)
+                
+                stats_file.parent.mkdir(exist_ok=True, parents=True)
+                weights_file.parent.mkdir(exist_ok=True, parents=True)
+                gate_statistics.parent.mkdir(exist_ok=True, parents=True)
+                
+                with open(chromosomes_file, "w") as f:
+                    for _, row in df.iterrows():
+                        f.write(row["chromosome"] + "\n")
+                
+                x.evaluate_chromosomes(chromosomes_file, stats_file, weights_file, gate_statistics)        
+                
+                if only_weights:
+                    continue
+                
+                def run_identifier_iterator():
+                    top = args.top
+                    top = top + 1 if top else len(df.index)
+                    for i in range(1, top, 1):
+                        current_path = Path(str(weights_file).format(run=i))
+                        
+                        if not current_path.exists():
+                            break
+                        
+                        yield i                   
+                
+                def weight_iterator():
+                    for i in run_identifier_iterator():
+                        current_path = Path(str(weights_file).format(run=i))
+                        yield x.get_weights(current_path)
+                
+                
+                cached_top_k, cached_loss = None, None
+                top_1 = []; top_5 = []; losses = []; runs_id = [];
+                fitness_values = ["error", "quantized_energy", "energy", "area", "quantized_delay", "delay", "depth", "gate_count", "chromosome"]
+                with tqdm(zip(weight_iterator(), df.iterrows(), pd.read_csv(stats_file).iterrows(), run_identifier_iterator()), unit="Record", total=len(df.index), leave=True) as records:
+                    for (weights, plans), (index, row), (eval_index, eval_row), run_id in records:
+                        df.loc[index, fitness_values] = eval_row[fitness_values]
+                        runs_id.append(run_id)
+                        print("start error:", row["error"], "new error:", eval_row["error"])  
+                        if False and eval_row["error"] == 0:
+                            if cached_top_k is None:
+                                cached_top_k, cached_loss = x.get_reference_model_metrics(cache=False, batch_size=None, top=[1, 5])
                             top_1.append(cached_top_k[1])
                             top_5.append(cached_top_k[5])
                             losses.append(cached_loss)
-                        else:
-                            model = x._model_adapter.inject_weights(weights, plans)
-                            top_k, loss = model.evaluate(top=[1, 5], batch_size=None)
-                            top_1.append(top_k[1])
-                            top_5.append(top_k[5])
-                            losses.append(loss)
-            df["Top-1"] = top_1
-            df["Top-5"] = top_5
-            df["Loss"] = losses
-            destination = data_store.derive_from_experiment(experiment) / "model_metrics" / (x.get_name(depth=1) + f".{run}.csv")
-            destination.parent.mkdir(exist_ok=True, parents=True)                                                                                             
-            df.to_csv(destination, index=False)
+                        else:          
+                            print("error:", eval_row["error"])   
+                            if eval_row["error"] == 0:
+                                top_1.append(cached_top_k[1])
+                                top_5.append(cached_top_k[5])
+                                losses.append(cached_loss)
+                            else:
+                                model = x._model_adapter.inject_weights(weights, plans)
+                                top_k, loss = model.evaluate(top=[1, 5], batch_size=None)
+                                top_1.append(top_k[1])
+                                top_5.append(top_k[5])
+                                losses.append(loss)
+                df["Top-1"] = top_1
+                df["Top-5"] = top_5
+                df["Loss"] = losses
+                df["Run ID"] = runs_id
+                destination.parent.mkdir(exist_ok=True, parents=True)                                                                                             
+                df.to_csv(destination, index=False)

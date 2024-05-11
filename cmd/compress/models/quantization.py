@@ -16,7 +16,7 @@ def _tensor_iterator_helper(tensor: torch.Tensor, selector):
     else:
         raise TypeError("unknown selector: " + str(type(selector)))
 
-def tensor_iterator(tensor: torch.Tensor, selectors, input_size: int =None):
+def tensor_iterator(tensor: torch.Tensor, selectors):
     for sel in selectors:    
         if isinstance(sel, ConstantSelector):
             yield torch.tensor(sel.get_values()), sel.get_size(), None  

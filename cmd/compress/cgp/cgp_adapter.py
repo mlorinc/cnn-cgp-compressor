@@ -38,8 +38,9 @@ class CGP(object):
 
     def add_inputs(self, x: torch.Tensor):
         x = x.flatten()
-        self._inputs[self._item_index][self._input_position:self._input_position+x.shape[0]] = x
-        self._input_position += x.shape[0]
+        size = min(self._input_position+x.shape[0], self.config.get_input_count()) - self._input_position
+        self._inputs[self._item_index][self._input_position:self._input_position+size] = x[:size]
+        self._input_position += size
 
     def add_outputs(self, x: torch.Tensor):
         x = x.flatten()
@@ -103,8 +104,8 @@ class CGP(object):
     def evaluate_all(self):
         return self._execute(command="evaluate:all")
     
-    def evaluate_chromosomes(self):
-        return self._execute(command="evaluate:chromosomes")
+    def evaluate_chromosomes(self, gate_statistics_file: str, *args):
+        return self._execute(command="evaluate:chromosomes", other_args=[str(gate_statistics_file)] + list(*args))
     
     def evaluate_chromosome(self, chromosome: str):
         return self._execute(command="evaluate:chromosome", other_args=[chromosome])

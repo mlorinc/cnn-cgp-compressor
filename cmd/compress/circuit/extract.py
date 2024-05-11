@@ -43,6 +43,8 @@ key_order = {
     "demux_16to1": 34,
 }
 
+key_order_with_id = {**key_order, "id": 100}
+
 class DataExtractor(object):
     def __init__(self, basedir: str) -> None:
         self.basedir = Path(basedir)

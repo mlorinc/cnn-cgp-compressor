@@ -45,6 +45,7 @@ class MultiExperiment(Experiment, ABC):
         raise NotImplementedError()
 
     def create_experiment(self, experiment_name: str, feature_maps_combiations: FilterSelectorCombinations, register: bool=True, name_fmt: str = None) -> Generator[Experiment, None, None]:   
+        base_experiment = None
         for i in range(self.batches or 1):
             current_experiment_name = experiment_name
             
@@ -59,6 +60,7 @@ class MultiExperiment(Experiment, ABC):
             
             if self.batches is not None:
                 errors = []
+                base_experiment = base_experiment or new_experiment
                 if new_experiment.config.has_start_generation():
                     errors.append("it is not allowed to set start generation when using batches")
                 if new_experiment.config.has_start_generation():
@@ -70,6 +72,8 @@ class MultiExperiment(Experiment, ABC):
                 batch_step = new_experiment.config.get_number_of_runs() // self.batches
                 new_experiment.config.set_start_run(batch_step * i)
                 new_experiment.config.set_number_of_runs(batch_step * i + batch_step)
+            
+            new_experiment.batched_parent = base_experiment if i > 0 else None
             new_experiment.set_feature_maps_combinations(feature_maps_combiations)
             if register:
                 self.register_experiment(new_experiment)
@@ -94,16 +98,20 @@ class MultiExperiment(Experiment, ABC):
             except FileNotFoundError as e:
                 print(f"warn: {str(e)}")       
     
-    def get_experiments_with_glob(self, str_glob: str):
+    def get_experiments_with_glob(self, str_glob: str, return_names=False):
         for experiment_name in glob(str(self.base_folder / str_glob)):
+            path = Path(experiment_name)
+            experiment_name = path.name
             print(experiment_name)
-            pass
             try:
                 config = CGPConfiguration(self.base_folder / experiment_name / Experiment.train_cgp_name)
                 new_experiment = self.create_experiment_from_name(config)
                 new_experiment.parent = self
                 self.experiments[experiment_name] = new_experiment
-                yield new_experiment
+                if not return_names:
+                    yield new_experiment
+                else:
+                    yield experiment_name
             except FileNotFoundError as e:
                 print(f"warn: {str(e)}")      
 

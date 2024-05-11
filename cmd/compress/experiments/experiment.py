@@ -25,6 +25,7 @@ class Experiment(object):
     def __init__(self, config: Union[CGPConfiguration, str, Path], model_adapter: ModelAdapter, cgp: CGP,
                  dtype=torch.int8, parent: Optional[Self] = None, start_run=None, depth=None, allowed_mse_error=None, **kwargs) -> None:
         self.base_folder = config.path.parent if isinstance(config, CGPConfiguration) else Path(config) if config is not None else None
+        self.batched_parent = None
         self.args = dict(**kwargs)
         self._allowed_mse_error = allowed_mse_error
         self._start_run = start_run
@@ -157,7 +158,7 @@ class Experiment(object):
             experiment.config.set_start_generation(start_generation)
         return experiment
 
-    def get_train_env(self, config: CGPConfiguration = None, clean=False, relative_paths: bool = False) -> Self:
+    def get_train_env(self, config: CGPConfiguration = None, clean=False, relative_paths: bool = False, reuse_weight_file=False) -> Self:
         if clean:
             self.clean_train()
         experiment = self._clone(config or self.config.clone())
@@ -169,8 +170,12 @@ class Experiment(object):
         experiment.eval_statistics.parent.mkdir(exist_ok=True, parents=True)
 
         if not config.has_input_file():
-            experiment._prepare_cgp(config)
-            experiment._cgp.create_train_file(experiment.train_weights)
+            if self.batched_parent is None and reuse_weight_file:
+                experiment._prepare_cgp(config)
+                experiment._cgp.create_train_file(experiment.train_weights)
+            else:
+                assert isinstance(self.batched_parent, Experiment)
+                shutil.copyfile(self.train_weights.parent.parent / self.batched_parent.get_name(depth=1) / self.train_weights.name, self.train_weights)
             config.set_input_file(self._handle_path(experiment.train_weights, relative_paths))
         if not config.has_cgp_statistics_file():
             config.set_cgp_statistics_file(self._handle_path(experiment.train_statistics, relative_paths))
@@ -226,7 +231,7 @@ class Experiment(object):
                 
             config.set_gate_parameters_file(self._handle_path(self.gate_parameters_file, relative_paths))
 
-            experiment = self.get_train_env(config, relative_paths=relative_paths)
+            experiment = self.get_train_env(config, relative_paths=relative_paths, reuse_weight_file=True)
             experiment.config.apply_extra_attributes()
             experiment.config.save()
             return experiment
@@ -290,6 +295,22 @@ class Experiment(object):
         
         if not self._depth:
             cxx_flags.append("-D_DEPTH_DISABLED")
+        
+        if self.config.get_function_output_arity() == 1:
+            cxx_flags.append("-D__SINGLE_OUTPUT_ARITY")  
+        
+        if self.args.get("multiplex", False) and self.config.get_dataset_size() == 1:
+            cxx_flags.append("-D__SINGLE_MULTIPLEX")        
+            
+        if self.args.get("multiplex", False) and self.config.get_dataset_size() > 1:
+            cxx_flags.append("-D__MULTI_MULTIPLEX")                 
+        
+        if self.args["e_fitness"].upper() == "MSE":
+            cxx_flags.append("-D__MEAN_SQUARED_ERROR_METRIC")   
+        elif self.args["e_fitness"].upper() == "AE":
+            cxx_flags.append("-D__ABSOLUTE_ERROR_METRIC")           
+        elif self.args["e_fitness"].upper() != "SE":
+            raise ValueError(f"unknown error fitness metric {self.args['e_fitness']}")
         
         template_data = {
             "machine": f"select=1:ncpus={cpu}:ompthreads={cpu}:mem={mem}:scratch_local={scratch_capacity}",
@@ -423,7 +444,7 @@ class Experiment(object):
         self._cgp.setup(config)
         self._cgp.evaluate_all()
 
-    def evaluate_chromosomes(self, chromosomes_file: Union[Path, str], output_statistics: Union[Path, str], output_weights: Union[Path, str]):
+    def evaluate_chromosomes(self, chromosomes_file: Union[Path, str], output_statistics: Union[Path, str], output_weights: Union[Path, str], gate_statistics_file: Union[Path, str]):
         config = self.config.clone()
         config.set_input_file(self.train_weights)
         config.set_cgp_statistics_file(chromosomes_file)
@@ -431,7 +452,7 @@ class Experiment(object):
         config.set_train_weights_file(output_weights)
         config.set_gate_parameters_file(self.gate_parameters_file)
         self._cgp.setup(config)
-        self._cgp.evaluate_chromosomes()
+        self._cgp.evaluate_chromosomes(gate_statistics_file)
         
     def evaluate_chromosome(self, chromosome: Union[Path, str], output_file: Union[Path, str] = "-", weights_file: Union[Path, str] = "-"):
         config = self.config.clone()
