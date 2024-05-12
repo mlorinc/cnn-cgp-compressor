@@ -387,6 +387,7 @@ dataset_t cgp::CGPInputStream::load_train_data()
 	std::vector<weight_output_t> outputs;
 	std::vector<int> no_care;
 	std::array<int, 256> needed_values {0};
+	std::array<int, 256> usage_values_vector { 0 };
 	for (size_t i = 0; i < cgp_model->dataset_size(); i++)
 	{
 		inputs.push_back(load_input());
@@ -400,10 +401,11 @@ dataset_t cgp::CGPInputStream::load_train_data()
 		for (int j = 0; j < no_care[i]; j++)
 		{
 			needed_values[outputs[i][j] + 128] += 1;
+			usage_values_vector[outputs[i][j] + 128] = 1;
 		}
 	}
 
-	return std::make_tuple(inputs, outputs, no_care, needed_values);
+	return std::make_tuple(inputs, outputs, no_care, needed_values, usage_values_vector);
 }
 
 std::unique_ptr<CGPConfiguration::gate_parameters_t[]> cgp::CGPInputStream::load_gate_parameters()

@@ -115,7 +115,7 @@ static int evaluate_chromosomes(std::shared_ptr<CGP> cgp_model, const dataset_t&
 		out.log_csv(counter, counter, "", solution);
 		counter++;
 
-		CGPOutputStream weight_logger(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
+		CGPOutputStream weight_logger(cgp_model, cgp_model->train_weights_file(), std::ios::trunc, template_args);
 		weight_logger.log_weights(chrom, get_dataset_input(dataset));
 
 		CGPOutputStream gate_stats_logger(cgp_model, gate_stats_file, std::ios::trunc, template_args);
@@ -210,13 +210,12 @@ static size_t train_run(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset
 	}
 
 	generation = (generation == std::numeric_limits<size_t>::max()) ? (cgp_model->start_generation()) : (generation);
-	auto mode = (generation == 0) ? (std::ios::out | std::ios::trunc) : (std::ios::out | std::ios::app);
 	CGPOutputStream logger(cgp_model, LOGGER_OUTPUT_FILE);
 	CGPOutputStream event_logger(cgp_model, "-");
 
 	double start_time = omp_get_wtime();
 	std::unordered_map<std::string, std::string> template_args{ {"run",  std::to_string(run + 1)} };
-	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), mode, template_args);
+	CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::app, template_args);
 
 	event_logger << "performin run " << run + 1 << " and starting from generation " << (generation + 1) << std::endl;
 	for (size_t log_counter = cgp_model->periodic_log_frequency(); !stop_flag && generation < cgp_model->generation_count(); generation++)
@@ -226,6 +225,7 @@ static size_t train_run(std::shared_ptr<CGP> cgp_model, const dataset_t& dataset
 
 		if (continue_evolution == 0 || cgp_model->get_generations_without_change() > patience)
 		{
+			event_logger << "finished evolution after " << (generation + 1) << " generations" << std::endl;
 			return generation;
 		}
 
@@ -256,33 +256,68 @@ static int train_generic(std::shared_ptr<CGP> cgp_model, const dataset_t& datase
 	for (size_t run = start_run; run < end_run; run++)
 	{
 		std::unordered_map<std::string, std::string> template_args{ {"run",  std::to_string(run + 1)} };
+
+		// Preapre clean CGP state
 		cgp_model->reset();
 		cgp_model->build_indices();
 		cgp_model->generate_population(dataset);
 
+		// Log csv header for Pandas
+		{
+			CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::trunc, template_args);
+			stats_out.log_csv_header();
+			stats_out.close();
+		}
+
+		// Perform the first phase training
 		auto generation = train_run(cgp_model, dataset, run, 0);
 
+		// Move threshold down, so energy can be optimised too
+		CGPOutputStream event_logger(cgp_model, "-");
 		if (cgp_model->mse_threshold() < cgp_model->get_best_error_fitness())
 		{
 			cgp_model->set_generations_without_change(0);
 			cgp_model->mse_threshold(cgp_model->get_best_error_fitness());
+
+			event_logger << "first correction is about to be done, error: " << std::to_string(cgp_model->get_best_error_fitness()) << std::endl;
+			// Perform corrections, but do not change energy properties
+			cgp_model->perform_correction(dataset, true);
+			event_logger << "first correction done, error: " << std::to_string(cgp_model->get_best_error_fitness()) << std::endl;
 		}
-		
+		{
+			// Log the change just in case
+			CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::app, template_args);
+			stats_out.log_csv(run, generation, format_timestamp(omp_get_wtime() - start_time), true);
+		}
+
+		// Either remove multiplex, or use weighted error to
+		// make sure the more represented weights are not equal
+		// to less used. In those we aim to sacrifice error for energy.
 		if (remove_multiplex_on_patience)
 		{
-			CGPOutputStream event_logger(cgp_model, "-");
 			cgp_model->remove_multiplexing(dataset);
 			event_logger << "early stopping patience multiplexing removed" << std::endl;
 		}
-		
+		else
+		{
+			cgp_model->use_quantity_weights(dataset);
+		}
+
+		{
+			// Log the change just in case
+			CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::app, template_args);
+			stats_out.log_csv(run, generation, format_timestamp(omp_get_wtime() - start_time), true);
+		}
+
+		// Optimise energy
 		generation = train_run(cgp_model, dataset, run, generation + 1);
 
-		auto time_taken = omp_get_wtime() - start_time;
+		// Report results in multiplexed chromosome
 		CGPOutputStream stats_out(cgp_model, cgp_model->cgp_statistics_file(), std::ios::app, template_args);
+		auto time_taken = omp_get_wtime() - start_time;
 		stats_out.log_csv(run, generation, format_timestamp(time_taken), true);
 
-
-		CGPOutputStream event_logger(cgp_model, "-");
+		// Remove helper gates
 		event_logger << "early stopping because of no change between " << cgp_model->patience() << " generations" << std::endl;
 		if (remove_multiplex_on_result)
 		{
@@ -293,10 +328,12 @@ static int train_generic(std::shared_ptr<CGP> cgp_model, const dataset_t& datase
 		logger.log_human(run, generation);
 		stats_out.log_csv(run, generation, format_timestamp(time_taken), true);
 
+		// Log experiment configuration
 		CGPOutputStream out(cgp_model, cgp_model->output_file(), std::ios::app, template_args);
 		out.dump_all();
 		out.close();
 
+		// Log inferred weights
 		CGPOutputStream weights_out(cgp_model, cgp_model->train_weights_file(), std::ios::app, template_args);
 		weights_out.log_weights(get_dataset_input(dataset));
 		weights_out.close();
@@ -357,12 +394,19 @@ int main(int argc, const char** args) {
 
 	//std::vector<std::string> arguments
 	//{
-	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/all_layers/mse_0.0_256_10/train_cgp.config"
+	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_256_31/train_cgp.config"
 	//};
 
 	//std::vector<std::string> arguments
 	//{ "evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\all_layers\\mse_0_50_10\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\all_layers\\mse_0_50_10\\gate_statistics\\statistics.1.{run}.txt", "--mse-threshold", "0", "--row-count", "50", "--col-count", "10", "--look-back-parameter", "10", "--input-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/train.data", "--cgp-statistics-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/chromosomes.txt", "--output-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/evaluate_statistics/statistics.1.csv", "--train-weights-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/all_weights/weights.1.{run}.txt", "--gate-parameters-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/gate_parameters.txt" }
 	//;
+	//std::vector<std::string> arguments{
+	//"evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\layer_bypass\\mse_0.5_500_30\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\layer_bypass\\mse_0.5_500_30\\gate_statistics\\statistics.1.{run}.txt", "--mse-threshold", "600", "--row-count", "500", "--col-count", "30", "--look-back-parameter", "30", "--input-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/train.data", "--cgp-statistics-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/chromosomes.txt", "--output-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/evaluate_statistics/statistics.1.csv", "--train-weights-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/all_weights/weights.1.{run}.txt", "--gate-parameters-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/gate_parameters.txt"
+	//};
+
+	//std::vector<std::string> arguments{
+	//"evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\gate_statistics\\statistics.16.{run}.txt", "--mse-threshold", "0", "--row-count", "256", "--col-count", "31", "--look-back-parameter", "32", "--input-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\train.data", "--cgp-statistics-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\chromosomes.txt", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\evaluate_statistics\\statistics.16.csv", "--train-weights-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\all_weights\\weights.16.{run}.txt", "--gate-parameters-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\gate_parameters.txt"
+	//};
 
 	std::cout << "... INIT CONFIGURATION CHECK ..." << std::endl;
 
@@ -410,6 +454,12 @@ int main(int argc, const char** args) {
 	std::cout << "MULTI_MULTIPLEX: on" << std::endl;
 #else
 	std::cout << "MULTI_MULTIPLEX: off" << std::endl;
+#endif
+
+#ifdef __USE_MULTIPLEX_WEIGHTS 
+	std::cout << "USE_MULTIPLEX_WEIGHTS: on" << std::endl;
+#else
+	std::cout << "USE_MULTIPLEX_WEIGHTS: off" << std::endl;
 #endif
 
 #ifdef NDEBUG 

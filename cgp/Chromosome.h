@@ -42,7 +42,19 @@ enum CGPOperator {
 	ID = 100
 };
 
-namespace cgp {
+namespace cgp 
+{
+	class RandomNumberGenerator {
+	private:
+		uint64_t seed; // Initial seed for the RNG
+	public:
+		// Constructor
+		RandomNumberGenerator(uint64_t initial_seed = 1) : seed(initial_seed) {}
+		void set_seed(uint64_t seed);
+		uint64_t get_seed();
+		uint64_t generate();
+	};
+
 	/// <summary>
 	/// Chromosome class representing an individual in Cartesian Genetic Programming (CGP).
 	/// </summary>
@@ -113,6 +125,8 @@ namespace cgp {
 
 		int max_genes_to_mutate;
 		int chromosome_size;
+		int mutable_genes_count;
+		RandomNumberGenerator rng;
 
 		/// <summary>
 		/// Reference to the CGP configuration used for chromosome setup.
@@ -197,6 +211,8 @@ namespace cgp {
 		/// </summary>
 		bool need_depth_evaluation = true;
 
+		bool need_gate_visit_map = true;
+
 		/// <summary>
 		/// Flag indicating multiplexing.
 		/// </summary>
@@ -207,7 +223,7 @@ namespace cgp {
 		/// </summary>
 		int start_id_index;
 
-		int id_count;
+		int id_count = 0;
 
 		/// <summary>
 		/// Cached energy consumption value.
@@ -515,11 +531,10 @@ namespace cgp {
 		int get_id_output_for(int value) const;
 
 		int get_function_input_arity(int gate_index) const;
+		int get_function_input_arity_2(gene_t func) const;
 		int get_function_output_arity(int gate_index) const;
 		int clip_pin(int pin) const;
 		bool is_used_pin(int pin) const;
-
-		void wire_multiplexed_id_to_output(const dataset_t& dataset);
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
 		/// <summary>
@@ -610,13 +625,16 @@ namespace cgp {
 		/// Method to perform mutation on the chromosome.
 		/// </summary>
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
-		std::shared_ptr<Chromosome> mutate() const;
+		std::shared_ptr<Chromosome> mutate(uint64_t seed);
+
+		void cross_rng(Chromosome &other);
+		uint64_t get_random_number();
 
 		/// <summary>
 		/// Method to perform mutation on the chromosome while reusing given chromosome.
 		/// </summary>
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
-		std::shared_ptr<Chromosome> mutate(std::shared_ptr<Chromosome> that, const dataset_t& dataset);
+		bool mutate(std::shared_ptr<Chromosome> that, const dataset_t& dataset);
 
 		/// <summary>
 		/// Swap visits maps.
@@ -633,6 +651,9 @@ namespace cgp {
 		/// Method to evaluate the chromosome based on its inputs.
 		/// </summary>
 		void evaluate();
+
+		void evaluate_single_from_pins(gene_t *input_pin, weight_output_t block_output_pins, gene_t function);
+		void evaluate_single_from_values(weight_input_t input, weight_output_t block_output_pins, gene_t function);
 
 		/// <summary>
 		/// Getter for the pointer to the beginning of the output array.
@@ -785,7 +806,7 @@ namespace cgp {
 		/// <param name="dataset">The dataset to perform corrections with.</param>
 		/// <param name="threshold">The threshold value for corrections (default is determined automatically).</param>
 		/// <param name="zero_energy_only">Whether to consider only zero energy corrections (default is false).</param>
-		void perform_corrections(const dataset_t& dataset, const int threshold = 512, const bool zero_energy_only = false);
+		void perform_corrections(const dataset_t& dataset, const int threshold = 512, const bool zero_energy_only = false, const bool only_id = false);
 
 		/// <summary>
 		/// Get the relative ID output from the given index.
@@ -813,6 +834,13 @@ namespace cgp {
 		/// Invalidate the chromosome, indicating that it needs to re-map energy.
 		/// </summary>
 		void invalidate_visit_map();
+
+		quantized_energy_t get_raw_quantized_energy();
+		energy_t get_raw_energy();
+		area_t get_raw_area();
+		quantized_delay_t get_raw_quantized_delay();
+		delay_t get_raw_delay();
+		gate_count_t get_raw_gate_count();
 	};
 
 	std::string to_string(const Chromosome& chromosome);

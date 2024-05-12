@@ -38,6 +38,7 @@ Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::uni
 	setup_maps();
 	setup_chromosome();
 	setup_output_iterators(0, output_count);
+	rng.set_seed(rand());
 }
 
 cgp::Chromosome::Chromosome(const CGPConfiguration& cgp_config, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies, const std::string& serialized_chromosome) :
@@ -47,10 +48,12 @@ cgp::Chromosome::Chromosome(const CGPConfiguration& cgp_config, const std::uniqu
 	output_count = cgp_configuration.output_count();
 	chromosome_size = cgp_configuration.chromosome_size();
 	setup_chromosome(serialized_chromosome);
+	rng.set_seed(rand());
 }
 
 Chromosome::Chromosome(const CGPConfiguration& cgp_configuration, const std::string& serialized_chromosome) : Chromosome(cgp_configuration, nullptr, serialized_chromosome)
 {
+	rng.set_seed(rand());
 }
 
 Chromosome::Chromosome(const Chromosome& that) noexcept :
@@ -78,6 +81,12 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 	locked_nodes_index = that.locked_nodes_index;
 	setup_maps(that);
 	setup_output_iterators(selector, output_count);
+	rng.set_seed(rand());
+}
+
+uint64_t Chromosome::get_random_number()
+{
+	return rng.generate();
 }
 
 int cgp::Chromosome::get_column(int gate_index) const
@@ -112,7 +121,9 @@ Chromosome::Chromosome(Chromosome&& that) noexcept :
 	multiplexing = that.multiplexing;
 	chromosome_size = that.chromosome_size;
 	max_genes_to_mutate = that.max_genes_to_mutate;
+	mutable_genes_count = that.mutable_genes_count;
 	locked_nodes_index = that.locked_nodes_index;
+	rng = std::move(that.rng);
 	setup_maps(std::move(that));
 }
 
@@ -340,6 +351,7 @@ void cgp::Chromosome::setup_output_iterators(int selector, size_t output_count)
 	absolute_output_end = absolute_output_start + output_size;
 	max_genes_to_mutate = cgp_configuration.max_genes_to_mutate() + 1;
 	max_gene_index = cgp_configuration.chromosome_size();
+	mutable_genes_count = chromosome_size;
 #else
 	output_pin_end = output_pin_start + output_count;
 	absolute_pin_end = absolute_pin_start + output_count;
@@ -355,12 +367,13 @@ void cgp::Chromosome::update_mutation_variables()
 	if (is_multiplexing())
 	{
 		chromosome_size = cgp_configuration.blocks_chromosome_size() + output_count;
-		max_genes_to_mutate = static_cast<int>(std::ceil(chromosome_size * cgp_configuration.mutation_max())) + 1;
-		locked_nodes_index = start_id_index;
+		mutable_genes_count = chromosome_size - id_count;
+		max_genes_to_mutate = static_cast<int>(std::floor(mutable_genes_count * cgp_configuration.mutation_max())) + 1;
 	}
 	else
 	{
 		chromosome_size = cgp_configuration.chromosome_size();
+		mutable_genes_count = chromosome_size;
 		max_genes_to_mutate = cgp_configuration.max_genes_to_mutate() + 1;
 	}
 #endif
@@ -466,7 +479,7 @@ Chromosome::gene_t* Chromosome::get_block_function(int row, int column) const {
 
 Chromosome::gene_t* Chromosome::get_block_function(int gate_index) const
 {
-	return chromosome.get() + gate_index * (cgp_configuration.function_input_arity() + 1) + cgp_configuration.function_input_arity();
+	return chromosome.get() + gate_index * cgp_configuration.block_chromosome_size() + cgp_configuration.function_input_arity();
 }
 
 const std::unique_ptr<Chromosome::gene_t[]>& Chromosome::get_chromosome() const
@@ -477,14 +490,13 @@ const std::unique_ptr<Chromosome::gene_t[]>& Chromosome::get_chromosome() const
 bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 {
 	// Only and only if gate_visit_map was fille
-	int genes_to_mutate = rand() % max_genes_to_mutate;
-	bool neutral_mutation = !need_energy_evaluation;
+	int genes_to_mutate = that->rng.generate() % max_genes_to_mutate;
+	bool neutral_mutation = !need_gate_visit_map;
 
-	#pragma omp parallel for
 	for (int i = 0; i < genes_to_mutate; i++) {
 		// Select a random gene
-		auto random_gene_index = rand() % chromosome_size;
-		auto random_number = rand();
+		auto random_gene_index = that->rng.generate() % mutable_genes_count;
+		auto random_number = that->rng.generate();
 
 		if (is_input(random_gene_index))
 		{
@@ -495,18 +507,17 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 			auto max = std::get<1>(column_values);
 			auto new_pin = _clip_pin((random_number % (max - min)) + min);
 
-			#pragma critical
-			neutral_mutation = neutral_mutation && (new_pin == that->chromosome[random_gene_index] || !gate_visit_map[gate_index]);
+			neutral_mutation = neutral_mutation && (new_pin == chromosome[random_gene_index] || !gate_visit_map[gate_index]);
 			that->chromosome[random_gene_index] = new_pin;
 		}
 		else if (is_output(random_gene_index)) {
+			assert(!multiplexing);
 			const auto& output_values = minimum_output_indicies[cgp_configuration.col_count()];
 			auto min = std::get<0>(output_values);
 			auto max = std::get<1>(output_values);
 			auto new_pin = _clip_pin((random_number % (max - min)) + min);
 
-			#pragma critical
-			neutral_mutation = neutral_mutation && that->chromosome[random_gene_index] == new_pin;
+			neutral_mutation = neutral_mutation && chromosome[random_gene_index] == new_pin;
 			that->chromosome[random_gene_index] = new_pin;
 		}
 		else {
@@ -523,24 +534,17 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 				func = CGPOperator::ID;
 			}
 
-			#pragma critical
-			neutral_mutation = neutral_mutation && (func == that->chromosome[random_gene_index] || !gate_visit_map[gate_index]);
+			neutral_mutation = neutral_mutation && (func == chromosome[random_gene_index] || !gate_visit_map[gate_index]);
 			that->chromosome[random_gene_index] = func;
 		}
 	}
 	if (!neutral_mutation)
 	{
 		that->invalidate();
-		that->estimated_quantized_energy_consumption = CGPConfiguration::quantized_energy_nan;
-		that->estimated_energy_consumption = CGPConfiguration::energy_nan;
-		that->estimated_area_utilisation = CGPConfiguration::area_nan;
-		that->estimated_quantized_delay = CGPConfiguration::quantized_delay_nan;
-		that->estimated_delay = CGPConfiguration::delay_nan;
-		that->estimated_depth = CGPConfiguration::depth_nan;
-		that->phenotype_node_count = CGPConfiguration::gate_count_nan;
 	}
 	else
 	{
+		that->need_gate_visit_map = true;
 		that->need_evaluation = need_evaluation;
 		that->need_energy_evaluation = need_energy_evaluation;
 		that->need_delay_evaluation = need_delay_evaluation;
@@ -561,21 +565,21 @@ bool Chromosome::mutate_genes(std::shared_ptr<Chromosome> that) const
 	return neutral_mutation;
 }
 
-std::shared_ptr<Chromosome> Chromosome::mutate() const
+std::shared_ptr<Chromosome> Chromosome::mutate(uint64_t seed)
 {
 	auto chrom = std::make_shared<Chromosome>(*this);
+	chrom->rng.set_seed(seed);
 	mutate_genes(chrom);
 	return chrom;
 }
 
-std::shared_ptr<Chromosome> cgp::Chromosome::mutate(std::shared_ptr<Chromosome> that, const dataset_t & dataset)
+bool cgp::Chromosome::mutate(std::shared_ptr<Chromosome> that, const dataset_t & dataset)
 {
 	// Actually, do not care anymore about having stricly lambda offsprings ...
 	assert(this != that.get());
 
 	std::copy(chromosome.get(), chromosome.get() + chromosome_size, that->chromosome.get());
-	mutate_genes(that);
-	return that;
+	return mutate_genes(that);
 }
 
 void cgp::Chromosome::swap_visit_map(Chromosome & chromosome)
@@ -694,6 +698,270 @@ int Chromosome::get_gate_input_used_pin(int gate_index) const
 #endif
 }
 
+void cgp::Chromosome::evaluate_single_from_pins(gene_t * input_pin, weight_output_t output, gene_t function)
+{
+	const auto expected_value_min = cgp_configuration.expected_value_min();
+	const auto expected_value_max = cgp_configuration.expected_value_max();
+	switch (function) {
+	case CGPOperator::REVERSE_MAX_A:
+		set_value(output[0], minus(expected_value_max, get_pin_value(input_pin[0])));
+		break;
+	case CGPOperator::ADD:
+		set_value(output[0], plus(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
+		break;
+	case CGPOperator::SUB:
+		set_value(output[0], minus(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
+		break;
+	case CGPOperator::MUL:
+		set_value(output[0], mul(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
+		break;
+	case CGPOperator::NEG:
+		set_value(output[0], neg(get_pin_value(input_pin[0])));
+		break;
+	case CGPOperator::REVERSE_MIN_B:
+		set_value(output[0], plus(expected_value_min, get_pin_value(input_pin[0])));
+		break;
+#ifdef CNN_FP32_WEIGHTS
+	case 6:
+		set_value(output[0], get_pin_value(input_pin[0]) * 0.25);
+		break;
+#else
+	case CGPOperator::QUARTER:
+		set_value(output[0], bit_rshift(get_pin_value(input_pin[0]), 2));
+		break;
+#endif
+#ifdef CNN_FP32_WEIGHTS
+	case 7:
+		set_value(output[0], get_pin_value(input_pin[0]) * 0.5);
+		break;
+#else
+	case CGPOperator::HALF:
+		set_value(output[0], bit_rshift(get_pin_value(input_pin[0]), 1));
+		break;
+#endif
+#ifndef CNN_FP32_WEIGHTS
+	case CGPOperator::BIT_AND:
+		set_value(output[0], bit_and(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
+		break;
+	case CGPOperator::BIT_OR:
+		set_value(output[0], bit_or(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
+		break;
+	case CGPOperator::BIT_XOR:
+		set_value(output[0], bit_xor(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
+		break;
+	case CGPOperator::BIT_NEG:
+		set_value(output[0], bit_neg(get_pin_value(input_pin[0])));
+		break;
+	case CGPOperator::DOUBLE:
+		set_value(output[0], bit_lshift(get_pin_value(input_pin[0]), 1));
+		break;
+	case CGPOperator::BIT_INC:
+		set_value(output[0], plus(get_pin_value(input_pin[0]), 1));
+		break;
+	case CGPOperator::BIT_DEC:
+		set_value(output[0], minus(get_pin_value(input_pin[0]), 1));
+		break;
+	case CGPOperator::R_SHIFT_3:
+		set_value(output[0], bit_rshift(get_pin_value(input_pin[0]), 3));
+		break;
+	case CGPOperator::R_SHIFT_4:
+		set_value(output[0], bit_rshift(get_pin_value(input_pin[0]), 4));
+		break;
+	case CGPOperator::R_SHIFT_5:
+		set_value(output[0], bit_rshift(get_pin_value(input_pin[0]), 5));
+		break;
+	case CGPOperator::L_SHIFT_2:
+		set_value(output[0], bit_lshift(get_pin_value(input_pin[0]), 2));
+		break;
+	case CGPOperator::L_SHIFT_3:
+		set_value(output[0], bit_lshift(get_pin_value(input_pin[0]), 3));
+		break;
+	case CGPOperator::L_SHIFT_4:
+		set_value(output[0], bit_lshift(get_pin_value(input_pin[0]), 4));
+		break;
+	case CGPOperator::L_SHIFT_5:
+		set_value(output[0], bit_lshift(get_pin_value(input_pin[0]), 5));
+		break;
+	case CGPOperator::ONE_CONST:
+		set_value(output[0], 1);
+		break;
+	case CGPOperator::MINUS_ONE_CONST:
+		set_value(output[0], -1);
+		break;
+	case CGPOperator::ZERO_CONST:
+		set_value(output[0], 0);
+		break;
+	case CGPOperator::EXPECTED_VALUE_MIN:
+		set_value(output[0], expected_value_min);
+		break;
+	case CGPOperator::EXPECTED_VALUE_MAX:
+		set_value(output[0], expected_value_max);
+		break;
+		// multiplexor
+	case CGPOperator::MUX:
+		set_value(output[0], get_pin_value(input_pin[selector]));
+		break;
+		// de-multiplexor
+	case CGPOperator::DEMUX:
+		for (int j = 0; j < cgp_configuration.function_output_arity(); j++)
+		{
+			set_value(output[j], (j == selector) ? (get_pin_value(input_pin[0])) : (0));
+		}
+		break;
+	case CGPOperator::ID:
+		set_value(output[0], get_pin_value(input_pin[0]));
+		break;
+#else
+	case 8:
+		set_value(output[0], get_pin_value(input_pin[0]) * 1.05);
+		break;
+		// multiplexor
+	case 9:
+		set_value(output[0], get_pin_value(input_pin[selector]));
+		break;
+		// de-multiplexor
+	case 10:
+		set_value(output[selector], get_pin_value(input_pin[0]));
+		break;
+#endif
+	default:
+		throw std::runtime_error("this Chromosome::evaluate branch is not implemented! branch: " + std::to_string(function));
+		break;
+	}
+}
+
+void cgp::Chromosome::evaluate_single_from_values(weight_input_t input, weight_output_t output, gene_t function)
+{
+	const auto expected_value_min = cgp_configuration.expected_value_min();
+	const auto expected_value_max = cgp_configuration.expected_value_max();
+	switch (function) {
+	case CGPOperator::REVERSE_MAX_A:
+		set_value(output[0], minus(expected_value_max, input[0]));
+		break;
+	case CGPOperator::ADD:
+		set_value(output[0], plus(input[0], input[1]));
+		break;
+	case CGPOperator::SUB:
+		set_value(output[0], minus(input[0], input[1]));
+		break;
+	case CGPOperator::MUL:
+		set_value(output[0], mul(input[0], input[1]));
+		break;
+	case CGPOperator::NEG:
+		set_value(output[0], neg(input[0]));
+		break;
+	case CGPOperator::REVERSE_MIN_B:
+		set_value(output[0], plus(expected_value_min, input[0]));
+		break;
+#ifdef CNN_FP32_WEIGHTS
+	case 6:
+		set_value(output[0], input[0] * 0.25);
+		break;
+#else
+	case CGPOperator::QUARTER:
+		set_value(output[0], bit_rshift(input[0], 2));
+		break;
+#endif
+#ifdef CNN_FP32_WEIGHTS
+	case 7:
+		set_value(output[0], input[0] * 0.5);
+		break;
+#else
+	case CGPOperator::HALF:
+		set_value(output[0], bit_rshift(input[0], 1));
+		break;
+#endif
+#ifndef CNN_FP32_WEIGHTS
+	case CGPOperator::BIT_AND:
+		set_value(output[0], bit_and(input[0], input[1]));
+		break;
+	case CGPOperator::BIT_OR:
+		set_value(output[0], bit_or(input[0], input[1]));
+		break;
+	case CGPOperator::BIT_XOR:
+		set_value(output[0], bit_xor(input[0], input[1]));
+		break;
+	case CGPOperator::BIT_NEG:
+		set_value(output[0], bit_neg(input[0]));
+		break;
+	case CGPOperator::DOUBLE:
+		set_value(output[0], bit_lshift(input[0], 1));
+		break;
+	case CGPOperator::BIT_INC:
+		set_value(output[0], plus(input[0], 1));
+		break;
+	case CGPOperator::BIT_DEC:
+		set_value(output[0], minus(input[0], 1));
+		break;
+	case CGPOperator::R_SHIFT_3:
+		set_value(output[0], bit_rshift(input[0], 3));
+		break;
+	case CGPOperator::R_SHIFT_4:
+		set_value(output[0], bit_rshift(input[0], 4));
+		break;
+	case CGPOperator::R_SHIFT_5:
+		set_value(output[0], bit_rshift(input[0], 5));
+		break;
+	case CGPOperator::L_SHIFT_2:
+		set_value(output[0], bit_lshift(input[0], 2));
+		break;
+	case CGPOperator::L_SHIFT_3:
+		set_value(output[0], bit_lshift(input[0], 3));
+		break;
+	case CGPOperator::L_SHIFT_4:
+		set_value(output[0], bit_lshift(input[0], 4));
+		break;
+	case CGPOperator::L_SHIFT_5:
+		set_value(output[0], bit_lshift(input[0], 5));
+		break;
+	case CGPOperator::ONE_CONST:
+		set_value(output[0], 1);
+		break;
+	case CGPOperator::MINUS_ONE_CONST:
+		set_value(output[0], -1);
+		break;
+	case CGPOperator::ZERO_CONST:
+		set_value(output[0], 0);
+		break;
+	case CGPOperator::EXPECTED_VALUE_MIN:
+		set_value(output[0], expected_value_min);
+		break;
+	case CGPOperator::EXPECTED_VALUE_MAX:
+		set_value(output[0], expected_value_max);
+		break;
+		// multiplexor
+	case CGPOperator::MUX:
+		set_value(output[0], input[selector]);
+		break;
+		// de-multiplexor
+	case CGPOperator::DEMUX:
+		for (int j = 0; j < cgp_configuration.function_output_arity(); j++)
+		{
+			set_value(output[j], (j == selector) ? (input[0]) : (0));
+		}
+		break;
+	case CGPOperator::ID:
+		set_value(output[0], input[0]);
+		break;
+#else
+	case 8:
+		set_value(output[0], input[0] * 1.05);
+		break;
+		// multiplexor
+	case 9:
+		set_value(output[0], input[selector]);
+		break;
+		// de-multiplexor
+	case 10:
+		set_value(output[selector], input[0]);
+		break;
+#endif
+	default:
+		throw std::runtime_error("this Chromosome::evaluate branch is not implemented! branch: " + std::to_string(function));
+		break;
+	}
+}
+
 void Chromosome::evaluate()
 {
 	assert(("Chromosome::evaluate cannot be called without calling Chromosome::set_input before", input != nullptr));
@@ -706,141 +974,11 @@ void Chromosome::evaluate()
 	auto output_pin = pin_map.get();
 	auto input_pin = chromosome.get();
 	auto func = chromosome.get() + cgp_configuration.function_input_arity();
-	const auto expected_value_min = cgp_configuration.expected_value_min();
-	const auto expected_value_max = cgp_configuration.expected_value_max();
 
 	for (int i = 0; i < cgp_configuration.col_count() * cgp_configuration.row_count(); i++)
 	{
-		gate_visit_map[i] = !need_energy_evaluation && gate_visit_map[i];
-		auto block_output_pins = output_pin;
-
-		switch (*func) {
-		case CGPOperator::REVERSE_MAX_A:
-			set_value(block_output_pins[0], minus(expected_value_max, get_pin_value(input_pin[0])));
-			break;
-		case CGPOperator::ADD:
-			set_value(block_output_pins[0], plus(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
-			break;
-		case CGPOperator::SUB:
-			set_value(block_output_pins[0], minus(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
-			break;
-		case CGPOperator::MUL:
-			set_value(block_output_pins[0], mul(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
-			break;
-		case CGPOperator::NEG:
-			set_value(block_output_pins[0], neg(get_pin_value(input_pin[0])));
-			break;
-		case CGPOperator::REVERSE_MIN_B:
-			set_value(block_output_pins[0], plus(expected_value_min, get_pin_value(input_pin[0])));
-			break;
-#ifdef CNN_FP32_WEIGHTS
-		case 6:
-			set_value(block_output_pins[0], get_pin_value(input_pin[0]) * 0.25);
-			break;
-#else
-		case CGPOperator::QUARTER:
-			set_value(block_output_pins[0], bit_rshift(get_pin_value(input_pin[0]), 2));
-			break;
-#endif
-#ifdef CNN_FP32_WEIGHTS
-		case 7:
-			set_value(block_output_pins[0], get_pin_value(input_pin[0]) * 0.5);
-			break;
-#else
-		case CGPOperator::HALF:
-			set_value(block_output_pins[0], bit_rshift(get_pin_value(input_pin[0]), 1));
-			break;
-#endif
-#ifndef CNN_FP32_WEIGHTS
-		case CGPOperator::BIT_AND:
-			set_value(block_output_pins[0], bit_and(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
-			break;
-		case CGPOperator::BIT_OR:
-			set_value(block_output_pins[0], bit_or(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
-			break;
-		case CGPOperator::BIT_XOR:
-			set_value(block_output_pins[0], bit_xor(get_pin_value(input_pin[0]), get_pin_value(input_pin[1])));
-			break;
-		case CGPOperator::BIT_NEG:
-			set_value(block_output_pins[0], bit_neg(get_pin_value(input_pin[0])));
-			break;
-		case CGPOperator::DOUBLE:
-			set_value(block_output_pins[0], bit_lshift(get_pin_value(input_pin[0]), 1));
-			break;
-		case CGPOperator::BIT_INC:
-			set_value(block_output_pins[0], plus(get_pin_value(input_pin[0]), 1));
-			break;
-		case CGPOperator::BIT_DEC:
-			set_value(block_output_pins[0], minus(get_pin_value(input_pin[0]), 1));
-			break;
-		case CGPOperator::R_SHIFT_3:
-			set_value(block_output_pins[0], bit_rshift(get_pin_value(input_pin[0]), 3));
-			break;
-		case CGPOperator::R_SHIFT_4:
-			set_value(block_output_pins[0], bit_rshift(get_pin_value(input_pin[0]), 4));
-			break;
-		case CGPOperator::R_SHIFT_5:
-			set_value(block_output_pins[0], bit_rshift(get_pin_value(input_pin[0]), 5));
-			break;
-		case CGPOperator::L_SHIFT_2:
-			set_value(block_output_pins[0], bit_lshift(get_pin_value(input_pin[0]), 2));
-			break;
-		case CGPOperator::L_SHIFT_3:
-			set_value(block_output_pins[0], bit_lshift(get_pin_value(input_pin[0]), 3));
-			break;
-		case CGPOperator::L_SHIFT_4:
-			set_value(block_output_pins[0], bit_lshift(get_pin_value(input_pin[0]), 4));
-			break;
-		case CGPOperator::L_SHIFT_5:
-			set_value(block_output_pins[0], bit_lshift(get_pin_value(input_pin[0]), 5));
-			break;
-		case CGPOperator::ONE_CONST:
-			set_value(block_output_pins[0], 1);
-			break;
-		case CGPOperator::MINUS_ONE_CONST:
-			set_value(block_output_pins[0], -1);
-			break;
-		case CGPOperator::ZERO_CONST:
-			set_value(block_output_pins[0], 0);
-			break;
-		case CGPOperator::EXPECTED_VALUE_MIN:
-			set_value(block_output_pins[0], expected_value_min);
-			break;
-		case CGPOperator::EXPECTED_VALUE_MAX:
-			set_value(block_output_pins[0], expected_value_max);
-			break;
-			// multiplexor
-		case CGPOperator::MUX:
-			set_value(block_output_pins[0], get_pin_value(input_pin[selector]));
-			break;
-			// de-multiplexor
-		case CGPOperator::DEMUX:
-			for (int j = 0; j < cgp_configuration.function_output_arity(); j++)
-			{
-				set_value(block_output_pins[j], (j == selector) ? (get_pin_value(input_pin[0])) : (0));
-			}
-			break;
-		case CGPOperator::ID:
-			set_value(block_output_pins[0], get_pin_value(input_pin[0]));
-			break;
-#else
-		case 8:
-			set_value(block_output_pins[0], get_pin_value(input_pin[0]) * 1.05);
-			break;
-			// multiplexor
-		case 9:
-			set_value(block_output_pins[0], get_pin_value(input_pin[selector]));
-			break;
-			// de-multiplexor
-		case 10:
-			set_value(block_output_pins[selector], get_pin_value(input_pin[0]));
-			used_pin = selector;
-			break;
-#endif
-		default:
-			throw std::runtime_error("this Chromosome::evaluate branch is not implemented! branch: " + std::to_string(*func));
-			break;
-		}
+		gate_visit_map[i] = !need_gate_visit_map && gate_visit_map[i];
+		evaluate_single_from_pins(input_pin, output_pin, *func);
 
 #ifdef __VIRTUAL_SELECTOR
 		if (is_demux(*func))
@@ -893,8 +1031,12 @@ Chromosome::weight_value_t* Chromosome::end_output()
 
 int cgp::Chromosome::get_function_input_arity(int gate_index) const
 {
-	const auto func = *get_block_function(gate_index);
-	switch (*get_block_function(gate_index)) {
+	return get_function_input_arity_2(*get_block_function(gate_index));
+}
+
+int cgp::Chromosome::get_function_input_arity_2(gene_t func) const
+{
+	switch (func) {
 	case CGPOperator::REVERSE_MAX_A:
 		return 1;
 		break;
@@ -1102,7 +1244,6 @@ Chromosome::weight_value_t* Chromosome::end_multiplexed_output()
 	return end;
 }
 
-
 std::string Chromosome::to_string() const
 {
 	std::ostringstream result;
@@ -1273,17 +1414,17 @@ void cgp::Chromosome::tight_layout()
 int cgp::Chromosome::get_gate_index_from_output_pin(int pin) const
 {
 	assert(("pin is not gate pin, but input pin", pin >= cgp_configuration.input_count()));
+#ifndef __SINGLE_OUTPUT_ARITY
 	return (pin - cgp_configuration.input_count()) / cgp_configuration.function_output_arity();
+#else
+	return pin - cgp_configuration.input_count();
+#endif
 }
 
 int cgp::Chromosome::get_gate_index_from_input_pin(int pin) const
 {
 	assert(("pin is not gate pin, but input pin", pin >= cgp_configuration.input_count()));
-#ifndef __SINGLE_OUTPUT_ARITY
 	return (pin - cgp_configuration.input_count()) / cgp_configuration.function_input_arity();
-#else
-	return pin - cgp_configuration.input_count();
-#endif
 }
 
 int cgp::Chromosome::get_output_pin_from_gate_index(int gate_index, int pin) const
@@ -1302,6 +1443,14 @@ void cgp::Chromosome::invalidate()
 	need_energy_evaluation = true;
 	need_delay_evaluation = true;
 	need_depth_evaluation = true;
+	need_gate_visit_map = true;
+	estimated_quantized_energy_consumption = CGPConfiguration::quantized_energy_nan;
+	estimated_energy_consumption = CGPConfiguration::energy_nan;
+	estimated_area_utilisation = CGPConfiguration::area_nan;
+	estimated_quantized_delay = CGPConfiguration::quantized_delay_nan;
+	estimated_delay = CGPConfiguration::delay_nan;
+	estimated_depth = CGPConfiguration::depth_nan;
+	phenotype_node_count = CGPConfiguration::gate_count_nan;
 }
 
 void cgp::Chromosome::invalidate_visit_map()
@@ -1309,6 +1458,7 @@ void cgp::Chromosome::invalidate_visit_map()
 	need_energy_evaluation = true;
 	need_delay_evaluation = true;
 	need_depth_evaluation = true;
+	need_gate_visit_map = true;
 }
 
 decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::get_estimated_quantized_energy_usage()
@@ -1353,13 +1503,12 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 
 			const int gate_index = get_gate_index_from_output_pin(pin);
 			bool can_visit = false;
-			#pragma omp critical		
+#pragma omp critical		
 			if (!gate_visit_map[gate_index])
 			{
 				gate_visit_map[gate_index] = true;
 				can_visit = true;
 			}
-			
 
 			if (can_visit)
 			{
@@ -1381,9 +1530,9 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 
 				gene_t* inputs = get_block_inputs(gate_index);
 				const auto arity = get_function_input_arity(gate_index);
-				for (int i = 0; i < arity; i++)
+				for (int j = 0; j < arity; j++)
 				{
-					pins_to_visit.push(inputs[i]);
+					pins_to_visit.push(inputs[j]);
 				}
 
 				// Just for documentation block, the semantic is here
@@ -1415,6 +1564,7 @@ decltype(Chromosome::estimated_quantized_energy_consumption) cgp::Chromosome::ge
 	this->phenotype_node_count = phenotype_node_count;
 
 	need_energy_evaluation = false;
+	need_gate_visit_map = false;
 	return estimated_quantized_energy_consumption;
 }
 
@@ -1455,13 +1605,12 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 		quantized_delay_distance_map[i] = std::numeric_limits<quantized_delay_t>::max();
 	}
 
-	estimated_quantized_delay = 0;
-	estimated_delay = 0;
-
+	quantized_delay_t estimated_quantized_delay = 0;
+	delay_t estimated_delay = 0;
 
 	const int length = absolute_output_end - absolute_output_start;
 
-#pragma omp parallel for
+#pragma omp parallel for shared(estimated_quantized_delay) shared(estimated_delay)
 	for (int i = 0; i < length; i++) {
 
 		std::stack<gene_t> pins_to_visit;
@@ -1479,11 +1628,11 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 			pins_to_visit.pop();
 			current_delays.pop();
 
-			
+
 			// if is CGP input pin
 			if (pin < cgp_configuration.input_count() || get_function_input_arity(get_gate_index_from_output_pin(pin)) == 0)
 			{
-				// then it is constant node
+				// then it is a constant node
 				if (pin >= cgp_configuration.input_count())
 				{
 					const int gate_index = get_gate_index_from_output_pin(pin);
@@ -1492,7 +1641,7 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 					current_delay += current_delay + CGPConfiguration::get_delay_parameter(get_function_cost(func));
 				}
 
-				#pragma omp critical
+#pragma omp critical
 				{
 					estimated_quantized_delay = std::max(estimated_quantized_delay, current_quantized_delay);
 					estimated_delay = std::max(estimated_delay, current_delay);
@@ -1508,7 +1657,7 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 
 			bool can_visit = false;
 
-			#pragma omp critical
+#pragma omp critical
 			if (new_quantized_cost > quantized_delay_distance_map[gate_index] || quantized_delay_distance_map[gate_index] == std::numeric_limits<quantized_delay_t>::max())
 			{
 				can_visit = true;
@@ -1519,15 +1668,16 @@ decltype(Chromosome::estimated_quantized_delay) Chromosome::get_estimated_quanti
 			{
 				const auto arity = get_function_input_arity(gate_index);
 				gene_t* inputs = get_block_inputs(gate_index);
-				for (int i = 0; i < arity; i++)
+				for (int j = 0; j < arity; j++)
 				{
-					pins_to_visit.push(inputs[i]);
+					pins_to_visit.push(inputs[j]);
 					current_delays.push(std::make_tuple(new_quantized_cost, new_real_cost));
 				}
 			}
 		}
 	}
-
+	this->estimated_quantized_delay = estimated_quantized_delay;
+	this->estimated_delay = estimated_delay;
 	need_delay_evaluation = false;
 	return estimated_quantized_delay;
 }
@@ -1625,7 +1775,7 @@ decltype(Chromosome::bottom_row) Chromosome::get_bottom_row()
 int cgp::Chromosome::clip_pin(int pin) const
 {
 	assert(pin >= 0);
-	assert(cgp_configuration.function_output_arity() > 1);
+	//assert(cgp_configuration.function_output_arity() > 1);
 	if (pin < cgp_configuration.input_count())
 	{
 		return pin;
@@ -1725,10 +1875,10 @@ void cgp::Chromosome::find_direct_solutions(const dataset_t & dataset)
 					chromosome_outputs[k] = j;
 					break;
 #endif
+				}
 			}
 		}
 	}
-}
 }
 
 void cgp::Chromosome::add_2pow_circuits(const dataset_t & dataset)
@@ -1840,9 +1990,9 @@ void cgp::Chromosome::add_2pow_circuits(const dataset_t & dataset)
 #else
 				chromosome_outputs[j] = result->second;
 #endif
+			}
 		}
 	}
-}
 }
 
 int cgp::Chromosome::find_free_index(int from) const
@@ -1886,6 +2036,12 @@ int cgp::Chromosome::get_relative_id_output_from_index(int index) const
 	assert(("cannot use get_relative_mx_output_from_index without multiplexing mode", multiplexing));
 	assert(("index out of range", 0 <= index && index < 256));
 	return get_gate_output(start_id_index + index);
+}
+
+void cgp::Chromosome::cross_rng(Chromosome& other)
+{
+	rng.set_seed(rng.generate() * other.rng.generate());
+	other.rng.set_seed(rng.generate() * other.rng.generate());
 }
 
 int cgp::Chromosome::get_id_output_for(int value) const
@@ -1958,7 +2114,6 @@ void cgp::Chromosome::use_multiplexing(const dataset_t & dataset)
 					break;
 				}
 			}
-			get_outputs()[i - start_id_index] = get_output_pin_from_gate_index(i);
 		}
 		else
 		{
@@ -1976,33 +2131,11 @@ void cgp::Chromosome::use_multiplexing(const dataset_t & dataset)
 		}
 	}
 
-	if (function == CGPOperator::MUX)
+	for (int i = 0; i < output_count; i++)
 	{
-		for (int i = 0; i < output_count; i++)
-		{
-			get_outputs()[i] = get_output_pin_from_gate_index(i + start_id_index);
-		}
+		get_outputs()[i] = get_output_pin_from_gate_index(i + start_id_index);
 	}
-	else
-	{
-		assert(("Multiplexer must be enabled in order to use_multiplexing work with dataset size of larger than 1", outputs.size() == 1));
-		setup_output_iterators(selector, id_count);
-	}
-	invalidate();
-}
-
-void cgp::Chromosome::wire_multiplexed_id_to_output(const dataset_t & dataset)
-{
-	const auto& outputs = get_dataset_output(dataset);
-	setup_output_iterators(selector, cgp_configuration.output_count());
-	assert(("Multiplexer must be enabled in order to use_multiplexing work with dataset size of larger than 1", outputs.size() == 1));
-	for (int i = 0; i < outputs.size(); i++)
-	{
-		for (int j = 0; j < cgp_configuration.output_count(); j++)
-		{
-			get_outputs()[j] = get_output_pin_from_gate_index(mulitplexed_value_to_index(outputs[i][j]));
-		}
-	}
+	setup_output_iterators(selector, id_count);
 	invalidate();
 }
 
@@ -2015,22 +2148,23 @@ void cgp::Chromosome::remove_multiplexing(const dataset_t & dataset)
 
 	locked_nodes_index = std::numeric_limits<decltype(locked_nodes_index)>::max();
 	gene_t function = (cgp_configuration.dataset_size() == 1) ? (CGPOperator::ID) : (CGPOperator::MUX);
+	multiplexing = false;
 	setup_output_iterators(selector, cgp_configuration.output_count());
 
-	if (function != CGPOperator::MUX) {
-		wire_multiplexed_id_to_output(dataset);
+	if (function == CGPOperator::ID) {
+		const auto& outputs = get_dataset_output(dataset);
 		for (int j = 0; j < output_count; j++)
 		{
-			int pin = get_outputs()[j];
-			if (pin >= cgp_configuration.input_count())
+			int pin = get_output_pin_from_gate_index(mulitplexed_value_to_index(outputs[0][j]));
+			assert(pin >= cgp_configuration.input_count());
+			int id_index = get_gate_index_from_output_pin(pin);
+
+			if (*get_block_function(id_index) != CGPOperator::ID)
 			{
-				int id_index = get_gate_index_from_output_pin(pin);
-
-				if (*get_block_function(id_index) != CGPOperator::ID)
-				{
-					continue;
-				}
-
+				get_outputs()[j] = pin;
+			}
+			else 
+			{
 				auto inputs = get_block_inputs(id_index);
 				get_outputs()[j] = inputs[0];
 			}
@@ -2054,7 +2188,7 @@ void cgp::Chromosome::remove_multiplexing(const dataset_t & dataset)
 			}
 		}
 	}
-	multiplexing = false;
+	id_count = 0;
 	invalidate();
 }
 
@@ -2082,7 +2216,7 @@ void cgp::Chromosome::copy_gate_function(int src_index, int dst_index)
 	*dst_function = *src_function;
 }
 
-void cgp::Chromosome::perform_corrections(const dataset_t & dataset, const int threshold, const bool zero_energy_only)
+void cgp::Chromosome::perform_corrections(const dataset_t & dataset, const int threshold, const bool zero_energy_only, const bool only_id)
 {
 	if (cgp_configuration.dataset_size() > 1)
 	{
@@ -2090,6 +2224,7 @@ void cgp::Chromosome::perform_corrections(const dataset_t & dataset, const int t
 	}
 	need_evaluation = true;
 	evaluate();
+	get_estimated_energy_usage();
 
 	bool valid = true;
 	const auto& inputs = get_dataset_input(dataset);
@@ -2109,84 +2244,108 @@ void cgp::Chromosome::perform_corrections(const dataset_t & dataset, const int t
 		const int delta = actual_value - expected_value;
 		const int abs_delta = std::abs(delta);
 		int best_delta = std::min(abs_delta, threshold), best_pin_index = -1, best_function = -1;
+		quantized_energy_t best_energy = CGPConfiguration::get_quantized_energy_parameter(get_function_cost(*get_block_function(i)));
+		auto input = std::make_unique<weight_value_t[]>(cgp_configuration.function_input_arity());
+		auto output = std::make_unique<weight_value_t[]>(cgp_configuration.function_output_arity());
 
-		// If there is only 1 data pairing, an input shortcircuit optimisation can be done
-		for (int j = 0; j < cgp_configuration.input_count() && (best_function != CGPOperator::ID || best_delta != 0); j++)
+		std::vector<gene_t> functions;
+		functions.push_back(CGPOperator::ID);
+
+		if (!only_id)
 		{
-			const int id_abs_delta = std::abs(inputs[0][j] - expected_value);
-			const int neg_abs_delta = std::abs(neg(inputs[0][j]) - expected_value);
-			const int plus_abs_delta = std::abs(plus(actual_value, inputs[0][j]) - expected_value);
-			const int sub_abs_delta = std::abs(minus(actual_value, inputs[0][j]) - expected_value);
-			if (id_abs_delta <= best_delta)
+			for (int func = 0; func < cgp_configuration.function_count(); func++)
 			{
-				best_delta = id_abs_delta;
-				best_pin_index = j;
-				best_function = CGPOperator::ID;
-			}
-			else if (!zero_energy_only && (neg_abs_delta < best_delta || (neg_abs_delta == best_delta && best_function != CGPOperator::ID)))
-			{
-				best_delta = neg_abs_delta;
-				best_pin_index = j;
-				best_function = CGPOperator::NEG;
-			}
-			else if (!zero_energy_only && plus_abs_delta < best_delta)
-			{
-				best_delta = plus_abs_delta;
-				best_pin_index = j;
-				best_function = CGPOperator::ADD;
-			}
-			else if (!zero_energy_only && sub_abs_delta < best_delta)
-			{
-				best_delta = sub_abs_delta;
-				best_pin_index = j;
-				best_function = CGPOperator::SUB;
+				functions.push_back(func);
 			}
 		}
 
-		for (int gate_index = 0, end = cgp_configuration.row_count() * (col - 1); (best_function != CGPOperator::ID || best_delta != 0) && gate_index < end; gate_index++)
+		for (int gate_index = 0, end = cgp_configuration.row_count() * (col - 1); (best_energy != 0 || best_delta != 0) && gate_index < end; gate_index++)
 		{
 			const auto& value = get_gate_output(gate_index);
 			const int pin_index = get_gate_output_used_pin(gate_index);
-			const int id_abs_delta = std::abs(value - expected_value);
-			const int neg_abs_delta = std::abs(neg(value) - expected_value);
-			const int plus_abs_delta = std::abs(plus(actual_value, value) - expected_value);
-			const int sub_abs_delta = std::abs(minus(actual_value, value) - expected_value);
-			if (id_abs_delta <= best_delta)
+			for (const auto& func : functions)
 			{
-				best_delta = id_abs_delta;
-				best_pin_index = pin_index;
-				best_function = CGPOperator::ID;
+				if (get_function_input_arity_2(func) == 1)
+				{
+					input[0] = value;
+				}
+				else if (get_function_input_arity_2(func) == 2)
+				{
+					input[0] = actual_value;
+					input[1] = value;
+				}
+				else if (get_function_input_arity_2(func) == 0)
+				{
+					// pass
+				}
+				else
+				{
+					throw std::runtime_error("unsupported function " + std::to_string(func));
+				}
+
+				evaluate_single_from_values(input.get(), output.get(), func);
+				const int delta = std::abs(output[0] - expected_value);
+				const auto energy = CGPConfiguration::get_quantized_energy_parameter(get_function_cost(func));
+				if (delta <= best_delta && energy <= best_energy && !(zero_energy_only && energy != 0) && gate_visit_map[gate_index])
+				{
+					best_delta = delta;
+					best_energy = energy;
+					best_pin_index = pin_index;
+					best_function = func;
+				}
 			}
-			else if (!zero_energy_only && (neg_abs_delta < best_delta || (neg_abs_delta == best_delta && best_function != CGPOperator::ID)))
+		}
+		// If there is only 1 data pairing, an input shortcircuit optimisation can be done
+		for (int j = 0; j < cgp_configuration.input_count() && (best_energy != 0 || best_delta != 0); j++)
+		{
+			for (const auto& func : functions)
 			{
-				best_delta = neg_abs_delta;
-				best_pin_index = pin_index;
-				best_function = CGPOperator::NEG;
-			}
-			else if (!zero_energy_only && plus_abs_delta < best_delta)
-			{
-				best_delta = plus_abs_delta;
-				best_pin_index = pin_index;
-				best_function = CGPOperator::ADD;
-			}
-			else if (!zero_energy_only && sub_abs_delta < best_delta)
-			{
-				best_delta = sub_abs_delta;
-				best_pin_index = pin_index;
-				best_function = CGPOperator::SUB;
+				if (get_function_input_arity_2(func) == 1)
+				{
+					input[0] = inputs[0][j];
+				}
+				else if (get_function_input_arity_2(func) == 2)
+				{
+					input[0] = actual_value;
+					input[1] = inputs[0][j];
+				}
+				else if (get_function_input_arity_2(func) == 0)
+				{
+					// pass
+				}
+				else
+				{
+					throw std::runtime_error("unsupported function " + std::to_string(func));
+				}
+
+				evaluate_single_from_values(input.get(), output.get(), func);
+				const int delta = std::abs(output[0] - expected_value);
+				const auto energy = CGPConfiguration::get_quantized_energy_parameter(get_function_cost(func));
+				if (delta <= best_delta && energy <= best_energy && !(zero_energy_only && energy != 0))
+				{
+					best_delta = delta;
+					best_energy = energy;
+					best_pin_index = j;
+					best_function = func;
+				}
 			}
 		}
 
 		if (best_pin_index != -1)
 		{
 			*get_block_function(i) = best_function;
-			if (best_function == CGPOperator::ID || best_function == CGPOperator::NEG)
+			auto arity = get_function_input_arity_2(best_function);
+			if (arity == 1 || arity == 0)
 			{
 				get_block_inputs(i)[0] = best_pin_index;
 			}
-			else
+			else if (arity == 2)
 			{
 				get_block_inputs(i)[1] = best_pin_index;
+			}
+			else
+			{
+				throw std::runtime_error("unsupported function arity in correction");
 			}
 			valid = false;
 		}
@@ -2212,7 +2371,7 @@ cgp::Chromosome::gate_parameters_t cgp::Chromosome::get_function_cost(gene_t fun
 
 	const auto& costs = cgp_configuration.function_costs();
 	return costs[function];
-	}
+}
 
 std::ostream& cgp::operator<<(std::ostream & os, const Chromosome & chromosome)
 {
@@ -2228,4 +2387,53 @@ std::string cgp::to_string(const cgp::Chromosome & chromosome)
 std::string cgp::to_string(const std::shared_ptr<Chromosome>&chromosome)
 {
 	return (chromosome) ? (to_string(*chromosome)) : Chromosome::nan_chromosome_string;
+}
+
+#pragma once
+
+#include "Chromosome.h"
+
+Chromosome::quantized_energy_t Chromosome::get_raw_quantized_energy() {
+	return estimated_quantized_energy_consumption;
+}
+
+Chromosome::energy_t Chromosome::get_raw_energy() {
+	return estimated_energy_consumption;
+}
+
+Chromosome::area_t Chromosome::get_raw_area() {
+	return estimated_area_utilisation;
+}
+
+Chromosome::quantized_delay_t Chromosome::get_raw_quantized_delay() {
+	return estimated_quantized_delay;
+}
+
+Chromosome::delay_t Chromosome::get_raw_delay() {
+	return estimated_delay;
+}
+
+Chromosome::gate_count_t Chromosome::get_raw_gate_count() {
+	return phenotype_node_count;
+}
+
+void cgp::RandomNumberGenerator::set_seed(uint64_t seed)
+{
+	this->seed = seed;
+}
+
+uint64_t cgp::RandomNumberGenerator::get_seed()
+{
+	return seed;
+}
+
+uint64_t cgp::RandomNumberGenerator::generate()
+{
+	constexpr uint64_t multiplier = 1664525;
+	constexpr uint64_t increment = 1013904223;
+	//const uint64_t modulus = 4294967296;
+
+	seed = multiplier * seed + increment;
+
+	return seed;
 }

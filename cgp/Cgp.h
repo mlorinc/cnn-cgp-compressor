@@ -173,7 +173,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the error value for</param>
 		/// <param name="value">The value to set as the error value</param>
 		/// <returns>The updated error value of the solution</returns>
-		static decltype(CGP::get_error(solution_t())) set_error(solution_t& solution, decltype(CGP::get_error(solution_t())) value);
+		static void set_error(solution_t& solution, decltype(CGP::get_error(solution_t())) value);
 
 		/// <summary>
 		/// Set the energy value of the given solution.
@@ -181,7 +181,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the energy value for</param>
 		/// <param name="value">The value to set as the energy value</param>
 		/// <returns>The updated energy value of the solution</returns>
-		static decltype(CGP::get_quantized_energy(solution_t())) set_quantized_energy(solution_t& solution, decltype(CGP::get_quantized_energy(solution_t())) value);
+		static void set_quantized_energy(solution_t& solution, decltype(CGP::get_quantized_energy(solution_t())) value);
 
 		/// <summary>
 		/// Set the energy value of the given solution.
@@ -189,7 +189,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the energy value for</param>
 		/// <param name="value">The value to set as the energy value</param>
 		/// <returns>The updated energy value of the solution</returns>
-		static decltype(CGP::get_energy(solution_t())) set_energy(solution_t& solution, decltype(CGP::get_energy(solution_t())) value);
+		static void set_energy(solution_t& solution, decltype(CGP::get_energy(solution_t())) value);
 
 		/// <summary>
 		/// Set the area value of the given solution.
@@ -197,7 +197,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the area value for</param>
 		/// <param name="value">The value to set as the area value</param>
 		/// <returns>The updated area value of the solution</returns>
-		static decltype(CGP::get_area(solution_t())) set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value);
+		static void set_area(solution_t& solution, decltype(CGP::get_area(solution_t())) value);
 
 		/// <summary>
 		/// Set the delay value of the given solution.
@@ -205,7 +205,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the delay value for</param>
 		/// <param name="value">The value to set as the delay value</param>
 		/// <returns>The updated delay value of the solution</returns>
-		static decltype(CGP::get_quantized_delay(solution_t())) set_quantized_delay(solution_t& solution, decltype(CGP::get_quantized_delay(solution_t())) value);
+		static void set_quantized_delay(solution_t& solution, decltype(CGP::get_quantized_delay(solution_t())) value);
 
 		/// <summary>
 		/// Set the delay value of the given solution.
@@ -213,7 +213,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the delay value for</param>
 		/// <param name="value">The value to set as the delay value</param>
 		/// <returns>The updated delay value of the solution</returns>
-		static decltype(CGP::get_delay(solution_t())) set_delay(solution_t& solution, decltype(CGP::get_delay(solution_t())) value);
+		static void set_delay(solution_t& solution, decltype(CGP::get_delay(solution_t())) value);
 
 		/// <summary>
 		/// Set the depth value of the given solution.
@@ -221,7 +221,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the depth value for</param>
 		/// <param name="value">The value to set as the depth value</param>
 		/// <returns>The updated depth value of the solution</returns>
-		static decltype(CGP::get_depth(solution_t())) set_depth(solution_t& solution, decltype(CGP::get_depth(solution_t())) value);
+		static void set_depth(solution_t& solution, decltype(CGP::get_depth(solution_t())) value);
 
 		/// <summary>
 		/// Set the gate count value of the given solution.
@@ -229,7 +229,7 @@ namespace cgp {
 		/// <param name="solution">The solution to set the gate count value for</param>
 		/// <param name="value">The value to set as the gate count value</param>
 		/// <returns>The updated gate count value of the solution</returns>
-		static decltype(CGP::get_gate_count(solution_t())) set_gate_count(solution_t& solution, decltype(CGP::get_gate_count(solution_t())) value);
+		static void set_gate_count(solution_t& solution, decltype(CGP::get_gate_count(solution_t())) value);
 
 		/// <summary>
 		/// The default solution format string.
@@ -262,6 +262,8 @@ namespace cgp {
 		std::map<std::string, std::string> other_config_attribitues;
 
 		uint64_t energy_threshold = 0;
+
+		std::array<int, 256> weights;
 
 		/// <summary>
 		/// Calculate the energy fitness of a chromosome.
@@ -327,21 +329,28 @@ namespace cgp {
 		/// </summary>
 		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
 		/// <returns>The MSE metric value without being divided.</returns>
-		error_t mx_mse_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
+		error_t mx_mse_error(const weight_value_t* predictions, const std::array<int, 256>& weights) const;
 
 		/// <summary>
 		/// Calculate the Absolute Error (AE) metric to evaluate multiplexed approximation.
 		/// </summary>
 		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
 		/// <returns>The AE metric value without being divided.</returns>
-		error_t mx_ae_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
+		error_t mx_ae_error(const weight_value_t* predictions, const std::array<int, 256>& weights) const;
 
 		/// <summary>
 		/// Calculate the Squared Error (SE) metric to evaluate multiplexed approximation.
 		/// </summary>
 		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
 		/// <returns>The MSE metric value without being divided.</returns>
-		error_t mx_se_error(const weight_value_t* predictions, std::array<int, 256> weights) const;
+		error_t mx_se_error(const weight_value_t* predictions, const std::array<int, 256> &weights) const;
+
+		/// <summary>
+		/// Calculate the number of correct gates approximated.
+		/// </summary>
+		/// <param name="chromosome">The predictions made by the multiplexed chromosome.</param>
+		/// <returns>The MSE metric value without being divided.</returns>
+		error_t mx_gates_error(const weight_value_t* predictions, const std::array<int, 256>& weights) const;
 
 		/// <summary>
 		/// Analyze chromosome and calculate error metric for made predictions. It does not fill up other fitnesses due to performance.
@@ -376,6 +385,8 @@ namespace cgp {
 		/// <param name="b">The second solution candidate.</param>
 		/// <returns>A tuple indicating if A dominates B and if the mutation was neutral.</returns>
 		std::tuple<bool, bool> dominates(solution_t& a, solution_t& b) const;
+
+		std::tuple<bool, bool> dominates(solution_t& a) const;
 
 		/// <summary>
 		/// Set the best solution from the given chromosome string.
@@ -542,6 +553,9 @@ namespace cgp {
 		/// </summary>
 		void reset();
 
+		void use_equal_weights(const dataset_t& dataset);
+		void use_quantity_weights(const dataset_t& dataset);
+
 		/// <summary>
 		/// Get number of generations without improvement in the best fitness.
 		/// </summary>
@@ -580,7 +594,7 @@ namespace cgp {
 
 		bool is_multiplexing() const;
 		void remove_multiplexing(const dataset_t& dataset);
-		void perform_correction(const dataset_t& dataset);
+		void perform_correction(const dataset_t& dataset, bool only_id);
 		void set_generations_without_change(decltype(generations_without_change) new_value);
 	};
 }

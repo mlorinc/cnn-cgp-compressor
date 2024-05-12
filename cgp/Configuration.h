@@ -1,6 +1,6 @@
 //#define __VIRTUAL_SELECTOR 1
-//#define __SINGLE_MULTIPLEX 1
 //#define __ABSOLUTE_ERROR_METRIC 1
+//#define __SINGLE_MULTIPLEX 1
 //#define __SINGLE_OUTPUT_ARITY 1
 
 #pragma once
