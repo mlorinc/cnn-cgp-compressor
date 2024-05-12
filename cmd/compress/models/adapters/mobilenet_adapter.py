@@ -189,7 +189,7 @@ class MobileNetV2Adapter(ModelAdapter):
             new_adapter.model.load_state_dict(path)
             return new_adapter
 
-    def _load_dataset(self, split: str, num_proc=1, **kwargs):
+    def _load_dataset(self, split: str = "validation", num_proc=1, **kwargs):
         ds = datasets.load_dataset("imagenet-1k",
                                    split=split,
                                    data_dir=Datastore().derive("datasets"),
@@ -204,11 +204,11 @@ class MobileNetV2Adapter(ModelAdapter):
     def get_train_data(self, **kwargs):
         return self._load_dataset("train", **kwargs)
 
-    def get_validation_data(self, **kwargs):
-        return self._load_dataset("validation", **kwargs)
+    def get_validation_data(self, split=None, **kwargs):
+        return self._load_dataset(split="validation", **kwargs)
 
-    def get_test_data(self, **kwargs):
-        return self._load_dataset("validation", **kwargs)
+    def get_test_data(self, split=None, **kwargs):
+        return self._load_dataset(split="validation", **kwargs)
     
     def get_criterion(self, **kwargs):
         return nn.CrossEntropyLoss()

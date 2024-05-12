@@ -5,8 +5,8 @@ function_count: 27
 function_input_arity: 2
 function_output_arity: 1
 dataset_size: 1
-input_count: 5
-output_count: 409600
+input_count: 64
+output_count: 256
 population_max: 8
 periodic_log_frequency: 1000000
 gate_parameters_file: C:\Users\Majo\source\repos\TorchCompresser\cmd\gate_info\data\parameters.txt

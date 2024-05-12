@@ -304,7 +304,7 @@ class CGPConfiguration:
         return self.get_attribute(self.COMMAND_CGP_STATISTICS_FILE)
 
     def set_attribute(self, attribute, value):
-        self._extra_attributes[attribute] = value if not attribute.endswith("_file") else PureWindowsPath(value)
+        self._extra_attributes[attribute] = value if not attribute.endswith("_file") else PureWindowsPath(value) if isinstance(value, Path) or isinstance(value, str) else value
 
     def set_learning_rate_file(self, value):
         self.set_attribute(self.COMMAND_LEARNING_RATE_FILE, value)

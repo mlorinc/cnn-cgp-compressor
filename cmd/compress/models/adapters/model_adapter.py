@@ -29,6 +29,9 @@ class ModelAdapter(ModelAdapterInterface, ABC):
     def get_test_data(self, **kwargs):
         raise NotImplementedError()
 
+    def get_custom_dataset(self, **kwargs):
+        raise NotImplementedError()
+
     @abstractmethod
     def get_criterion(self, **kwargs):
         raise NotImplementedError()
@@ -73,15 +76,16 @@ class ModelAdapter(ModelAdapterInterface, ABC):
                  include_loss: bool =True,
                  show_top_k: int = 2,
                  num_workers: int = 1,
+                 custom_dataset=False,
                  **kwargs
                  ):
         top = set([1] + top) if isinstance(top, Iterable) else set([1, top])
         original_train_mode = self.model.training
-        dataset = self.get_test_data(**kwargs)
+        dataset = self.get_test_data(**kwargs) if not custom_dataset else self.get_custom_dataset(**kwargs)
         criterion = self.get_criterion(**kwargs)
         try:
             self.model.eval()
-            loader = DataLoader(dataset, batch_size=batch_size or len(dataset), shuffle=False, num_workers=num_workers)
+            loader = DataLoader(dataset, batch_size=batch_size or len(dataset), shuffle=False, num_workers=num_workers or 0)
             running_loss = 0
             total_samples = 0
             running_topk_correct = dict([(k, 0) for k in top])

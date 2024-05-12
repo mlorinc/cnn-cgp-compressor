@@ -21,9 +21,18 @@ class BaseAdapter(ModelAdapter, ABC):
         assert isinstance(self.model, BaseModel)
         return self.model.get_test_data(**kwargs)
     
+    def get_train_data(self, **kwargs):
+        pass  
+    
     def get_criterion(self, **kwargs):
         assert isinstance(self.model, BaseModel)
         return self.model.get_criterion(**kwargs)
+
+    def get_custom_dataset(self, train_dataset: bool = False, **kwargs):
+        if train_dataset:
+            return self.model.get_train_data(**kwargs)
+        else:
+            return self.get_test_data(**kwargs)
 
     def clone(self):
         assert isinstance(self.model, BaseModel)

@@ -104,8 +104,19 @@ class CGP(object):
     def evaluate_all(self):
         return self._execute(command="evaluate:all")
     
-    def evaluate_chromosomes(self, gate_statistics_file: str, *args):
-        return self._execute(command="evaluate:chromosomes", other_args=[str(gate_statistics_file)] + list(*args))
+    def evaluate_chromosomes(self, gate_statistics_file: str, *args, config_path: str = None, train_weights: str = None, chromosome_file: str = None, output_statistics: str = None, output_weights: str = None, gate_parameters_file: str = None):
+        config = self.config.clone() if self.config is not None else CGPConfiguration(config_path)
+        config.set_input_file(train_weights or config.get_input_file())
+        config.set_cgp_statistics_file(chromosome_file or config.get_cgp_statistics_file())
+        config.set_output_file(output_statistics or config.get_output_file())
+        config.set_train_weights_file(output_weights or config.get_train_weights_file())
+        config.set_gate_parameters_file(gate_parameters_file or config.get_gate_parameters_file())
+        
+        old_config, self.config = self.config, config
+        try:
+            return self._execute(command="evaluate:chromosomes", other_args=[str(gate_statistics_file)] + list(*args))
+        finally:
+            self.config = old_config
     
     def evaluate_chromosome(self, chromosome: str):
         return self._execute(command="evaluate:chromosome", other_args=[chromosome])

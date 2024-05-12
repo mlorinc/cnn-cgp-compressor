@@ -59,7 +59,7 @@ class WorstCaseExperiment(MultiExperiment):
         combination = FilterSelectorCombination()
         # list(range(-128, 128, 1))
         # [-128, 0] + [2**i for i in range(1, 7, 1)])]
-        combination.add(FilterSelector("conv1", [ValuesSelector([0, 128, 1, 2, 5])], [ValuesSelector(list(range(-128, 128, 1)))]*1600))
+        combination.add(FilterSelector("conv1", [ValuesSelector(list(range(0, 65)))], [ValuesSelector(list(range(-128, 128, 1)))]*1))
         combinations.add(combination)
         return combinations
 

@@ -26,16 +26,30 @@ class LeNet5(BaseModel):
     def _create_self(self, *args) -> Self:
         return LeNet5(self.model_path)
 
-    def get_train_data(self):
-        return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=True, download=True, transform=LeNet5.transforms)
+    def get_train_data(self, dataset="mnist", split="digits", **kwargs):
+        if dataset == "mnist":
+            return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=True, download=True, transform=LeNet5.transforms)
+        elif dataset == "emnist":
+            return torchvision.datasets.EMNIST(root=Datastore().derive("./datasets"), split=split, train=True, transform=LeNet5.transforms, download=False)
+        elif dataset == "qmnist":
+            return torchvision.datasets.QMNIST(root=Datastore().derive("./datasets"), what=split, train=True, transform=LeNet5.transforms, download=True)
+        else:
+            raise ValueError(f"unknown dataset {dataset}")
 
-    def get_test_data(self):
-        return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=False, download=True, transform=LeNet5.transforms)
+    def get_test_data(self, dataset="mnist", split="digits", **kwargs):
+        if dataset == "mnist":
+            return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=False, download=True, transform=LeNet5.transforms)
+        elif dataset == "emnist":
+            return torchvision.datasets.EMNIST(root=Datastore().derive("./datasets"), split=split, train=False, transform=LeNet5.transforms, download=False)
+        elif dataset == "qmnist":
+            return torchvision.datasets.QMNIST(root=Datastore().derive("./datasets"), what=split, train=False, transform=LeNet5.transforms, download=True)        
+        else:
+            raise ValueError(f"unknown dataset {dataset}")
 
     def get_validation_data(self):
         raise ValueError("not supported")
 
-    def get_criterion(self):
+    def get_criterion(self, **kwargs):
         return nn.CrossEntropyLoss()
     
     def get_optimizer(self) -> optim.Optimizer:

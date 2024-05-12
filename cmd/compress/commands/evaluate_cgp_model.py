@@ -9,6 +9,7 @@ from parse import parse
 from commands.factory.experiment import create_all_experiment, create_experiment
 from tqdm import tqdm
 from functools import partial
+from cgp.cgp_adapter import CGP
 
 def evaluate_cgp_model(args):
     for experiment in create_all_experiment(args):
@@ -17,9 +18,24 @@ def evaluate_cgp_model(args):
         experiment = experiment.get_result_eval_env()
         experiment.get_model_metrics_from_statistics()
 
+def evaluate_model(root=r"C:\Users\Majo\source\repos\TorchCompresser\data_store\mobilenet\features_18_0_features_18_0_mse_0.0_256_31_batch_1", run=2):
+    root = Path(root)
+    cgp = CGP("C:\\Users\\Majo\\source\\repos\\TorchCompresser\\out\\build\\x64-release\\cgp\\CGP.exe")
+    df = pd.read_csv(
+        root / f"train_statistics/fitness/statistics.{run}.csv",
+        names=["run", "generation", "timestamp", "error", "qenergy", "energy", "area", "qdelay", "delay", "depth", "gate_count", "chromosome"])
+    df.dropna(inplace=True, subset="chromosome")
+    print(df)
+    solution = df.iloc[-1]
+    print(solution)
+    with open("temp_chromosome.txt", "w") as f:
+        f.write(solution["chromosome"] + "\n")
+    cgp.evaluate_chromosomes("gate.stats.txt", train_weights=root / "train.data", config_path=root / "train_cgp.config", chromosome_file="temp_chromosome.txt", output_statistics="stats_temp_chromosome.txt", output_weights="weight_temp_chromosome.txt", gate_parameters_file=root / "gate_parameters.txt")     
 
 # def evaluate_model_metrics_pbs(self,
+#                         model_name: str,
 #                         time_limit: str,
+#                         dataset: str = None,
 #                         template_pbs_file: str = r"C:\Users\Majo\source\repos\TorchCompresser\cmd\compress\commands\pbs\model_metrics_job.sh",
 #                         experiments_folder: str = "experiments_folder",
 #                         results_folder: str = "results",
@@ -77,14 +93,30 @@ def evaluate_cgp_model(args):
 #                 pbs_f.write(line)
 #     print("saved pbs file to: " + str(self.train_pbs))    
 
+columns_names = ["run", "generation", "timestamp", "error", "quantized_energy", "energy", "area", "quantized_delay", "delay", "depth", "gate_count", "chromosome"]
+
 def sample(top: int, f: str):
     df = pd.read_csv(f)
-    return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
+    if "error" in df.columns.values:
+        return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
+    else:
+        df = pd.read_csv(f, names=columns_names)
+        return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
 
 def pick_top(top: int, f: str):
     prev_chunk = pd.DataFrame()
     last_chunk = pd.DataFrame()
-    for chunk in pd.read_csv(f, chunksize=2*top):
+    
+    chunk = next(pd.read_csv(f, chunksize=2*top), None)
+    names = None
+    
+    if chunk is None:
+        raise ValueError(f"dataset is empty for {f}")
+    
+    if "error" not in chunk.columns.values:
+        names = columns_names
+    
+    for chunk in pd.read_csv(f, chunksize=2*top, names=names):
         prev_chunk = last_chunk
         last_chunk = chunk
     
@@ -98,6 +130,9 @@ def evaluate_model_metrics(args):
     data_store = store.Datastore()
     data_store.init_experiment_path(experiment)
     df_factory = pd.read_csv if args.top is None else partial(pick_top, args.top)
+    original_top = args.top
+    kwargs = vars(args)
+    del kwargs["top"]
 
     if not isinstance(experiment, experiments.MultiExperiment):
         experiment_list = [experiment]
@@ -106,7 +141,7 @@ def evaluate_model_metrics(args):
         sub_experiments = experiment.get_experiments_with_glob(case) if isinstance(experiment, experiments.MultiExperiment) else [experiment]
         for x in sub_experiments:
             for run in (args.runs or x.get_number_of_train_statistic_file(fmt=args.statistics_file_format)):
-                destination = data_store.derive_from_experiment(experiment) / "model_metrics" / (x.get_name(depth=1) + f".{run}.csv")
+                destination = data_store.derive_from_experiment(experiment) / "model_metrics" / (f"{args.dataset or 'default'}.{args.split or 'test'}." + (x.get_name(depth=1) + f".{run}.csv"))
                 
                 if destination.exists():
                     print(f"skipping {x.get_name(depth=1)} run {run}")
@@ -117,17 +152,19 @@ def evaluate_model_metrics(args):
 
                 df.drop(columns="depth", inplace=True, errors="ignore")
                 df = df[~(
-                    df["error"].duplicated() & df["quantized_energy"].duplicated() & 
-                    df["energy"].duplicated() & df["quantized_delay"].duplicated() & 
-                    df["delay"].duplicated() & df["area"].duplicated() &
-                    df["gate_count"].duplicated() & df["chromosome"].duplicated())]   
+                    df["error"].duplicated(keep="last") & df["quantized_energy"].duplicated(keep="last") & 
+                    df["energy"].duplicated(keep="last") & df["quantized_delay"].duplicated(keep="last") & 
+                    df["delay"].duplicated(keep="last") & df["area"].duplicated(keep="last") &
+                    df["gate_count"].duplicated(keep="last") & df["chromosome"].duplicated(keep="last"))]   
+
 
                 df = df.loc[~df["chromosome"].isna(), :].copy()
                 df["Top-1"] = None
                 df["Top-5"] = None
                 df["Loss"] = None        
                 
-                chromosomes_file = data_store.derive_from_experiment(x) / "chromosomes.txt"
+                top = original_top + 1 if original_top else len(df.index)
+                chromosomes_file = data_store.derive_from_experiment(x) / f"chromosomes.{run}.txt"
                 stats_file = data_store.derive_from_experiment(x) / "evaluate_statistics" /  f"statistics.{run}.csv"
                 weights_file = data_store.derive_from_experiment(x) / "all_weights" / (f"weights.{run}." + "{run}.txt")
                 gate_statistics = data_store.derive_from_experiment(x) / "gate_statistics" / (f"statistics.{run}." + "{run}.txt")
@@ -147,8 +184,6 @@ def evaluate_model_metrics(args):
                     continue
                 
                 def run_identifier_iterator():
-                    top = args.top
-                    top = top + 1 if top else len(df.index)
                     for i in range(1, top, 1):
                         current_path = Path(str(weights_file).format(run=i))
                         
@@ -161,7 +196,6 @@ def evaluate_model_metrics(args):
                     for i in run_identifier_iterator():
                         current_path = Path(str(weights_file).format(run=i))
                         yield x.get_weights(current_path)
-                
                 
                 cached_top_k, cached_loss = None, None
                 top_1 = []; top_5 = []; losses = []; runs_id = [];
@@ -179,13 +213,13 @@ def evaluate_model_metrics(args):
                             losses.append(cached_loss)
                         else:          
                             print("error:", eval_row["error"])   
-                            if eval_row["error"] == 0:
+                            if False and eval_row["error"] == 0:
                                 top_1.append(cached_top_k[1])
                                 top_5.append(cached_top_k[5])
                                 losses.append(cached_loss)
                             else:
                                 model = x._model_adapter.inject_weights(weights, plans)
-                                top_k, loss = model.evaluate(top=[1, 5], batch_size=None)
+                                top_k, loss = model.evaluate(top=[1, 5], **kwargs)
                                 top_1.append(top_k[1])
                                 top_5.append(top_k[5])
                                 losses.append(loss)

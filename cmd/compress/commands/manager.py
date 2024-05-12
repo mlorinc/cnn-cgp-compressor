@@ -90,9 +90,15 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
             if command == "model-metrics":
                 experiment_group.add_argument("--runs", help="Specific runs to evaluate", nargs="+", default=None)
                 experiment_group.add_argument("--top", help="Evaluate only the best", type=int, default=None)
+                experiment_group.add_argument("--batch-size", help="Batch size", type=int, default=None)
                 experiment_group.add_argument("-s", "--statistics-file-format", help="Specify statistics filename", type=str, default=None)
                 experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=str(Datastore().derive(experiment_name)))
                 experiment_group.add_argument("-w", "--only-weights", help="Infer weights only", action="store_true")
+                experiment_group.add_argument("--dataset", help="Dataset to use", type=str)
+                experiment_group.add_argument("--split", help="Split to use", type=str)
+                experiment_group.add_argument("--num-workers", type=int, default=None, help="Worker count for data loader")
+                experiment_group.add_argument("--num-proc", type=int, default=None, help="Proccesor count for dataset")
+                experiment_group.add_argument("-l", "--include-loss", action="store_true", help="Whether to include loss in evaluation")
             else:
                 experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=os.environ.get("experiments_root", "cmd/compress/experiments/"))
 

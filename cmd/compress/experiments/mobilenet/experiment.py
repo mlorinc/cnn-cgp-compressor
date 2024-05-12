@@ -64,7 +64,15 @@ class MobilenetExperiment(MultiExperiment):
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
         experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error)
-        result = parse("mse_{mse}_{rows}_{cols}", name)
+        result = parse("{input_layer_name}_{output_layer_name}_mse_{mse}_{rows}_{cols}", name)
+        
+        second_layer_start = name.index("_features")
+        mse_start = name.index("_mse")
+        
+        input_layer_name = name[:second_layer_start]
+        output_layer_name = name[second_layer_start+1:mse_start]
+        rest = name[mse_start+1:]
+        result = parse("mse_{mse}_{rows}_{cols}", rest)
         
         if not result:
             raise ValueError("invalid name " + name)
@@ -76,7 +84,7 @@ class MobilenetExperiment(MultiExperiment):
         experiment.config.set_row_count(rows)
         experiment.config.set_col_count(cols)
         experiment.config.set_look_back_parameter(cols + 1)
-        experiment.set_feature_maps_combinations(self._get_filters(self.input_layer_names, self.output_layer_names))
+        experiment.set_feature_maps_combinations(self._get_filters(input_layer_name, output_layer_name))
         return experiment
 
     def _get_filters(self, input_layer_names: List[str], output_layer_names: List[str]):

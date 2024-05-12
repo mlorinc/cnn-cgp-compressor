@@ -64,7 +64,7 @@ def get_experiment_arguments(name: str, parser):
 
 def get_base_argument_parser(parser: argparse.ArgumentParser):
     parser.add_argument("--depth", action="store_true", default=False, help="Include depth metric")
-    parser.add_argument("-e", "--allowed-mse-error", default=0.15, help="Allowed error when chromosomes will be logged in statistics")
+    parser.add_argument("-e", "--allowed-mse-error", default=None, help="Allowed error when chromosomes will be logged in statistics")
     return parser
 
 def get_pbs_default_arguments_parser(parser: argparse.ArgumentParser):
