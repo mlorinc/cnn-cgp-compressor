@@ -26,9 +26,9 @@ ml add intelcdk || { echo >&2 "Could not load the Intel module!"; exit 1; }
 # if the copy operation fails, issue error message and exit
 cp -r $DATADIR/$CGP_CPP_PROJECT $SCRATCHDIR || { echo >&2 "Error while copying CGP source file(s)!"; exit 2; }
 
-cd $SCRATCHDIR/$CGP_CPP_PROJECT && make clean all || { echo >&2 "Error while moving to the compilation dir!"; exit 3; }
+cd $SCRATCHDIR/$CGP_CPP_PROJECT && make || { echo >&2 "Error while moving to the compilation dir!"; exit 3; }
 
-mkdir -p $(dirname $CGP_BIN_DST) || { echo >&2 "Error while creating bin dir!"; exit 4; }
+# mkdir -p $(dirname $CGP_BIN_DST) || { echo >&2 "Error while creating bin dir!"; exit 4; }
 
 # cp $SCRATCHDIR/$CGP_CPP_PROJECT/$CGP_BINARY_SRC $CGP_BIN_DST || { echo >&2 "Error while copying CGP binary!"; exit 5; }
 
