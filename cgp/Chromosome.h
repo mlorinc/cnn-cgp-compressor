@@ -533,6 +533,7 @@ namespace cgp
 		int get_function_input_arity(int gate_index) const;
 		int get_function_input_arity_2(gene_t func) const;
 		int get_function_output_arity(int gate_index) const;
+		int get_function_output_arity2(gene_t func) const;
 		int clip_pin(int pin) const;
 		bool is_used_pin(int pin) const;
 	public:

@@ -9,11 +9,12 @@
 #include <map>
 #include <cmath>
 
-#if defined(__VIRTUAL_SELECTOR) || defined(__SINGLE_OUTPUT_ARITY)
+//#if defined(__VIRTUAL_SELECTOR) || defined(__SINGLE_OUTPUT_ARITY)
+//#define _clip_pin(x) (x)
+//#else
+//#define _clip_pin(x) (clip_pin(x))
+//#endif
 #define _clip_pin(x) (x)
-#else
-#define _clip_pin(x) (clip_pin(x))
-#endif
 
 
 #if defined(__VIRTUAL_SELECTOR)
@@ -165,14 +166,16 @@ void Chromosome::setup_chromosome()
 		const auto& column_values = minimum_output_indicies[column_index];
 		auto min = std::get<0>(column_values);
 		auto max = std::get<1>(column_values);
-
+		// Block function
+		ite[cgp_configuration.function_input_arity()] = get_random_number() % cgp_configuration.function_count();
 		// Block inputs
 		for (auto j = 0; j < cgp_configuration.function_input_arity(); j++)
 		{
-			*ite++ = _clip_pin((rand() % (max - min)) + min);
+			*ite++ = _clip_pin((get_random_number() % (max - min)) + min);
 		}
 		// Block function
-		*ite++ = rand() % cgp_configuration.function_count();
+		/**ite++ = rand() % cgp_configuration.function_count();*/
+		ite++;
 	}
 
 	// Connect outputs
@@ -185,7 +188,7 @@ void Chromosome::setup_chromosome()
 #else
 	for (int i = 0; i < output_count; i++) {
 #endif
-		* ite++ = _clip_pin((rand() % (max - min)) + min);
+		* ite++ = _clip_pin((get_random_number() % (max - min)) + min);
 	}
 }
 
@@ -219,16 +222,19 @@ void Chromosome::setup_chromosome(const std::string & serialized_chromosome)
 		{
 			throw std::invalid_argument("invalid format of the gate ID");
 		}
-
+		auto old_it = it;
 		for (size_t k = 0; k < block_size; k++)
 		{
-			int value;
-
-			if (!(input >> value >> discard))
+			if (!(input >> *it++ >> discard))
 			{
 				throw std::invalid_argument("invalid format of the chromosome gate definition\n" + serialized_chromosome);
 			}
-			*it++ = _clip_pin(value);
+		}
+
+		// Clip inputs
+		for (int j = 0; j < cgp_configuration.function_input_arity(); j++)
+		{
+			*old_it++ = _clip_pin(*old_it);
 		}
 
 #if defined(__OLD_NOOP_OPERATION_SUPPORT)
@@ -980,24 +986,17 @@ void Chromosome::evaluate()
 		gate_visit_map[i] = !need_gate_visit_map && gate_visit_map[i];
 		evaluate_single_from_pins(input_pin, output_pin, *func);
 
-#ifdef __VIRTUAL_SELECTOR
-		if (is_demux(*func))
+#ifndef __SINGLE_OUTPUT_ARITY
+		if (*func != CGPOperator::DEMUX)
 		{
-			for (int i = 0; i < cgp_configuration.function_output_arity(); i++)
+			// Shortcircuit pins if multi-output is used
+			int start = get_function_output_arity2(*func);
+			for (int i = start; i < cgp_configuration.function_output_arity(); i++)
 			{
-				set_value(block_output_pins[i], (i == selector) ? (block_output_pins[i]) : (0));
+				set_value(output_pin[i], output_pin[0]);
 			}
 		}
-		else
-		{
-			// speed up evolution of operator + multiplexor; shortcircuit pins
-			for (int i = 0; i < cgp_configuration.function_output_arity(); i++)
-			{
-				set_value(block_output_pins[i], block_output_pins[selector]);
-			}
-		}
-#endif // __VIRTUAL_SELECTOR
-
+#endif
 
 		output_pin += cgp_configuration.function_output_arity();
 		input_pin += cgp_configuration.function_input_arity() + 1;
@@ -1031,7 +1030,14 @@ Chromosome::weight_value_t* Chromosome::end_output()
 
 int cgp::Chromosome::get_function_input_arity(int gate_index) const
 {
-	return get_function_input_arity_2(*get_block_function(gate_index));
+	try {
+		return get_function_input_arity_2(*get_block_function(gate_index));
+	}
+	catch (const std::runtime_error& e)
+	{
+		std::string new_message = std::string(e.what()) + ", from gate index " + std::to_string(gate_index);
+		throw std::runtime_error(new_message);
+	}
 }
 
 int cgp::Chromosome::get_function_input_arity_2(gene_t func) const
@@ -1137,7 +1143,12 @@ int cgp::Chromosome::get_function_input_arity_2(gene_t func) const
 
 int cgp::Chromosome::get_function_output_arity(int gate_index) const
 {
-	const auto func = *get_block_function(gate_index);
+	return get_function_output_arity2(*get_block_function(gate_index));
+}
+
+int cgp::Chromosome::get_function_output_arity2(gene_t func) const
+{
+	assert(func <= CGPOperator::DEMUX || func == CGPOperator::ID);
 	switch (func) {
 	case CGPOperator::REVERSE_MAX_A:
 		return 1;
@@ -1232,7 +1243,7 @@ int cgp::Chromosome::get_function_output_arity(int gate_index) const
 		return 1;
 		break;
 	default:
-		throw std::runtime_error("this Chromosome::get_function_input_arity branch is not implemented! branch: " + std::to_string(func));
+		throw std::runtime_error("this Chromosome::get_function_output_arity branch is not implemented! branch: " + std::to_string(func));
 		break;
 	}
 }
@@ -1784,7 +1795,7 @@ int cgp::Chromosome::clip_pin(int pin) const
 	auto pin_gate_index = get_gate_index_from_output_pin(pin);
 	auto gate_base_pin = get_output_pin_from_gate_index(pin_gate_index);
 	auto new_relative_pin = pin - gate_base_pin;
-	int new_pin = get_output_pin_from_gate_index(pin_gate_index, std::min(get_function_output_arity(pin_gate_index) - 1, new_relative_pin));
+	int new_pin = gate_base_pin + std::min(get_function_output_arity(pin_gate_index) - 1, new_relative_pin);
 
 	assert(gate_base_pin <= new_pin && new_pin < gate_base_pin + cgp_configuration.function_output_arity());
 	return new_pin;
