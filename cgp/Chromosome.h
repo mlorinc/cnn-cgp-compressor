@@ -9,39 +9,6 @@
 #include "Configuration.h"
 #include "Dataset.h"
 
-enum CGPOperator {
-	REVERSE_MAX_A = 0,
-	ADD = 1,
-	SUB = 2,
-	MUL = 3,
-	NEG = 4,
-	REVERSE_MIN_B = 5,
-	QUARTER = 6,
-	HALF = 7,
-	BIT_AND = 8,
-	BIT_OR = 9,
-	BIT_XOR = 10,
-	BIT_NEG = 11,
-	DOUBLE = 12,
-	BIT_INC = 13,
-	BIT_DEC = 14,
-	R_SHIFT_3 = 15,
-	R_SHIFT_4 = 16,
-	R_SHIFT_5 = 17,
-	L_SHIFT_2 = 18,
-	L_SHIFT_3 = 19,
-	L_SHIFT_4 = 20,
-	L_SHIFT_5 = 21,
-	ONE_CONST = 22,
-	MINUS_ONE_CONST = 23,
-	ZERO_CONST = 24,
-	EXPECTED_VALUE_MIN = 25,
-	EXPECTED_VALUE_MAX = 26,
-	MUX = 27,
-	DEMUX = 28,
-	ID = 100
-};
-
 namespace cgp 
 {
 	class RandomNumberGenerator {

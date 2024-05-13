@@ -188,7 +188,7 @@ void Chromosome::setup_chromosome()
 #else
 	for (int i = 0; i < output_count; i++) {
 #endif
-		* ite++ = _clip_pin((get_random_number() % (max - min)) + min);
+		*ite++ = _clip_pin((get_random_number() % (max - min)) + min);
 	}
 }
 
@@ -212,7 +212,7 @@ void Chromosome::setup_chromosome(const std::string & serialized_chromosome)
 	setup_chromosome();
 	setup_output_iterators(0, output_count);
 
-	size_t block_size = cgp_configuration.function_input_arity() + 1;
+	size_t block_size = cgp_configuration.block_chromosome_size();
 	auto it = chromosome.get();
 
 	for (size_t i = 0; i < row_count * col_count; i++)
@@ -222,19 +222,13 @@ void Chromosome::setup_chromosome(const std::string & serialized_chromosome)
 		{
 			throw std::invalid_argument("invalid format of the gate ID");
 		}
-		auto old_it = it;
+
 		for (size_t k = 0; k < block_size; k++)
 		{
 			if (!(input >> *it++ >> discard))
 			{
 				throw std::invalid_argument("invalid format of the chromosome gate definition\n" + serialized_chromosome);
 			}
-		}
-
-		// Clip inputs
-		for (int j = 0; j < cgp_configuration.function_input_arity(); j++)
-		{
-			*old_it++ = _clip_pin(*old_it);
 		}
 
 #if defined(__OLD_NOOP_OPERATION_SUPPORT)
@@ -279,18 +273,16 @@ void Chromosome::setup_maps()
 	gate_visit_map.reset(new bool[nodes_count]);
 	absolute_output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size();
 	absolute_pin_start = pin_map.get() + cgp_configuration.pin_map_output_start();
+	output_start = absolute_output_start;
+	output_pin_start = absolute_pin_start;
 
 #if defined(__VIRTUAL_SELECTOR)
 	const int output_size = cgp_configuration.output_count() * cgp_configuration.dataset_size();
-	output_start = absolute_output_start + output_size;
-	output_pin_start = absolute_pin_start + output_size;
 	estimated_quantized_energy_consumption_array = std::make_unique<quantized_energy_t[]>(output_size);
 	estimated_energy_consumption_array = std::make_unique<energy_t[]>(output_size);
 	estimated_area_utilisation_array = std::make_unique<area_t[]>(output_size);
 	phenotype_node_count_array = std::make_unique<gate_count_t[]>(output_size);
 #else
-	output_start = absolute_output_start;
-	output_pin_start = absolute_pin_start;
 	estimated_quantized_energy_consumption_array = std::make_unique<quantized_energy_t[]>(cgp_configuration.output_count());
 	estimated_energy_consumption_array = std::make_unique<energy_t[]>(cgp_configuration.output_count());
 	estimated_area_utilisation_array = std::make_unique<area_t[]>(cgp_configuration.output_count());
@@ -350,13 +342,12 @@ void cgp::Chromosome::setup_output_iterators(int selector, size_t output_count)
 	this->output_count = output_count;
 #if defined(__VIRTUAL_SELECTOR)
 	const int output_size = output_count * cgp_configuration.dataset_size();
-	output_start = chromosome.get() + cgp_configuration.blocks_chromosome_size() + selector * output_count;
+	output_start = absolute_output_start + selector * output_count;
 	output_pin_start = absolute_pin_start + selector * output_count;
 	output_pin_end = output_pin_start + output_count;
 	absolute_pin_end = absolute_pin_start + output_size;
 	absolute_output_end = absolute_output_start + output_size;
 	max_genes_to_mutate = cgp_configuration.max_genes_to_mutate() + 1;
-	max_gene_index = cgp_configuration.chromosome_size();
 	mutable_genes_count = chromosome_size;
 #else
 	output_pin_end = output_pin_start + output_count;
@@ -987,13 +978,13 @@ void Chromosome::evaluate()
 		evaluate_single_from_pins(input_pin, output_pin, *func);
 
 #ifndef __SINGLE_OUTPUT_ARITY
+		// Shortcircuit pins if multi-output is used
 		if (*func != CGPOperator::DEMUX)
 		{
-			// Shortcircuit pins if multi-output is used
-			int start = get_function_output_arity2(*func);
-			for (int i = start; i < cgp_configuration.function_output_arity(); i++)
+			int src_pin = ((*func) != CGPOperator::MUX) ? (0) : (selector);
+			for (int i = 0; i < cgp_configuration.function_output_arity(); i++)
 			{
-				set_value(output_pin[i], output_pin[0]);
+				set_value(output_pin[i], output_pin[src_pin]);
 			}
 		}
 #endif

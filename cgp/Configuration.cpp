@@ -742,6 +742,12 @@ namespace cgp {
 
 
 	CGPConfiguration& CGPConfiguration::function_count(decltype(function_count_value) value) {
+		// Do not use DEMUX at all.
+		if (value - 1 == CGPOperator::DEMUX)
+		{
+			value--;
+		}
+
 		function_count_value = value;
 		return *this;
 	}
