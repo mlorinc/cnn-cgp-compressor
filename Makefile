@@ -19,8 +19,8 @@ TARGET := $(BIN_PATH)/$(TARGET_NAME)
 TARGET_DEBUG := $(DBG_PATH)/$(TARGET_NAME)
 
 # src files & obj files
-SRC := $(SRC_PATH)/StringTemplate.cpp $(SRC_PATH)/Configuration.cpp $(SRC_PATH)/Dataset.cpp $(SRC_PATH)/Stream.cpp $(SRC_PATH)/Chromosome.cpp $(SRC_PATH)/Cgp.cpp $(SRC_PATH)/CGPStream.cpp $(SRC_PATH)/Learning.cpp $(SRC_PATH)/Main.cpp
-OBJ := $(OBJ_PATH)/StringTemplate.o $(OBJ_PATH)/Configuration.o $(OBJ_PATH)/Dataset.o $(OBJ_PATH)/Stream.o $(OBJ_PATH)/Chromosome.o $(OBJ_PATH)/Cgp.o $(SRC_PATH)/CGPStream.o $(SRC_PATH)/Learning.o $(OBJ_PATH)/Main.o
+SRC := $(SRC_PATH)/StringTemplate.cpp $(SRC_PATH)/Configuration.cpp $(SRC_PATH)/Dataset.cpp $(SRC_PATH)/Stream.cpp $(SRC_PATH)/Chromosome.cpp $(SRC_PATH)/Cgp.cpp $(SRC_PATH)/CGPStream.cpp $(SRC_PATH)/Main.cpp
+OBJ := $(OBJ_PATH)/StringTemplate.o $(OBJ_PATH)/Configuration.o $(OBJ_PATH)/Dataset.o $(OBJ_PATH)/Stream.o $(OBJ_PATH)/Chromosome.o $(OBJ_PATH)/Cgp.o $(SRC_PATH)/CGPStream.o $(OBJ_PATH)/Main.o
 
 # clean files list
 DISTCLEAN_LIST := $(OBJ) 
