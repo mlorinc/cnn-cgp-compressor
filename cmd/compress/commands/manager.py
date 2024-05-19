@@ -5,7 +5,7 @@ import experiments.manager as experiments
 from commands.optimize_prepare_model import optimize_prepare_model
 from commands.fix_train_stats import fix_train_statistics
 from commands.optimize_model import optimize_model
-from commands.evaluate_cgp_model import evaluate_cgp_model, evaluate_model_metrics
+from commands.evaluate_cgp_model import evaluate_cgp_model, evaluate_model_metrics, evaluate_model_metrics_pbs
 from commands.train_model import train_model
 from commands.evaluate_model import evaluate_base_model
 from commands.evaluate_model_sensitivity import model_sensitivity
@@ -43,6 +43,8 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     evaluate_parser.add_argument("-a", "--archive", action="store_true", help="Archive model in datastore")
     evaluate_parser.add_argument("--num-workers", type=int, default=None, help="Worker count for data loader")
     evaluate_parser.add_argument("--num-proc", type=int, default=None, help="Proccesor count for dataset")
+    evaluate_parser.add_argument("--dataset", help="Dataset to use", type=str)
+    evaluate_parser.add_argument("--split", help="Split to use", type=str)
 
     # model:evaluate
     sensitivity_parser = subparsers.add_parser("model:sensitivity", help="Evaluate a model sensitivity")
@@ -66,6 +68,28 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     debug_parser = subparsers.add_parser("model:debug", help="Debug a model")
     debug_parser.add_argument("model_name", help="Name of the model to quantize")
     debug_parser.add_argument("-m", "--model_path", help="Path where trained model is saved", required=False, default=None) 
+
+    parser = subparsers.add_parser("model-metrics-pbs", help="Model evaluation on PBS")
+    parser.add_argument("--experiment", type=str, default="mobilenet", help="Experiment name")
+    parser.add_argument("--model-name", type=str, default="mobilenet_v2", help="Model name")
+    parser.add_argument("--model-path", type=str, default="data_store/models/mobilenet_v2/mobilenet_v2.state_dict.pth", help="Path to the model")
+    parser.add_argument("--time-limit", type=str, default="24:00:00", help="Time limit")
+    parser.add_argument("--dataset", type=str, help="Dataset")
+    parser.add_argument("--template-pbs-file", type=str, default=r"C:\Users\Majo\source\repos\TorchCompresser\cmd\compress\commands\pbs\model_metrics_job.sh", help="Template PBS file path")
+    parser.add_argument("--data-dir", type=str, default="/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/mobilenet_preparation_batch_10_19", help="Data directory")
+    parser.add_argument("--job-dir", type=str, default="/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/planners/batch_10_19", help="OpenPBS job directory")
+    parser.add_argument("--results-folder", type=str, default="/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/results", help="Results folder")
+    parser.add_argument("--cgp-folder", type=str, default="cgp_cpp_project", help="CGP folder")
+    parser.add_argument("--cpu", type=int, default=16, help="CPU")
+    parser.add_argument("--mem", type=str, default="64gb", help="Memory")
+    parser.add_argument("--scratch-capacity", type=str, default="500gb", help="Scratch capacity")
+    parser.add_argument("--modulo-group", type=int, default=None, help="Modulo group")
+    parser.add_argument("--modulo", type=int, default=None, help="Modulo")
+    parser.add_argument("--batch-size", type=int, default=2048, help="Batch size")
+    parser.add_argument("--num-proc", type=int, default=1, help="Number of processes")
+    parser.add_argument("--num-workers", type=int, default=14, help="Number of workers")
+    parser.add_argument("--stats-format", type=str, default="statistics.{run}.csv.zip", help="Statistics format")
+    parser.add_argument("--experiment-wildcard", type=str, default="*256_31", help="Experiment wildcard")
 
 def _register_experiment_commands(subparsers: argparse._SubParsersAction, experiment_names: List[str]):
     help_train = "Train a new CGP model to infer mising convolution weights from CNN model. Weights are trained as they are defined by {experiment_name}."
@@ -99,6 +123,9 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
                 experiment_group.add_argument("--num-workers", type=int, default=None, help="Worker count for data loader")
                 experiment_group.add_argument("--num-proc", type=int, default=None, help="Proccesor count for dataset")
                 experiment_group.add_argument("-l", "--include-loss", action="store_true", help="Whether to include loss in evaluation")
+                
+                if experiment_name == "mobilenet":
+                    experiment_group.add_argument("--rename", action="store_true", help="Whether to only rename old experiment format")
             else:
                 experiment_parser.add_argument("--experiment-path", help="Path to the experiment", type=str, default=os.environ.get("experiments_root", "cmd/compress/experiments/"))
 
@@ -146,6 +173,8 @@ def dispatch(args):
             return lambda: quantize_model(args.model_name, args.model_path, args.new_path)
         elif args.command == "model:debug":
             return lambda: debug_model(args.model_name, args.model_path)
+        elif args.command == "model-metrics-pbs":
+            return lambda: evaluate_model_metrics_pbs(**vars(args))
         else:
             print("Invalid command. Use --help for usage information.")
             print(e)

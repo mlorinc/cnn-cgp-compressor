@@ -1,4 +1,5 @@
 import os
+from string import Template
 import pandas as pd
 import seaborn as sns
 import commands.datastore as store
@@ -32,66 +33,81 @@ def evaluate_model(root=r"C:\Users\Majo\source\repos\TorchCompresser\data_store\
         f.write(solution["chromosome"] + "\n")
     cgp.evaluate_chromosomes("gate.stats.txt", train_weights=root / "train.data", config_path=root / "train_cgp.config", chromosome_file="temp_chromosome.txt", output_statistics="stats_temp_chromosome.txt", output_weights="weight_temp_chromosome.txt", gate_parameters_file=root / "gate_parameters.txt")     
 
-# def evaluate_model_metrics_pbs(self,
-#                         model_name: str,
-#                         time_limit: str,
-#                         dataset: str = None,
-#                         template_pbs_file: str = r"C:\Users\Majo\source\repos\TorchCompresser\cmd\compress\commands\pbs\model_metrics_job.sh",
-#                         experiments_folder: str = "experiments_folder",
-#                         results_folder: str = "results",
-#                         cgp_folder: str = "cgp_cpp_project",
-#                         cpu=32,
-#                         mem="2gb",
-#                         scratch_capacity="1gb"):
-    
-#     job_name = self.get_name().replace("/", "_")
-    
-#     template_data = {
-#         "machine": f"select=1:ncpus={cpu}:ompthreads={cpu}:mem={mem}:scratch_local={scratch_capacity}",
-#         "time_limit": time_limit,
-#         "job_name": f"cgp_model_metrics_{job_name}",
-#         "server": os.environ.get("pbs_server"),
-#         "username": os.environ.get("pbs_username"),
-#         "copy_src": "/storage/$server/home/$username/cgp_workspace/jobs_backups/experiments_folder/friday/all_layers/fixed_mse_16_50_10",
-#         "copy_dst": "workspace/all_layers",
-#         "end_copy_src": "$copy_dst/fixed_mse_16_50_10/data_store/model_metrics/*.csv",
-#         "end_copy_dst": "/storage/$server/home/$username/cgp_workspace/cgp_model_eval",
-#         "program": "",
-#         "cwd": "$copy_dst/fixed_mse_16_50_10",
-        
-#         "workspace": "/storage/$server/home/$username/cgp_workspace",
-#         "experiments_folder": experiments_folder,
-#         "results_folder": results_folder,
-#         "cgp_cpp_project": cgp_folder,
-#         "cgp_binary_src": "bin/cgp",
-#         "cgp_binary": "cgp",
-#         "cgp_command": "train",
-#         "cgp_config": self.config.path.name,
-#         "cgp_args": " ".join([str(arg) for arg in args]),
-#         "experiment": self.get_name(),
-#         "error_t": error_type,
-#         "cflags": " ".join([str(arg) for arg in cxx_flags])
-#     }
+def evaluate_model_metrics_pbs(
+                        experiment: str = "mobilenet",
+                        model_name: str = "mobilenet_v2",
+                        model_path: str = "data_store/models/mobilenet_v2/mobilenet_v2.state_dict.pth",
+                        time_limit: str = "24:00:00",
+                        job_dir: str = "/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/planners/batch_10_19",
+                        dataset: str = None,
+                        template_pbs_file: str = r"C:\Users\Majo\source\repos\TorchCompresser\cmd\compress\commands\pbs\model_metrics_job.sh",
+                        data_dir: str = "/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/mobilenet_preparation_batch_10_19",
+                        results_folder: str = "/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/results",
+                        cgp_folder: str = "cgp_cpp_project",
+                        cpu=16,
+                        mem="64gb",
+                        scratch_capacity="500gb",
+                        modulo=1,
+                        modulo_group=None,
+                        batch_size=2048,
+                        num_proc=1,
+                        num_workers=14,
+                        stats_format="statistics.{run}.csv.zip",
+                        experiment_wildcard="*256_31",
+                        **kwargs
+                        ):
+    modulo_groups = [modulo_group] if modulo_group is not None else range(int(modulo))
+    for modulo_group in modulo_groups:
+        job_name = f"{experiment}_{model_name}_{modulo_group}_{modulo}"
+        template_data = {
+            "machine": f"select=1:ncpus={cpu}:ompthreads={cpu}:mem={mem}:scratch_ssd={scratch_capacity}",
+            "model_name": model_name,
+            "model_path": model_path,
+            "time_limit": time_limit,
+            "job_name": f"model_eval_{job_name}",
+            "job_dir": job_dir,
+            "server": os.environ.get("pbs_server"),
+            "username": os.environ.get("pbs_username"),
+            "hf_token": os.environ.get("huggingface"),
+            "experiment_wildcard": experiment_wildcard,
+            "stats_format": stats_format,
+            "num_workers": num_workers,
+            "num_proc": num_proc,
+            "batch_size": batch_size,
+            "data_dir": data_dir,
+            "result_dir": results_folder,
+            "cwd": "compress_py",
+            "cgp_cpp_project": cgp_folder,
+            "cgp_binary_src": "bin/cgp",
+            "cgp_binary": "cgp",
+            "experiment": experiment,
+            "error_t": "uint64_t",
+            "cflags": " ".join(["-D_DISABLE_ROW_COL_STATS", "-D_DEPTH_DISABLED"]),
+            "dataset":  dataset,
+            "modulo":  modulo,
+            "modulo_group":  modulo_group,
+        }
 
-#     with open(template_pbs_file, "r") as template_pbs_f, open(self.train_pbs, "w", newline="\n") as pbs_f:
-#         copy_mode = False
-#         for line in template_pbs_f:
-#             if not copy_mode and line.strip() == "# PYTHON TEMPLATE END":
-#                 copy_mode = True
-#                 continue
+        pbs_file = f"{job_name}.pbs.sh"
+        with open(template_pbs_file, "r") as template_pbs_f, open(pbs_file, "w", newline="\n") as pbs_f:
+            copy_mode = False
+            for line in template_pbs_f:
+                if not copy_mode and line.strip() == "# PYTHON TEMPLATE END":
+                    copy_mode = True
+                    continue
 
-#             if copy_mode:
-#                 pbs_f.write(line)
-#             else:
-#                 # keep substituting until it is done
-#                 changed = True
-#                 while changed:
-#                     old_line = line
-#                     template = Template(line)
-#                     line = template.safe_substitute(template_data)
-#                     changed = line != old_line
-#                 pbs_f.write(line)
-#     print("saved pbs file to: " + str(self.train_pbs))    
+                if copy_mode:
+                    pbs_f.write(line)
+                else:
+                    # keep substituting until it is done
+                    changed = True
+                    while changed:
+                        old_line = line
+                        template = Template(line)
+                        line = template.safe_substitute(template_data)
+                        changed = line != old_line
+                    pbs_f.write(line)
+        print("saved pbs file to: " + str(pbs_file))    
 
 columns_names = ["run", "generation", "timestamp", "error", "quantized_energy", "energy", "area", "quantized_delay", "delay", "depth", "gate_count", "chromosome"]
 
@@ -140,9 +156,11 @@ def evaluate_model_metrics(args):
     for case in experiment_list:
         sub_experiments = experiment.get_experiments_with_glob(case) if isinstance(experiment, experiments.MultiExperiment) else [experiment]
         for x in sub_experiments:
+            if kwargs.get("rename", False):
+                print(f"skipping {x.get_name(depth=1)} because it was renamed")
+                continue
             for run in (args.runs or x.get_number_of_train_statistic_file(fmt=args.statistics_file_format)):
                 destination = data_store.derive_from_experiment(experiment) / "model_metrics" / (f"{args.dataset or 'default'}.{args.split or 'test'}." + (x.get_name(depth=1) + f".{run}.csv"))
-                
                 if destination.exists():
                     print(f"skipping {x.get_name(depth=1)} run {run}")
                     continue
