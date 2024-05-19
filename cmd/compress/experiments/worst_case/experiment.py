@@ -39,7 +39,7 @@ class WorstCaseExperiment(MultiExperiment):
 
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
-        experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error)
+        experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
         result = parse("{prefix}mse_{mse}_{rows}_{cols}", name)
         
         if not result:

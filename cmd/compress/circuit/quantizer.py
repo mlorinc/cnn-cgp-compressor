@@ -16,9 +16,12 @@ class Quantizier(object):
             self.size = reduce(mul, grid_sizes, 1)
         else:
             self.size = 1
+        print(f"min value: {min_value}", f"max value: {max_value}")
         self.min_value = Decimal(min_value * self.size)
         self.max_value = Decimal(max_value * self.size)
+        print(f"min total value: {self.min_value}", f"max total value: {self.max_value}")
         self.error_allowance = Decimal(error_allowance)
+        print(f"error allowance: {self.error_allowance}")
         self.bits = int(math.ceil(math.log2((self.max_value - self.min_value) / self.error_allowance + 2)))
         self.max_error = (self.max_value - self.min_value) / (2**self.bits - 2)
         

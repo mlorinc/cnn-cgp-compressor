@@ -65,6 +65,7 @@ def get_experiment_arguments(name: str, parser):
 def get_base_argument_parser(parser: argparse.ArgumentParser):
     parser.add_argument("--depth", action="store_true", default=False, help="Include depth metric")
     parser.add_argument("-e", "--allowed-mse-error", default=None, help="Allowed error when chromosomes will be logged in statistics")
+    parser.add_argument("--e-fitness", default="SE", type=str, help="Error fitness")
     return parser
 
 def get_pbs_default_arguments_parser(parser: argparse.ArgumentParser):
@@ -75,7 +76,6 @@ def get_pbs_default_arguments_parser(parser: argparse.ArgumentParser):
     parser.add_argument("--cpu", type=int, default=None, help="Number of CPUs")
     parser.add_argument("--mem", default="2gb", help="Memory")
     parser.add_argument("--scratch-capacity", default="1gb", help="Scratch capacity")
-    parser.add_argument("--e-fitness", default="SE", type=str, help="Error fitness")
     parser.add_argument("--multiplex", action="store_true", help="Use Multiplex Optimisation")
     return parser
 

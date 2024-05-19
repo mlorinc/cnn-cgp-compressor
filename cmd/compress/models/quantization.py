@@ -78,7 +78,7 @@ def conv2d_core(selectors, kernel_size, core_size):
 def conv2d_selector(layer_name: str, selectors, kernel_size, core_size):
     return FilterSelector(layer_name, conv2d_core(selectors, kernel_size, core_size), conv2d_outter(selectors, kernel_size, core_size))
 
-def dequantize_per_channel(x: torch.Tensor, conv_layer: torch.Tensor):
+def quantize_per_channel(x: torch.Tensor, conv_layer: torch.Tensor):
     zero_point = conv_layer.q_per_channel_zero_points()
     scale = conv_layer.q_per_channel_scales()
 
@@ -91,7 +91,7 @@ def dequantize_per_channel(x: torch.Tensor, conv_layer: torch.Tensor):
         dtype=torch.qint8
     )
 
-def dequantize_per_tensor(x: torch.Tensor, scale: torch.float32, zero_point: torch.float32):
+def quantize_per_tensor(x: torch.Tensor, scale: torch.float32, zero_point: torch.float32):
     dequantized = ((x - zero_point) * scale).float()
     return torch.quantize_per_tensor(
         dequantized,

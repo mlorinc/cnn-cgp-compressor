@@ -4,11 +4,12 @@ import operator
 import copy
 from abc import ABC, abstractmethod
 from torch.utils.data import DataLoader
+import random
 from typing import List, Union, Self, Iterable, Optional, Callable
 from functools import reduce
 from models.adapters.model_adapter_interface import ModelAdapterInterface
 from models.base_model import BaseModel
-from models.quantization import dequantize_per_tensor, tensor_iterator
+from models.quantization import quantize_per_tensor, tensor_iterator
 from models.selector import FilterSelectorCombinations
 from tqdm import tqdm
 
@@ -83,6 +84,7 @@ class ModelAdapter(ModelAdapterInterface, ABC):
         original_train_mode = self.model.training
         dataset = self.get_test_data(**kwargs) if not custom_dataset else self.get_custom_dataset(**kwargs)
         criterion = self.get_criterion(**kwargs)
+        print(f"dataset has {len(dataset)} samples")
         try:
             self.model.eval()
             loader = DataLoader(dataset, batch_size=batch_size or len(dataset), shuffle=False, num_workers=num_workers or 0)
@@ -116,9 +118,14 @@ class ModelAdapter(ModelAdapterInterface, ABC):
                             break
                                 
 
-            top_k = {k: v / total_samples for k, v in running_topk_correct.items()}      
+            top_k = {k: v / total_samples for k, v in running_topk_correct.items()}
+            top_k_strings = [f"Top-{k}: {v:.6f}" for k, v in list(top_k.items())[1:show_top_k]]
+            top_k_strings = (", " + ", ".join(top_k_strings) if top_k_strings else "")
             average_loss = running_loss / total_samples
-
+            if include_loss and criterion is not None:
+                print(f"Loss: {average_loss:.4f}, Acc: {top_k[1]:.6f}" + top_k_strings)
+            else:
+                print(f"Acc: {top_k[1]:.6f}" + top_k_strings)
             if len(top_k) == 1:
                 return top_k[1], average_loss
             else:
@@ -147,15 +154,14 @@ class ModelAdapter(ModelAdapterInterface, ABC):
         except:
             return layer.weight.detach()        
 
-    def set_weights_bias(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor, biases: torch.Tensor):
+    def set_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor):
         layer = self.get_layer(layer)
         try:
-            layer.set_weight_bias(weights, biases)
+            layer.set_weight(weights)
         except Exception as e:
             layer.weight = weights 
-            layer.bias = biases
 
-    def inject_weights(self, weights_vector: List[torch.Tensor], injection_combinations: FilterSelectorCombinations, inline=False):
+    def inject_weights(self, weights_vector: List[torch.Tensor], injection_combinations: FilterSelectorCombinations, inline=False, debug=False):
         original_train_mode = self.model.training
         model = self.clone() if not inline else self
         try:
@@ -164,13 +170,15 @@ class ModelAdapter(ModelAdapterInterface, ABC):
                 for weights, injection_plans in zip(weights_vector, injection_combinations.get_combinations()):
                     offset = 0
                     for sel in injection_plans.get_selectors():
-                        bias = model.get_bias(sel.selector)
                         fp32_weights = model.get_weights(sel.selector)
                         for w, size, out_selector in tensor_iterator(fp32_weights, sel.out):
                             # print("Layer:", plan.layer_name, "Sel:", out_selector, "Size:", size)
-                            fp32_weights[*out_selector] = dequantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())                                      
+                            if not debug:
+                                fp32_weights[*out_selector] = quantize_per_tensor(weights[offset:offset+size], w.q_scale(), w.q_zero_point())
+                            else:
+                                fp32_weights[*out_selector] = quantize_per_tensor(torch.tensor([random.randint(-128, 127) for _ in range(size)], dtype=torch.int8), w.q_scale(), w.q_zero_point())                                      
                             offset += size
-                        model.set_weights_bias(sel.selector, fp32_weights, bias)
+                        model.set_weights(sel.selector, fp32_weights)
                     print("offset:", offset, "size:", reduce(operator.mul, weights.shape))
                     # assert offset == reduce(operator.mul, weights.shape)
                 return model

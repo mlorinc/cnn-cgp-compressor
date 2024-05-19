@@ -21,9 +21,19 @@ class MissingChromosomeError(ValueError):
 
 class Experiment(object):
     train_cgp_name = "train_cgp.config"
+    error_metric_macros = {
+        "MSE": "-D__MEAN_SQUARED_ERROR_METRIC",
+        "AE": "-D__ABSOLUTE_ERROR_METRIC",
+        "SE": ""
+    }
+    error_metric_thresholds = {
+        "MSE": lambda _, error=256, extra_error=0: int(error**2 + extra_error),
+        "AE": lambda output_size, error=256, extra_error=0: int(error * output_size + extra_error),
+        "SE": lambda output_size, error=256, extra_error=0: int(error**2 * output_size + extra_error)
+    }
 
     def __init__(self, config: Union[CGPConfiguration, str, Path], model_adapter: ModelAdapter, cgp: CGP,
-                 dtype=torch.int8, parent: Optional[Self] = None, start_run=None, depth=None, allowed_mse_error=None, **kwargs) -> None:
+                 dtype=torch.int8, parent: Optional[Self] = None, start_run=None, number_of_runs=None, depth=None, allowed_mse_error=None, **kwargs) -> None:
         self.base_folder = config.path.parent if isinstance(config, CGPConfiguration) else Path(config) if config is not None else None
         self.batched_parent = None
         self.args = dict(**kwargs)
@@ -31,21 +41,26 @@ class Experiment(object):
         self._start_run = start_run
         self._depth = depth
         if isinstance(config, CGPConfiguration):
-            config.parse_arguments({**self.args, "start_run": start_run})
+            config.parse_arguments({**self.args, "start_run": start_run, "number_of_runs": number_of_runs})
 
         self.temporary_base_folder = None
         self.set_paths(self.base_folder)
         self.parent: Self = parent
         self.config = config if isinstance(config, CGPConfiguration) else None
         self._model_adapter = model_adapter
-        self._cgp = cgp if isinstance(cgp, CGP) else CGP(cgp)
         self.dtype = dtype
+        self._cgp = cgp if isinstance(cgp, CGP) else CGP(cgp, dtype=self.dtype)
         self._to_number = int if self.dtype == torch.int8 else float
         self.model_top_k = None
         self.model_loss = None
         self.name_fmt = None
         self._feature_maps_combinations = None
+        self.error_threshold_function = self.error_metric_thresholds.get(self.args["e_fitness"].upper(), None)
+        self.error_metric_macro = self.error_metric_macros.get(self.args["e_fitness"].upper(), None)
         self.reset()
+        
+        if self.error_threshold_function is None:
+            raise ValueError(f"unknown error fitness metric {self.args['e_fitness']}")    
 
     @classmethod
     def with_data_only(cls, path: Union[Path, str], model_name: str = None, model_path: str = None, cgp: str = None):
@@ -112,17 +127,21 @@ class Experiment(object):
         self.clean_eval()
 
     def _clone(self, config: CGPConfiguration) -> Self:
-        experiment = Experiment(config or self.config.clone(), self._model_adapter.clone() if self._model_adapter else None, self._cgp, self.dtype)
+        experiment = Experiment(
+            config or self.config.clone(),
+            self._model_adapter.clone() if self._model_adapter else None,
+            self._cgp,
+            dtype=self.dtype,
+            start_run=self._start_run,
+            depth=self._depth,
+            allowed_mse_error=self._allowed_mse_error,
+            **self.args
+            )
         experiment.model_top_k = self.model_top_k
         experiment.model_loss = self.model_loss
         experiment._cgp_prepared = self._cgp_prepared
         experiment._feature_maps_combinations = self._feature_maps_combinations.clone()
         experiment.parent = self.parent
-        experiment.args = self.args
-        experiment.dtype = self.dtype
-        experiment._depth = self._depth
-        experiment._start_run = self._start_run
-        experiment._allowed_mse_error = self._allowed_mse_error
         return experiment
 
     def _handle_path(self, path: Path, relative: bool):
@@ -171,11 +190,11 @@ class Experiment(object):
 
         if not config.has_input_file():
             if self.batched_parent is None and reuse_weight_file:
-                experiment._prepare_cgp(config)
-                experiment._cgp.create_train_file(experiment.train_weights)
-            else:
                 assert isinstance(self.batched_parent, Experiment)
                 shutil.copyfile(self.train_weights.parent.parent / self.batched_parent.get_name(depth=1) / self.train_weights.name, self.train_weights)
+            else:
+                experiment._prepare_cgp(config)
+                experiment._cgp.create_train_file(experiment.train_weights)
             config.set_input_file(self._handle_path(experiment.train_weights, relative_paths))
         if not config.has_cgp_statistics_file():
             config.set_cgp_statistics_file(self._handle_path(experiment.train_statistics, relative_paths))
@@ -200,10 +219,10 @@ class Experiment(object):
             except:
                 allowed_mse_error = float(allowed_mse_error)
             
-            if isinstance(allowed_mse_error, int):
-                config.set_mse_chromosome_logging_threshold(allowed_mse_error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size())
-            elif isinstance(allowed_mse_error, float):
-                config.set_mse_chromosome_logging_threshold(int(allowed_mse_error**2 * experiment.config.get_output_count() * experiment.config.get_dataset_size()))
+
+            output_size = experiment.config.get_output_count() * experiment.config.get_dataset_size()
+            if isinstance(allowed_mse_error, int) or isinstance(allowed_mse_error, float):
+                config.set_mse_chromosome_logging_threshold(int(self.error_threshold_function(output_size, error=allowed_mse_error)))
             elif allowed_mse_error is not None:
                 raise TypeError("allowed-mse-error must be either int or float: " + str(type(allowed_mse_error)))
         if not config.has_start_run() and self._start_run:
@@ -231,7 +250,7 @@ class Experiment(object):
                 
             config.set_gate_parameters_file(self._handle_path(self.gate_parameters_file, relative_paths))
 
-            experiment = self.get_train_env(config, relative_paths=relative_paths, reuse_weight_file=True)
+            experiment = self.get_train_env(config, relative_paths=relative_paths, reuse_weight_file=False)
             experiment.config.apply_extra_attributes()
             experiment.config.save()
             return experiment
@@ -286,7 +305,7 @@ class Experiment(object):
             64: "uint64_t",
         }
         
-        error_bits = math.ceil(math.log2(self.config.get_output_count() * 255**2 + 1))
+        error_bits = math.ceil(math.log2(self.error_threshold_function(self.config.get_output_count(), extra_error=1)))
         error_type = next(t for bit, t in unsigned_types.items() if error_bits <= bit)
         
         args = self.config.to_args()
@@ -305,12 +324,8 @@ class Experiment(object):
         if self.args.get("multiplex", False) and self.config.get_dataset_size() > 1:
             cxx_flags.append("-D__MULTI_MULTIPLEX")                 
         
-        if self.args["e_fitness"].upper() == "MSE":
-            cxx_flags.append("-D__MEAN_SQUARED_ERROR_METRIC")   
-        elif self.args["e_fitness"].upper() == "AE":
-            cxx_flags.append("-D__ABSOLUTE_ERROR_METRIC")           
-        elif self.args["e_fitness"].upper() != "SE":
-            raise ValueError(f"unknown error fitness metric {self.args['e_fitness']}")
+        if self.error_metric_macro.strip() != "":
+            cxx_flags.append(self.error_metric_macro)
         
         template_data = {
             "machine": f"select=1:ncpus={cpu}:ompthreads={cpu}:mem={mem}:scratch_local={scratch_capacity}",

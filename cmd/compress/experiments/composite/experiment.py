@@ -70,8 +70,9 @@ class MultiExperiment(Experiment, ABC):
                 if errors:
                     raise ValueError("the following errors occured while batching:\n\t" + "\n\t".join(errors))
                 batch_step = new_experiment.config.get_number_of_runs() // self.batches
-                new_experiment.config.set_start_run(batch_step * i)
-                new_experiment.config.set_number_of_runs(batch_step * i + batch_step)
+                new_experiment._start_run = batch_step * i
+                new_experiment.config.set_start_run(new_experiment._start_run)
+                new_experiment.config.set_number_of_runs(new_experiment._start_run + batch_step)
             
             new_experiment.batched_parent = base_experiment if i > 0 else None
             new_experiment.set_feature_maps_combinations(feature_maps_combiations)

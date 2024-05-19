@@ -5,7 +5,7 @@ from models.adapters.model_adapter import ModelAdapter
 from experiments.composite.experiment import MultiExperiment
 from experiments.experiment import Experiment
 from models.quantization import conv2d_selector
-from models.selector import FilterSelector, ByteSelector, FilterSelectorCombination, FilterSelectorCombinations
+from models.selector import FilterSelector, ValuesSelector, FilterSelectorCombination, FilterSelectorCombinations
 import argparse
 from typing import List
 from parse import parse
@@ -34,12 +34,14 @@ class LeSelectorExperiment(MultiExperiment):
             self._prepare_filters()
 
     def _prepare_filters(self):
+        output_count = 16*6*25+6*25
         for mse in self.mse_thresholds:
             for experiment in self.create_experiment(f"{self.prefix}mse_{mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.layer_names)):
-                experiment.config.set_mse_threshold(int(mse**2 * (16*6*25+6*25)))
+                experiment.config.set_mse_threshold(self.error_threshold_function(output_count, error=mse))
                 experiment.config.set_row_count(self.args["rows"])
                 experiment.config.set_col_count(self.args["cols"])
-                experiment.config.set_look_back_parameter(self.args["cols"])
+                experiment.config.set_output_count(output_count)
+                experiment.config.set_look_back_parameter(int(self.args["cols"] + 1))
 
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
@@ -61,9 +63,9 @@ class LeSelectorExperiment(MultiExperiment):
 
     def _get_filters(self, layer_names: List[str]):
         combinations = FilterSelectorCombinations()
+        combination = FilterSelectorCombination()
         for layer_name in layer_names:
-            combination = FilterSelectorCombination()
-            combination.add(FilterSelector(layer_name, [ByteSelector(self.config.get_input_count())], [(slice(None), slice(None), slice(None), slice(None))]))
+            combination.add(FilterSelector(layer_name, [ValuesSelector([0])], [(slice(None), slice(None), slice(None), slice(None))]))
         combinations.add(combination)
         return combinations
 

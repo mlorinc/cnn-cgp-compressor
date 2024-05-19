@@ -56,7 +56,7 @@ class ModelAdapterInterface(ABC):
         pass
 
     @abstractmethod
-    def set_weights_bias(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor, biases: torch.Tensor):
+    def set_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor):
         pass
 
     @abstractmethod

@@ -41,15 +41,16 @@ class AllLayersExperiment(MultiExperiment):
         for mse in self.mse_thresholds:
             input_count = max(map(self._get_input_count, self.layer_names))
             output_count = max(map(self._get_output_count, self.layer_names))
-            mse = int(mse**2 * output_count)
-            for experiment in self.create_experiment(f"{self.prefix}mse_{mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.layer_names)):
+            original_mse = mse
+            mse = self.error_threshold_function(output_count + 96, error=mse)
+            for experiment in self.create_experiment(f"{self.prefix}mse_{original_mse}_{self.args['rows']}_{self.args['cols']}{self.suffix}", self._get_filters(self.layer_names)):
                 experiment.config.set_input_count(input_count)
                 experiment.config.set_output_count(output_count)
                 experiment.config.set_mse_threshold(mse)
                 experiment.config.set_dataset_size(len(self.layer_names))
                 experiment.config.set_row_count(self.args["rows"])
                 experiment.config.set_col_count(self.args["cols"])
-                experiment.config.set_look_back_parameter(self.args["cols"])
+                experiment.config.set_look_back_parameter(int(self.args["cols"]) + 1)
 
     def _get_output_count(self, layer) -> int:
         layer: torch.nn.Conv2d = self._model_adapter.get_layer(layer)
@@ -61,7 +62,7 @@ class AllLayersExperiment(MultiExperiment):
 
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
-        experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error)
+        experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
         result = parse("mse_{mse}_{rows}_{cols}", name)
         
         if not result:

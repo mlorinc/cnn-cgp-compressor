@@ -27,7 +27,7 @@ class LeNet5(BaseModel):
         return LeNet5(self.model_path)
 
     def get_train_data(self, dataset="mnist", split="digits", **kwargs):
-        if dataset == "mnist":
+        if dataset == "mnist" or dataset is None:
             return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=True, download=True, transform=LeNet5.transforms)
         elif dataset == "emnist":
             return torchvision.datasets.EMNIST(root=Datastore().derive("./datasets"), split=split, train=True, transform=LeNet5.transforms, download=False)
@@ -37,7 +37,7 @@ class LeNet5(BaseModel):
             raise ValueError(f"unknown dataset {dataset}")
 
     def get_test_data(self, dataset="mnist", split="digits", **kwargs):
-        if dataset == "mnist":
+        if dataset == "mnist" or dataset is None:
             return torchvision.datasets.MNIST(root=Datastore().derive("./datasets"), train=False, download=True, transform=LeNet5.transforms)
         elif dataset == "emnist":
             return torchvision.datasets.EMNIST(root=Datastore().derive("./datasets"), split=split, train=False, transform=LeNet5.transforms, download=False)

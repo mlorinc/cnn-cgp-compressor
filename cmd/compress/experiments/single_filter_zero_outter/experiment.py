@@ -6,10 +6,9 @@ import random
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
 from models.adapters.model_adapter import ModelAdapter
-from experiments.composite.experiment import MultiExperiment
 from experiments.grid_size.experiment import GridSizeExperiment
 from models.selector import FilterSelector
-from models.quantization import conv2d_selector, dequantize_per_tensor
+from models.quantization import conv2d_selector
 
 class SingleFilterZeroOutterExperiment(GridSizeExperiment):
     name = "single_filter_zero_outter"
