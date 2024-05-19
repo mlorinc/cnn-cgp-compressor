@@ -280,10 +280,10 @@ class CGPConfiguration:
         return self.get_attribute(self.COMMAND_FUNCTION_OUTPUT_ARITY)
 
     def get_input_count(self):
-        return self.get_attribute(self.COMMAND_INPUT_COUNT)
+        return int(self.get_attribute(self.COMMAND_INPUT_COUNT))
 
     def get_output_count(self):
-        return self.get_attribute(self.COMMAND_OUTPUT_COUNT)
+        return int(self.get_attribute(self.COMMAND_OUTPUT_COUNT))
 
     def get_population_max(self):
         return self.get_attribute(self.COMMAND_POPULATION_MAX)
@@ -385,10 +385,10 @@ class CGPConfiguration:
         self.set_attribute(self.COMMAND_FUNCTION_OUTPUT_ARITY, value)
 
     def set_input_count(self, value):
-        self.set_attribute(self.COMMAND_INPUT_COUNT, value)
+        self.set_attribute(self.COMMAND_INPUT_COUNT, int(value))
 
     def set_output_count(self, value):
-        self.set_attribute(self.COMMAND_OUTPUT_COUNT, value)
+        self.set_attribute(self.COMMAND_OUTPUT_COUNT, int(value))
 
     def set_population_max(self, value):
         self.set_attribute(self.COMMAND_POPULATION_MAX, value)

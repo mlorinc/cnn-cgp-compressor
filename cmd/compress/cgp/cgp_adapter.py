@@ -26,8 +26,9 @@ class CGP(object):
 
     def setup(self, config: CGPConfiguration):
         self.config = config
-        input_size = self.config.get_input_count()
-        output_size = self.config.get_output_count()
+        input_size = int(self.config.get_input_count())
+        output_size = int(self.config.get_output_count())
+        print(f"CGP INIT: input_size={input_size}, output_size={output_size}, dtype={self._dtype}, dataset_size={config.get_dataset_size()}")
         self._inputs = [torch.zeros(size=(input_size, ), dtype=self._dtype).detach() for _ in range(config.get_dataset_size())]
         self._expected_values = [torch.zeros(size=(output_size, ), dtype=self._dtype).detach() for _ in range(config.get_dataset_size())]
         self._input_wildcards = [0] * config.get_dataset_size()
