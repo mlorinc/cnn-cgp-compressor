@@ -76,6 +76,8 @@ Chromosome::Chromosome(const Chromosome& that) noexcept :
 	input = that.input;
 	start_id_index = that.start_id_index;
 	id_count = that.id_count;
+	start_mux_index = that.start_mux_index;
+	mux_count = that.mux_count;
 	multiplexing = that.multiplexing;
 	chromosome_size = that.chromosome_size;
 	max_genes_to_mutate = that.max_genes_to_mutate;
@@ -119,6 +121,8 @@ Chromosome::Chromosome(Chromosome&& that) noexcept :
 	input = std::move(that.input);
 	start_id_index = that.start_id_index;
 	id_count = that.id_count;
+	start_mux_index = that.start_mux_index;
+	mux_count = that.mux_count;
 	multiplexing = that.multiplexing;
 	chromosome_size = that.chromosome_size;
 	max_genes_to_mutate = that.max_genes_to_mutate;
@@ -365,6 +369,11 @@ void cgp::Chromosome::update_mutation_variables()
 	{
 		chromosome_size = cgp_configuration.blocks_chromosome_size() + output_count;
 		mutable_genes_count = chromosome_size - id_count;
+#ifdef __MULTI_MULTIPLEX
+		// Do not mutate MUX
+		mutable_genes_count -= (cgp_configuration.row_count() * cgp_configuration.col_count() - start_mux_index) * cgp_configuration.block_chromosome_size();
+#endif
+
 		max_genes_to_mutate = static_cast<int>(std::floor(mutable_genes_count * cgp_configuration.mutation_max())) + 1;
 	}
 	else
@@ -806,7 +815,14 @@ void cgp::Chromosome::evaluate_single_from_pins(gene_t * input_pin, weight_outpu
 		}
 		break;
 	case CGPOperator::ID:
+#ifdef __SINGLE_OUTPUT_ARITY
 		set_value(output[0], get_pin_value(input_pin[0]));
+#else
+		for (int j = 0; j < cgp_configuration.function_output_arity(); j++)
+		{
+			set_value(output[j], get_pin_value(input_pin[j]));
+		}
+#endif
 		break;
 #else
 	case 8:
@@ -938,7 +954,14 @@ void cgp::Chromosome::evaluate_single_from_values(weight_input_t input, weight_o
 		}
 		break;
 	case CGPOperator::ID:
+#ifdef __SINGLE_OUTPUT_ARITY
 		set_value(output[0], input[0]);
+#else
+		for (int j = 0; j < cgp_configuration.function_output_arity(); j++)
+		{
+			set_value(output[j], input[j]);
+		}
+#endif
 		break;
 #else
 	case 8:
@@ -2097,46 +2120,63 @@ void cgp::Chromosome::use_multiplexing(const dataset_t & dataset)
 	multiplexing = true;
 	const auto& outputs = get_dataset_output(dataset);
 	const auto& inputs = get_dataset_input(dataset);
+	const auto grid_size = cgp_configuration.row_count() * cgp_configuration.col_count();
 	gene_t function = (cgp_configuration.dataset_size() == 1) ? (CGPOperator::ID) : (CGPOperator::MUX);
-	id_count = (function == CGPOperator::ID) ? (256) : (output_count);
-	start_id_index = cgp_configuration.row_count() * cgp_configuration.col_count() - id_count;
+	id_count = 256;
+	mux_count = (function == CGPOperator::ID) ? (0) : (output_count);
+	start_mux_index = grid_size - mux_count;
+
+	if (mux_count == 0)
+	{
+		start_id_index = grid_size - id_count;
+	}
+	else
+	{
+		start_id_index = (get_column(start_mux_index) - 1) * cgp_configuration.row_count() - id_count;
+	}
+
 	locked_nodes_index = start_id_index;
 
-	for (int i = start_id_index; i < start_id_index + id_count; i++)
+	for (int id_i = start_id_index; id_i < start_id_index + id_count; id_i++)
 	{
-		*get_block_function(i) = function;
+		*get_block_function(id_i) = CGPOperator::ID;
 
-		if (function == CGPOperator::ID) {
-			int num = mulitplexed_index_to_value(i);
-			for (int k = 0; k < cgp_configuration.input_count(); k++)
+		int num = mulitplexed_index_to_value(id_i);
+		for (int dataset_i = 0; dataset_i < cgp_configuration.dataset_size(); dataset_i++)
+		{
+			for (int input_i = 0; input_i < cgp_configuration.input_count(); input_i++)
 			{
-				if (inputs[0][k] == num)
+				if (inputs[dataset_i][input_i] == num)
 				{
-					get_block_inputs(i)[0] = k;
+					get_block_inputs(id_i)[dataset_i] = input_i;
 					break;
 				}
 			}
 		}
-		else
+	}
+
+	if (mux_count != 0)
+	{
+		// Connect MUXs to 256 IDs
+		for (int mux_i = start_mux_index; mux_i < start_mux_index + id_count; mux_i++)
 		{
-			for (int dataset_i = 0; dataset_i < inputs.size(); dataset_i++)
+			int id_index = mux_i - start_mux_index + start_id_index;
+			*get_block_function(mux_i) = CGPOperator::MUX;
+
+			for (int dataset_i = 0; dataset_i < cgp_configuration.dataset_size(); dataset_i++)
 			{
-				for (int input_i = 0; input_i < cgp_configuration.input_count(); input_i++)
-				{
-					if (inputs[dataset_i][input_i] == outputs[dataset_i][i - start_id_index])
-					{
-						auto mux_input = get_block_inputs(i);
-						mux_input[dataset_i] = input_i;
-					}
-				}
+				get_block_inputs(mux_i)[dataset_i] = get_output_pin_from_gate_index(id_index, dataset_i);
 			}
 		}
 	}
 
-	for (int i = 0; i < output_count; i++)
+	// Connect first 256 outputs to either ID or MUX
+	const int output_facade_index = (mux_count != 0) ? (start_mux_index) : (start_id_index);
+	for (int j = 0; j < id_count; j++)
 	{
-		get_outputs()[i] = get_output_pin_from_gate_index(i + start_id_index);
+		get_outputs()[j] = get_output_pin_from_gate_index(output_facade_index + j);
 	}
+	
 	setup_output_iterators(selector, id_count);
 	invalidate();
 }
@@ -2148,13 +2188,13 @@ void cgp::Chromosome::remove_multiplexing(const dataset_t & dataset)
 		return;
 	}
 
+	const auto& outputs = get_dataset_output(dataset);
 	locked_nodes_index = std::numeric_limits<decltype(locked_nodes_index)>::max();
-	gene_t function = (cgp_configuration.dataset_size() == 1) ? (CGPOperator::ID) : (CGPOperator::MUX);
+	gene_t function = (mux_count == 0) ? (CGPOperator::ID) : (CGPOperator::MUX);
 	multiplexing = false;
 	setup_output_iterators(selector, cgp_configuration.output_count());
 
 	if (function == CGPOperator::ID) {
-		const auto& outputs = get_dataset_output(dataset);
 		for (int j = 0; j < output_count; j++)
 		{
 			int pin = get_output_pin_from_gate_index(mulitplexed_value_to_index(outputs[0][j]));
@@ -2174,23 +2214,20 @@ void cgp::Chromosome::remove_multiplexing(const dataset_t & dataset)
 	}
 	else
 	{
-		for (int i = start_id_index; i < start_id_index + id_count; i++)
-		{
-			bool same = true;
-			auto mux_inputs = get_block_inputs(i);
-			int value = mux_inputs[0];
-			for (int j = 0; j < get_function_input_arity(i) && same; j++)
+		for (int dataset_i = 0; dataset_i < cgp_configuration.dataset_size(); dataset_i++) {
+			for (int output_i = 0; output_i < output_count; output_i++)
 			{
-				same = same && value == mux_inputs[j];
-			}
-
-			if (same)
-			{
-				get_outputs()[i - start_id_index] = get_block_inputs(i)[0];
+				int mux_id = start_mux_index + output_i;
+				int id_index = mulitplexed_value_to_index(outputs[dataset_i][output_i]);
+				// Connect MUX pin to specific ID input (ID is redundant)
+				get_block_inputs(mux_id)[dataset_i] = get_block_inputs(id_index)[dataset_i];
+				// Connect Output to MUX
+				get_outputs()[output_i] = get_output_pin_from_gate_index(mux_id, 0);
 			}
 		}
 	}
 	id_count = 0;
+	mux_count = 0;
 	invalidate();
 }
 

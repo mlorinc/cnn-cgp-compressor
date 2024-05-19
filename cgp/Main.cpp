@@ -253,6 +253,8 @@ static int train_generic(std::shared_ptr<CGP> cgp_model, const dataset_t& datase
 	logger.close();
 
 	double start_time = omp_get_wtime();
+	// Do not allow DMUX to be used
+	cgp_model->function_count(std::min(cgp_model->function_count(), static_cast<int>(CGPOperator::MUX)));
 	for (size_t run = start_run; run < end_run; run++)
 	{
 		std::unordered_map<std::string, std::string> template_args{ {"run",  std::to_string(run + 1)} };
@@ -386,6 +388,9 @@ int main(int argc, const char** args) {
 	//{
 	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_350_100/train_cgp.config"
 	//};
+
+	//std::vector<std::string> arguments
+	//{ "train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/all_layers/mse_0_1536_31/train_cgp.config" };
 
 	//std::vector<std::string> arguments
 	//{

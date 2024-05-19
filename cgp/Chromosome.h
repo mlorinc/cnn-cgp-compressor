@@ -186,11 +186,16 @@ namespace cgp
 		bool multiplexing = false;
 
 		/// <summary>
-		/// Multiplexed gates start index.
+		/// Multiplexed ID gates start index.
 		/// </summary>
 		int start_id_index;
-
 		int id_count = 0;
+
+		/// <summary>
+		/// Multiplexed MUX gates start index.
+		/// </summary>
+		int start_mux_index;
+		int mux_count = 0;
 
 		/// <summary>
 		/// Cached energy consumption value.
