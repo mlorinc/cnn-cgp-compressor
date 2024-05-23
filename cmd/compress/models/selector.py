@@ -39,6 +39,14 @@ class FilterSelectorCombinations(object):
         cloned._combinations = [sel.clone() for sel in self._combinations]
         return cloned
 
+    @classmethod
+    def all_weights(clf, layer: str):
+        combinations = clf()
+        combination = FilterSelectorCombination()
+        combination.add(FilterSelector(layer, [(slice(None), slice(None), slice(None), slice(None))], [(slice(None), slice(None), slice(None), slice(None))]))
+        combinations.add(combination)
+        return combinations
+
 class ConstantSelector(ABC):
     @abstractmethod
     def get_values(self) -> List:
