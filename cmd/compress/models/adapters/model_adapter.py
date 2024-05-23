@@ -41,14 +41,6 @@ class ModelAdapter(ModelAdapterInterface, ABC):
     def get_convolution_layers(self) -> Iterable[nn.Conv2d]:
         raise NotImplementedError()
 
-    def get_layer(self, selector: Union[str, Callable[[Self], nn.Conv2d]]) -> nn.Module:
-        if isinstance(selector, str):
-            return getattr(self.model, selector)
-        elif isinstance(selector, nn.Module):
-            return selector
-        else:
-            return selector(self)
-
     @abstractmethod
     def clone(self):
         cloned_adapter = copy.deepcopy(self)
@@ -140,26 +132,44 @@ class ModelAdapter(ModelAdapterInterface, ABC):
         except:
             return layer.bias
         
-    def get_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
+    def get_layer(self, selector: Union[str, Callable[[Self], nn.Conv2d]]) -> nn.Module:
+        if isinstance(selector, str):
+            return getattr(self, selector)
+        elif isinstance(selector, nn.Module):
+            return selector
+        else:
+            return selector(self)
+
+    def _get_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
         layer = self.get_layer(layer)
         try:
             return layer.weight().detach()
         except:
-            return layer.weight.detach()
+            return layer.weight.detach() 
 
-    def get_train_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
-        layer = self.get_layer(layer)
-        try:
-            return layer.weight().detach().int_repr()
-        except:
-            return layer.weight.detach()        
+    def get_weights(self, selector: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):
+        if not isinstance(selector, str):
+            return self._get_weights(selector)
+        return self.model.state_dict()[selector + ".weight"]
 
-    def set_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor):
+    def get_train_weights(self, selector: Union[nn.Module, str, Callable[[Self], nn.Conv2d]]):    
+        return self.get_weights(selector).int_repr()      
+
+    def _set_weights(self, layer: Union[nn.Module, str, Callable[[Self], nn.Conv2d]], weights: torch.Tensor):
         layer = self.get_layer(layer)
         try:
             layer.set_weight(weights)
         except Exception as e:
             layer.weight = weights 
+            
+    def set_weights(self, layer: str, weights: torch.Tensor):
+        if not isinstance(layer, str):
+            self._set_weights(layer, weights)
+        else:
+            state_dict = self.model.state_dict()
+            state_dict[layer + ".weight"] = weights
+            self.model.load_state_dict(state_dict)            
+            
 
     def inject_weights(self, weights_vector: List[torch.Tensor], injection_combinations: FilterSelectorCombinations, inline=False, debug=False):
         original_train_mode = self.model.training
