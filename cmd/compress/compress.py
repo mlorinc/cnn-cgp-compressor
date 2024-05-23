@@ -1,5 +1,6 @@
 import argparse
 import commands.manager as manager
+from commands.evaluate_cgp_model import evaluate_model
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,3 +19,4 @@ def main():
     
 if __name__ == "__main__":
     main()
+    # evaluate_model(root=r"C:\Users\Majo\source\repos\TorchCompresser\local_experiments\worst_case\mse_0_256_31", run=1)
