@@ -45,16 +45,17 @@ class LeSelectorExperiment(MultiExperiment):
 
     def create_experiment_from_name(self, config: CGPConfiguration):
         name = config.path.parent.name
-        experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error)
-        result = parse("{prefix}mse_{mse}_{rows}_{cols}", name)
+        experiment = Experiment(config, self._model_adapter, self._cgp, self.args, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
+        result = parse("mse_{mse}_{rows}_{cols}", name)
         
         if not result:
             raise ValueError("invalid name:", name)
         
-        mse = int(result["mse"])
+        mse = float(result["mse"])
         rows = int(result["rows"])
         cols = int(result["cols"])
-        experiment.config.set_mse_threshold(mse)
+        output_count = 16*6*25+6*25
+        experiment.config.set_mse_threshold(self.error_threshold_function(output_count, error=mse))
         experiment.config.set_row_count(rows)
         experiment.config.set_col_count(cols)
         experiment.config.set_look_back_parameter(cols)

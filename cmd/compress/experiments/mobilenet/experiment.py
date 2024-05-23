@@ -94,7 +94,7 @@ class MobilenetExperiment(MultiExperiment):
         experiment.config.set_col_count(cols)
         experiment.config.set_look_back_parameter(cols + 1)
         experiment.set_feature_maps_combinations(self._get_filters(experiment.input_layer_name, experiment.output_layer_name))
-        self.rename_if_needed(experiment)
+        # self.rename_if_needed(experiment)
         return experiment
 
     def rename_if_needed(self, experiment: Experiment):

@@ -24,10 +24,10 @@ class MultiExperiment(Experiment, ABC):
         self.batches = batches
 
     @classmethod
-    def with_data_only(cls, path: Union[Path, str], model_name: str = None, model_path: str = None, cgp: str = None) -> Self:
+    def with_data_only(cls, path: Union[Path, str], model_name: str = None, model_path: str = None, cgp: str = None, e_fitness="SE") -> Self:
         path = Path(path)
         model_adapter = BaseAdapter.load_base_model(model_name, model_path) if model_name and model_path else None
-        return cls(path, model_adapter, cgp, {}, prepare=False)     
+        return cls(path, model_adapter, cgp, {}, prepare=False, e_fitness=e_fitness)     
 
     def _clone(self, config: CGPConfiguration):
         raise NotImplementedError()
