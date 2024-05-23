@@ -45,6 +45,14 @@ merge)
     [ -z "$4" ] && ZIP="lean" || ZIP="$4"
     merge_experiments $2 $3 $ZIP
     ;;
+merge-all)
+    [ -z "$2" ] && echo "missing argument of how many chromosomes to keep" && exit 2
+    [ -z "$3" ] && ZIP="lean" || ZIP="$3"
+
+    for file in *_batch_0; do
+        merge_experiments ${file%_batch_0} $2 $ZIP
+    done
+    ;;    
 *)
     echo -n "unknown argument: $1"
     exit 1
