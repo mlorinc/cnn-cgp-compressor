@@ -8,9 +8,13 @@ from cgp.cgp_configuration import CGPConfiguration
 from models.adapters.model_adapter import ModelAdapter
 from experiments.grid_size.experiment import GridSizeExperiment
 from models.selector import FilterSelector
-from models.quantization import conv2d_selector
+from models.quantization import conv2d_selector, quantize_per_tensor
 
 class SingleFilterZeroOutterExperiment(GridSizeExperiment):
+    """
+    SingleFilterZeroOutterExperiment performs experiments on single filters of a CNN layer, focusing on 
+    zeroing out the outer regions of the filters.
+    """    
     name = "single_filter_zero_outter"
     def __init__(self, 
                  config: CGPConfiguration, 
@@ -20,9 +24,23 @@ class SingleFilterZeroOutterExperiment(GridSizeExperiment):
                  automatic_creation: bool = True,
                  **kwargs
                  ) -> None:
+        """
+        Initialize the SingleFilterZeroOutterExperiment class.
+
+        Args:
+            config (CGPConfiguration): Configuration for the CGP.
+            model_adapter (ModelAdapter): Adapter for the model.
+            cgp (CGP): CGP instance.
+            dtype (torch.dtype, optional): Data type for the experiment. Defaults to torch.int8.
+            automatic_creation (bool, optional): Flag for automatic creation of experiments. Defaults to True.
+            kwargs: Additional arguments for the experiment.
+        """        
         super().__init__(config, model_adapter, cgp, automatic_creation=automatic_creation, dtype=dtype, **kwargs)
 
-    def _prepare_filters(self, automatic_creation: bool = False):
+    def _prepare_filters(self):
+        """
+        Prepare filters for the experiments, zeroing out the outer regions of the filters.
+        """        
         zero_mse_experiments = []
         other_mse_experiments = []
 
@@ -50,18 +68,44 @@ class SingleFilterZeroOutterExperiment(GridSizeExperiment):
             self.register_experiment(b)
 
     def _get_filter(self, layer_name: str, filter_i: int, channel_i: int):
+        """
+        Get the filter selector for the specified layer, filter index, and channel index.
+
+        Args:
+            layer_name (str): Name of the layer.
+            filter_i (int): Filter index.
+            channel_i (int): Channel index.
+
+        Returns:
+            FilterSelector: The filter selector.
+        """        
         return conv2d_selector(layer_name, [filter_i, channel_i], 5, 3)
 
     def zero_outter(self, sel: FilterSelector):
+        """
+        Zero out the outer regions of the selected filter.
+
+        Args:
+            sel (FilterSelector): The filter selector.
+        """        
         bias = self._model_adapter.get_bias(sel.selector)
         fp32_weights = self._model_adapter.get_weights(sel.selector)
         for output_selector in sel.out:
             w = fp32_weights[*output_selector]
             size = reduce(operator.mul, w.shape)
-            fp32_weights[*output_selector] = dequantize_per_tensor(torch.zeros(size), w.q_scale(), w.q_zero_point())
+            fp32_weights[*output_selector] = quantize_per_tensor(torch.zeros(size), w.q_scale(), w.q_zero_point())
         self._model_adapter.set_weights_bias(sel.selector, fp32_weights, bias)        
 
     def has_zero_in_input(self, sel: FilterSelector):
+        """
+        Check if there are zeros in the input of the selected filter.
+
+        Args:
+            sel (FilterSelector): The filter selector.
+
+        Returns:
+            bool: True if there are zeros in the input, False otherwise.
+        """        
         fp32_weights = self._model_adapter.get_train_weights(sel.selector)
         for input_sel in sel.inp:
             w: torch.Tensor = fp32_weights[*input_sel]
@@ -71,5 +115,18 @@ class SingleFilterZeroOutterExperiment(GridSizeExperiment):
 
     @classmethod
     def with_cli_arguments(cls, config: CGPConfiguration, model_adapter: ModelAdapter, cgp: CGP, args):
+        """
+        Create an instance of SingleFilterZeroOutterExperiment using CLI arguments.
+
+        Args:
+            cls: The class to create an instance of.
+            config (CGPConfiguration): Configuration for the CGP.
+            model_adapter (ModelAdapter): Adapter for the model.
+            cgp (CGP): CGP instance.
+            args: Additional arguments from CLI.
+
+        Returns:
+            SingleFilterZeroOutterExperiment: The created instance.
+        """        
         cls = cls if not args.reuse else partial(SingleFilterZeroOutterExperiment.with_replication, args.reuse, args.name_format)
         return cls(config, model_adapter, cgp, **args)

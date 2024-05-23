@@ -9,6 +9,9 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 
 class LeNet5(BaseModel):
+    """
+    PyTorch implementation of LeNet-5 architecture proposed by LeCun in 1995.
+    """
     name = "lenet"
     transforms = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
     def __init__(self, model_path: str = None):

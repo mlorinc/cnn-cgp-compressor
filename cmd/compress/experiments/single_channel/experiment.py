@@ -11,6 +11,10 @@ import experiments.single_channel.cli as sc
 from parse import parse
 
 class SingleChannelExperiment(MultiExperiment):
+    """
+    A class for conducting single channel experiments, extending MultiExperiment.
+    Approximate a single channel in CNN.
+    """    
     name = "single_channel"
     def __init__(self, 
                  config: CGPConfiguration, 
@@ -28,6 +32,25 @@ class SingleChannelExperiment(MultiExperiment):
                  prepare=True,
                  **kwargs) -> None:
         super().__init__(config, model_adapter, cgp, dtype, **kwargs)
+        """
+        Initialize the SingleChannelExperiment class.
+
+        Args:
+            config (CGPConfiguration): Configuration for the CGP.
+            model_adapter (ModelAdapter): Adapter for the model.
+            cgp (CGP): CGP instance.
+            dtype (torch.dtype): Data type for the experiment.
+            layer_name (str): Name of the layer to be used in the experiment.
+            channel (int): Channel to be used in the experiment.
+            prefix (str, optional): Prefix for the experiment name. Defaults to "".
+            suffix (str, optional): Suffix for the experiment name. Defaults to "".
+            mse_thresholds (list, optional): List of MSE thresholds. Defaults to sc.thresholds.
+            rows_per_filter (int, optional): Number of rows per filter. Defaults to sc.rows_per_filter.
+            rows (int, optional): Number of rows. Defaults to None.
+            cols (int, optional): Number of columns. Defaults to None.
+            prepare (bool, optional): Whether to prepare filters. Defaults to True.
+            **kwargs: Additional arguments.
+        """        
         self.mse_thresholds = mse_thresholds
         self.prefix = prefix
         self.suffix = suffix
@@ -40,6 +63,9 @@ class SingleChannelExperiment(MultiExperiment):
         self._prepare_filters()
 
     def _prepare_filters(self):
+        """
+        Prepare filters for the experiment if self._prepare is True.
+        """        
         if self._prepare:
             layer = self._model_adapter.get_layer(self.layer_name)
             single_cell_size = self.rows_per_filter * layer.out_channels
@@ -53,6 +79,15 @@ class SingleChannelExperiment(MultiExperiment):
                     experiment.config.set_look_back_parameter(cols)
          
     def create_experiment_from_name(self, config: CGPConfiguration):
+        """
+        Create an experiment instance from the given configuration.
+
+        Args:
+            config (CGPConfiguration): Configuration for the CGP.
+
+        Returns:
+            Experiment: The created experiment instance.
+        """        
         name = config.path.parent.name
         experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
         result = parse("{layer_name}_mse_{mse}_{rows}_{cols}", name)
@@ -71,6 +106,16 @@ class SingleChannelExperiment(MultiExperiment):
         return experiment
             
     def _get_filter(self, layer_name: str, channel_i: int):
+        """
+        Get the filter selector for the specified layer and channel.
+
+        Args:
+            layer_name (str): Name of the layer.
+            channel_i (int): Channel index.
+
+        Returns:
+            FilterSelectorCombinations: The filter selector combinations.
+        """        
         combinations = FilterSelectorCombinations()
         combination = FilterSelectorCombination()
         combinations.add(combination)

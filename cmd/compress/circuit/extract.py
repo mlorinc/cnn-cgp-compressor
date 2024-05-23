@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Union
 from decimal import *
 
+# Dictionary to maintain order of keys for various operations
 key_order = {
     "reverse_max_a": 0,
     "add": 1,
@@ -46,22 +47,63 @@ key_order = {
 key_order_with_id = {**key_order, "id": 100}
 
 class DataExtractor(object):
+    """
+    A class to extract power, area, and timing data from specified files and save the processed data.
+
+    Attributes:
+        basedir (Path): The base directory where the input files are located and output files will be saved.
+        input_dir (Path): Directory containing the input files.
+        output_file (Path): Path to the CSV file where the extracted data will be saved.
+        output_file_text (Path): Path to the text file where the extracted data will be saved in text format.
+    """    
     def __init__(self, basedir: str) -> None:
+        """
+        Initializes the DataExtractor with a base directory.
+
+        Args:
+            basedir (str): The base directory where input and output files are located.
+        """        
         self.basedir = Path(basedir)
         self.input_dir = self.basedir / "res"
         self.output_file = self.basedir / "parameters.csv"
         self.output_file_text = self.basedir / "parameters.txt"
     
     def _get_power_files(self):
+        """
+        Retrieves the list of power files from the input directory.
+
+        Returns:
+            list: A list of file paths matching the pattern *_power.txt in the input directory.
+        """        
         return glob.glob(str(self.input_dir / "*_power.txt"))
 
     def _get_area_files(self):
+        """
+        Retrieves the list of area files from the input directory.
+
+        Returns:
+            list: A list of file paths matching the pattern *_area.txt in the input directory.
+        """        
         return glob.glob(str(self.input_dir / "*_area.txt"))
     
     def _get_timing_files(self):
+        """
+        Retrieves the list of timing files from the input directory.
+
+        Returns:
+            list: A list of file paths matching the pattern *_timing.txt in the input directory.
+        """        
         return glob.glob(str(self.input_dir / "*_timing.txt"))
 
     def save(self, df: pd.DataFrame, output_csv: Union[str], output_txt: Union[str]):
+        """
+        Saves the extracted data to CSV and text files.
+
+        Args:
+            df (pd.DataFrame): The DataFrame containing the extracted data.
+            output_csv (Union[str, Path]): Path to the CSV file where the data will be saved. Defaults to self.output_file.
+            output_txt (Union[str, Path]): Path to the text file where the data will be saved. Defaults to self.output_file_text.
+        """        
         df.to_csv(output_csv or self.output_file, header=True, index=True)
 
         df = df.loc[df.index.isin(key_order.keys()), :].copy()
@@ -76,6 +118,12 @@ class DataExtractor(object):
         
 
     def _extract_powers(self) -> pd.DataFrame:
+        """
+        Extracts power data from power files.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing power values and units.
+        """        
         power_values = []
         power_units = []
         index = []
@@ -102,6 +150,12 @@ class DataExtractor(object):
         return df
 
     def _extract_delays(self) -> pd.DataFrame:
+        """
+        Extracts delay data from timing files.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing delay values.
+        """        
         values = []
         index = []
         for file in self._get_timing_files():
@@ -129,6 +183,12 @@ class DataExtractor(object):
         return pd.DataFrame(values, index=index, columns=["delay"])
     
     def _extract_areas(self) -> pd.DataFrame:
+        """
+        Extracts area data from area files.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing area values.
+        """        
         values = []
         index = []
         for file in self._get_area_files():
@@ -149,6 +209,12 @@ class DataExtractor(object):
         return pd.DataFrame(values, index=index, columns=["area"], dtype="float")
 
     def extract(self):
+        """
+        Extracts power, delay, and area data from files and combines them into a single DataFrame.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing combined power, delay, and area data.
+        """        
         getcontext().prec = 32
         powers = self._extract_powers()
         delays = self._extract_delays()

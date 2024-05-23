@@ -11,6 +11,22 @@ selector_functions = {
 }
 
 def model_sensitivity(model_name=None, model_path=None, error_type = [], **kwargs):
+    """
+    Evaluates the sensitivity of a model to various types of quantization errors.
+
+    Args:
+        model_name (str, optional): The name of the model.
+        model_path (str, optional): The path to the model's state dictionary.
+        error_type (list): A list of error types to test.
+        **kwargs: Additional keyword arguments for the evaluation.
+
+    Raises:
+        FileExistsError: If the destination file already exists.
+
+    Notes:
+        This function creates a DataFrame containing the model's performance metrics for each error type
+        and saves it as a CSV file. The error types are defined in the `selector_functions` dictionary.
+    """    
     data_store = Datastore().derive(model_name)
     state_dict_path = data_store / "state_dict.pth"
     data_store.mkdir(exist_ok=True, parents=True)

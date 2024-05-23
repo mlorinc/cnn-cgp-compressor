@@ -91,6 +91,12 @@ class CGPConfiguration:
             self.load(config_file)
 
     def parse_arguments(self, args):
+        """
+        Parses command-line arguments and sets the corresponding attributes.
+
+        Args:
+            args: Command-line arguments.
+        """        
         for argument_name, metadata in self.ARGUMENTS.items():
             if metadata["attribute"] in args:
                 value = args[metadata["attribute"]]
@@ -98,6 +104,15 @@ class CGPConfiguration:
                     self.set_attribute(metadata["attribute"], value)
 
     def clone(self, new_config_file: str = None):
+        """
+        Creates a clone of the current configuration instance.
+
+        Args:
+            new_config_file (str): Path to the new configuration file.
+
+        Returns:
+            CGPConfiguration: A new instance of CGPConfiguration with the same attributes.
+        """        
         cloned_instance = CGPConfiguration()
         cloned_instance.path = new_config_file or self.path
         cloned_instance._attributes = copy.deepcopy(self._attributes)
@@ -105,6 +120,15 @@ class CGPConfiguration:
         return cloned_instance
 
     def load(self, config_file: str = None):
+        """
+        Loads the configuration from a file.
+
+        Args:
+            config_file (str): Path to the configuration file.
+
+        Raises:
+            ValueError: If no configuration file is provided.
+        """     
         if config_file is None and self.path is None:
             raise ValueError(
                 "either config file must be passed to the load function or the class constructor must have been provided a configuration file as argument"
@@ -119,6 +143,15 @@ class CGPConfiguration:
                     self._attributes[key.strip()] = self._parse_value(value.strip())
 
     def save(self, config_file: str = None):
+        """
+        Saves the current configuration to a file.
+
+        Args:
+            config_file (str): Path to the configuration file.
+
+        Raises:
+            ValueError: If no configuration file is provided.
+        """        
         if config_file is None and self.path is None:
             raise ValueError(
                 "either config file must be passed to the save function or the class constructor must have been provided a configuration file as argument"
@@ -146,9 +179,15 @@ class CGPConfiguration:
                 return value_str
 
     def remove_extra_attributes(self):
+        """
+        Removes all unsaved attributes from the configuration.
+        """        
         self._extra_attributes = {}
 
     def apply_extra_attributes(self):
+        """
+        Applies extra attributes to the main attributes, to make sure they will be saved in next save call.
+        """        
         new_extra_dict = dict()
         if self.COMMAND_START_RUN in self._extra_attributes:
             if self._extra_attributes[self.COMMAND_START_RUN] is not None:
@@ -170,6 +209,15 @@ class CGPConfiguration:
 
     @contextlib.contextmanager
     def open_stdout(self, mode="w"):
+        """
+        Context manager to open the stdout file.
+
+        Args:
+            mode (str): Mode in which to open the file.
+
+        Yields:
+            TextIO: File handle for stdout.
+        """        
         f_handle: TextIO = None 
         try:
             file = self.get_stdout_file() if self.has_stdout_file() else "-"
@@ -185,6 +233,15 @@ class CGPConfiguration:
 
     @contextlib.contextmanager
     def open_stderr(self, mode="w"):
+        """
+        Context manager to open the stderr file.
+
+        Args:
+            mode (str): Mode in which to open the file.
+
+        Yields:
+            TextIO: File handle for stderr.
+        """        
         f_handle: TextIO = None 
         try:
             file = self.get_stderr_file() if self.has_stderr_file() else "-"

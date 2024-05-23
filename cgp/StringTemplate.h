@@ -14,5 +14,11 @@ namespace cgp
         std::string message;
     };
 
+	/// <summary>
+	/// Replace variables withing string surrounded by curly braces.
+	/// </summary>
+	/// <param name="input">String to perform substitution on.</param>
+    /// <param name="variables">Substitution mapping.</param>
+	/// <returns>Substituted string.</returns>	
     std::string replace_string_variables(const std::string& input, const std::unordered_map<std::string, std::string>& variables);
 }

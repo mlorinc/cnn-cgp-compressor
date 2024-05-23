@@ -7,6 +7,9 @@ from models.quantization import conv2d_selector
 import argparse
 
 class SingleFilterExperiment(Experiment):
+    """
+    SingleFilterExperiment conducts experiments on a single filter of a convolutional neural network layer.
+    """    
     name = "single_filter"
     def __init__(self, 
                 config: CGPConfiguration,
@@ -21,6 +24,23 @@ class SingleFilterExperiment(Experiment):
                 prefix="",
                 suffix="",
                 dtype=torch.int8) -> None:
+        """
+        Initialize the SingleFilterExperiment class.
+
+        Args:
+            config (CGPConfiguration): Configuration for the CGP.
+            model_adapter (ModelAdapter): Adapter for the model.
+            cgp (CGP): CGP instance.
+            args: Additional arguments for the experiment.
+            grid_size (tuple, optional): Grid size for the CGP. Defaults to (5, 5).
+            layer_name (str, optional): Name of the layer. Defaults to "conv1".
+            channel (int, optional): Channel index. Defaults to 0.
+            filter (int, optional): Filter index. Defaults to 0.
+            patience (int, optional): Number of generations to run before stopping. Defaults to 100000.
+            prefix (str, optional): Prefix for the experiment name. Defaults to "".
+            suffix (str, optional): Suffix for the experiment name. Defaults to "".
+            dtype (torch.dtype, optional): Data type for the experiment. Defaults to torch.int8.
+        """        
         super().__init__(config, model_adapter, cgp, args, dtype)
         self.set_paths(self.base_folder / (prefix + self.base_folder.name + suffix))
         self.grid_size = grid_size
@@ -33,6 +53,17 @@ class SingleFilterExperiment(Experiment):
         self.config.set_look_back_parameter(grid_size[1])
 
     def _get_filter(self, layer_name: str, filter_i: int, channel_i: int):
+        """
+        Get the filter selector for the specified layer, filter index, and channel index.
+
+        Args:
+            layer_name (str): Name of the layer.
+            filter_i (int): Filter index.
+            channel_i (int): Channel index.
+
+        Returns:
+            FilterSelector: The filter selector.
+        """        
         return conv2d_selector(layer_name, [filter_i, channel_i], 5, 3)
     
     @staticmethod

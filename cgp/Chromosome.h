@@ -85,14 +85,36 @@ namespace cgp
 		/// </summary>
 		static const std::string nan_chromosome_string;
 
+		/// <summary>
+		/// Is mux function.
+		/// </summary>
 		static bool is_mux(int func);
+
+		/// <summary>
+		/// Is d-mux function.
+		/// </summary>
 		static bool is_demux(int func);
 	private:
 		static gate_parameters_t id_gate_parameters;
 
+		/// <summary>
+		/// Max genes that can be mutated.
+		/// </summary>
 		int max_genes_to_mutate;
+
+		/// <summary>
+		/// Current chromosome size.
+		/// </summary>
 		int chromosome_size;
+
+		/// <summary>
+		/// Overal available mutable genes.
+		/// </summary>		
 		int mutable_genes_count;
+
+		/// <summary>
+		/// Random number generator.
+		/// </summary>			
 		RandomNumberGenerator rng;
 
 		/// <summary>
@@ -145,7 +167,14 @@ namespace cgp
 		/// </summary>
 		std::unique_ptr<bool[]> gate_visit_map;
 
+		/// <summary>
+		/// Depth distance map used in OpenMP async computing.
+		/// </summary>		
 		std::unique_ptr<depth_t[]> depth_distance_map;
+
+		/// <summary>
+		/// Quantized delay map used in OpenMP async computing.
+		/// </summary>				
 		std::unique_ptr<quantized_delay_t[]> quantized_delay_distance_map;
 
 		/// <summary>
@@ -178,6 +207,9 @@ namespace cgp
 		/// </summary>
 		bool need_depth_evaluation = true;
 
+		/// <summary>
+		/// Flag indicating whether chromosome has valid visit map.
+		/// </summary>	
 		bool need_gate_visit_map = true;
 
 		/// <summary>
@@ -189,6 +221,10 @@ namespace cgp
 		/// Multiplexed ID gates start index.
 		/// </summary>
 		int start_id_index;
+
+		/// <summary>
+		/// Number of helper identity functions used in compression optimisation.
+		/// </summary>			
 		int id_count = 0;
 
 		/// <summary>
@@ -273,8 +309,16 @@ namespace cgp
 		/// </summary>
 		int last_col = 0;
 
+		/// <summary>
+		/// Current output count.
+		/// </summary>		
 		size_t output_count;
 
+		/// <summary>
+		/// Predicate to check whether gate is locked.
+		/// </summary>
+		/// <param name="gate_index">Gate index in grid.</param>
+		/// <returns>True if locked, otherwise false.</returns>
 		bool is_locked_node(int gate_index) const;
 
 		/// <summary>
@@ -298,6 +342,11 @@ namespace cgp
 		/// <returns>True if the position represents an output, otherwise false.</returns>
 		bool is_output(int position) const;
 
+		/// <summary>
+		/// Get relative output position from absolute chromosome index.
+		/// </summary>
+		/// <param name="chromosome_position">Chromosome index.</param>
+		/// <returns>Relative index of output.</returns>
 		int get_output_position(int chromosome_position) const;
 
 		/// <summary>
@@ -335,6 +384,9 @@ namespace cgp
 		/// </summary>
 		void setup_output_iterators(int selector, size_t output_count);
 
+		/// <summary>
+		/// Update mutation related variables to reflect changes.
+		/// </summary>
 		void update_mutation_variables();
 
 		weight_value_t plus(int a, int b);
@@ -348,7 +400,18 @@ namespace cgp
 		weight_value_t bit_neg(weight_value_t a);
 		weight_value_t neg(weight_value_t a);
 
+		/// <summary>
+		/// Get column index.
+		/// </summary>
+		/// <param name="gate_index">Gate index.</param>
+		/// <returns>Column index.</returns>
 		int get_column(int gate_index) const;
+
+		/// <summary>
+		/// Get row index.
+		/// </summary>
+		/// <param name="gate_index">Gate index.</param>
+		/// <returns>Row index.</returns>		
 		int get_row(int gate_index) const;
 
 		/// <summary>
@@ -502,11 +565,44 @@ namespace cgp
 		/// <returns>The ID output corresponding to the value.</returns>
 		int get_id_output_for(int value) const;
 
+		/// <summary>
+		/// Get function input arity.
+		/// </summary>
+		/// <param name="gate_index">Gate index.</param>
+		/// <returns>Function input arity.</returns>
 		int get_function_input_arity(int gate_index) const;
+
+		/// <summary>
+		/// Get function input arity.
+		/// </summary>
+		/// <param name="func">Function Id.</param>
+		/// <returns>Function input arity.</returns>		
 		int get_function_input_arity_2(gene_t func) const;
+
+		/// <summary>
+		/// Get function output arity.
+		/// </summary>
+		/// <param name="gate_index">Gate index.</param>
+		/// <returns>Function Output arity.</returns>		
 		int get_function_output_arity(int gate_index) const;
+
+		/// <summary>
+		/// Get function output arity.
+		/// </summary>
+		/// <param name="func">Function Id.</param>
+		/// <returns>Function output arity.</returns>			
 		int get_function_output_arity2(gene_t func) const;
+
+		/// <summary>
+		/// Unused anymore.
+		/// </summary>	
 		int clip_pin(int pin) const;
+
+		/// <summary>
+		/// Check whether the pin is in use.
+		/// </summary>
+		/// <param name="func">Pin index.</param>
+		/// <returns>True if used, false otherwise.</returns>		
 		bool is_used_pin(int pin) const;
 	public:
 		friend std::ostream& operator<<(std::ostream& os, const Chromosome& chromosome);
@@ -516,7 +612,6 @@ namespace cgp
 		/// <param name="cgp_configuration">Reference to the CGP configuration.</param>
 		/// <param name="minimum_output_indicies">Array containing tuples specifying the minimum and maximum pin indices for possible output connections base on look back parameter.</param>
 		Chromosome(const CGPConfiguration& cgp_configuration, const std::unique_ptr<std::tuple<int, int>[]>& minimum_output_indicies);
-
 
 		/// <summary>
 		/// Constructor for the Chromosome class using string chromosome representation.
@@ -600,7 +695,16 @@ namespace cgp
 		/// <returns>Shared pointer to the mutated chromosome.</returns>
 		std::shared_ptr<Chromosome> mutate(uint64_t seed);
 
+		/// <summary>
+		/// Combine random number generators with other chromosome.
+		/// </summary>
+		/// <param name="other">Other chromosome to combine with</param>
 		void cross_rng(Chromosome &other);
+
+		/// <summary>
+		/// Generate random number.
+		/// </summary>
+		/// <returns>Random unsigned number</returns>		
 		uint64_t get_random_number();
 
 		/// <summary>
@@ -625,7 +729,20 @@ namespace cgp
 		/// </summary>
 		void evaluate();
 
+		/// <summary>
+		/// Evaluate a single gate using pins.
+		/// </summary>
+		/// <param name="gene_t">Input pins.</param>
+		/// <param name="block_output_pins">Output array.</param>
+		/// <param name="function">Function to call.</param>
 		void evaluate_single_from_pins(gene_t *input_pin, weight_output_t block_output_pins, gene_t function);
+
+		/// <summary>
+		/// Evaluate a single gate using values.
+		/// </summary>
+		/// <param name="gene_t">Input array.</param>
+		/// <param name="block_output_pins">Output array.</param>
+		/// <param name="function">Function to call.</param>		
 		void evaluate_single_from_values(weight_input_t input, weight_output_t block_output_pins, gene_t function);
 
 		/// <summary>
@@ -788,8 +905,19 @@ namespace cgp
 		/// <returns>The relative ID output.</returns>
 		int get_relative_id_output_from_index(int index) const;
 
+		/// <summary>
+		/// Return whether evaluation is needed.
+		/// </summary>
 		bool needs_evaluation() const;
+
+		/// <summary>
+		/// Return whether energy evaluation is needed.
+		/// </summary>		
 		bool needs_energy_evaluation() const;
+
+		/// <summary>
+		/// Return whether delay evaluation is needed.
+		/// </summary>			
 		bool needs_delay_evaluation() const;
 
 		/// <summary>

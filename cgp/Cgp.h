@@ -261,8 +261,14 @@ namespace cgp {
 		/// </summary>
 		std::map<std::string, std::string> other_config_attribitues;
 
+		/// <summary>
+		/// Approximate best energy that can be acheived.
+		/// </summary>
 		uint64_t energy_threshold = 0;
 
+		/// <summary>
+		/// An array where weight importance is stored.
+		/// </summary>
 		std::array<int, 256> weights;
 
 		/// <summary>
@@ -395,6 +401,9 @@ namespace cgp {
 		/// <param name="dataset">Dataset to perform evaluation on.</param>
 		void set_best_chromosome(const std::string& chromosome, const dataset_t &dataset);
 
+		/// <summary>
+		/// Initialiase structures related to population.
+		/// </summary>
 		void prepare_population_structures(int population);
 	public:
 		/// <summary>
@@ -456,6 +465,9 @@ namespace cgp {
 		/// </summary>
 		void mutate(const dataset_t& dataset);
 
+		/// <summary>
+		/// Calculate approximately the best energies that can be acheived.
+		/// </summary>
 		void calculate_energy_threshold();
 
 		/// <summary>
@@ -553,7 +565,16 @@ namespace cgp {
 		/// </summary>
 		void reset();
 
+		/// <summary>
+		/// Treat weights equally in fitness evaluation.
+		/// </summary>
+		/// <param name="dataset">Dataset from which values will be initialised.</param>		
 		void use_equal_weights(const dataset_t& dataset);
+
+		/// <summary>
+		/// Treat weights unequally in fitness evaluation based on their occurence.
+		/// </summary>
+		/// <param name="dataset">Dataset from which values will be initialised.</param>			
 		void use_quantity_weights(const dataset_t& dataset);
 
 		/// <summary>
@@ -592,9 +613,29 @@ namespace cgp {
 		/// <returns>A map containing additional unprocessed information.</returns>
 		std::map<std::string, std::string> load(std::istream& in, const std::vector<std::string>& arguments, const dataset_t &dataset);
 
+		/// <summary>
+		/// Return whether multiplexing optimisation is used.
+		/// </summary>
+		/// <returns>True if the CGP uses multiplex optimisation.</returns>
 		bool is_multiplexing() const;
+
+		/// <summary>
+		/// Remove multiplexing optimisation.
+		/// </summary>
+		/// <param name="dataset_t">Dataset information.</param>	
 		void remove_multiplexing(const dataset_t& dataset);
+
+		/// <summary>
+		/// Attempt to correct incorrectly approximated weights.
+		/// </summary>
+		/// <param name="dataset_t">Dataset information.</param>
+		/// <param name="only_id">If true no new function will be inserted nor replaced. Therefore only it can be re-wired.</param>	
 		void perform_correction(const dataset_t& dataset, bool only_id);
+
+		/// <summary>
+		/// Set generations without change.
+		/// </summary>
+		/// <param name="new_value">A new value.</param>	
 		void set_generations_without_change(decltype(generations_without_change) new_value);
 	};
 }

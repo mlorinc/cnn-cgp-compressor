@@ -6,6 +6,13 @@ import torch
 import copy
 
 class PTQQuantizedLeNet5(QuantizedBaseModel, LeNet5):
+    """
+    PTQQuantizedLeNet5 class inherits from QuantizedBaseModel and LeNet5.
+    This class represents a PyTorch quantized version of the LeNet-5 architecture using Post-Training Quantization (PTQ).
+
+    Attributes:
+        name (str): The name of the model, set to "ptq_quantized_lenet".
+    """    
     name = "ptq_quantized_lenet"
 
     def __init__(self, model_path: str = None):
@@ -18,6 +25,9 @@ class PTQQuantizedLeNet5(QuantizedBaseModel, LeNet5):
         return PTQQuantizedLeNet5(self.model_path)
 
     def _prepare(self):
+        """
+        Prepares the model for quantization by fusing Conv-ReLU pairs and setting the quantization configuration.
+        """        
         super()._prepare()
         # fuse first Conv-ReLU pair
         torch.quantization.fuse_modules(self, ["conv1", "relu1"], inplace=True)
@@ -27,10 +37,20 @@ class PTQQuantizedLeNet5(QuantizedBaseModel, LeNet5):
         torch.quantization.prepare(self, inplace=True)
 
     def _convert(self):
+        """
+        Converts the model to a quantized version.
+        """        
         super()._convert()
         torch.quantization.convert(self, inplace=True)
 
     def quantize(self, new_path: str = None, inline=True):
+        """
+        Quantizes the model and saves the quantized model to the specified path.
+
+        Parameters:
+            new_path (str, optional): Path to save the quantized model.
+            inline (bool): Flag to indicate whether to save the quantized model inline.
+        """        
         self.ptq_quantization(new_path)
         self.save(new_path, inline=inline)
 

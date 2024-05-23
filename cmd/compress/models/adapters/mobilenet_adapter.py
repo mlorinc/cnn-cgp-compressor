@@ -17,6 +17,12 @@ from parse import parse
 from typing import Optional, Union
 
 class MobileNetDataset(Dataset):
+    """
+    A PyTorch Dataset for MobileNet that handles data transformations and ensures the data is in the correct format.
+
+    Args:
+        data (Tensor): A tensor containing the data samples.
+    """    
     def __init__(self, data):
         """
         Args:
@@ -45,23 +51,37 @@ class MobileNetDataset(Dataset):
             raise e
 
 class Residual(object):
+    """
+    A class to represent a residual block in MobileNet.
+
+    Args:
+        inverted_residual (InvertedResidual): The inverted residual block from MobileNetV2.
+    """    
     def __init__(self, inverted_residual: InvertedResidual) -> None:
         self.dw: nn.Conv2d = inverted_residual.conv[0][0]
         self.pw: nn.Conv2d = inverted_residual.conv[1]
 
 class ExpandedResidual(object):
+    """
+    A class to represent an expanded residual block in MobileNet.
+
+    Args:
+        inverted_residual (InvertedResidual): The inverted residual block from MobileNetV2.
+    """    
     def __init__(self, inverted_residual: InvertedResidual) -> None:
         self.expander: nn.Conv2d = inverted_residual.conv[0][0]
         self.dw: nn.Conv2d = inverted_residual.conv[1][0]
         self.pw: nn.Conv2d = inverted_residual.conv[2]
-        
-class MobileNetBlock(object):
-    def __init__(self, block: Union[Residual, ExpandedResidual, nn.Conv2d]) -> None:
-        self.block = block
-
-    # def get_parameters_size()
 
 class MobileNetV2Adapter(ModelAdapter):
+    """
+    Adapter for MobileNetV2 to handle model loading, weight setting, and other utilities.
+
+    Attributes:
+        name (str): The name of the model.
+        inverted_residual_setting (list): Settings for the inverted residual blocks in MobileNetV2.
+        expected_weight_count (dict): Expected weight counts for the layers.
+    """    
     name = "mobilenet_v2"
     inverted_residual_setting = [
         # t, c, n, s
@@ -141,20 +161,33 @@ class MobileNetV2Adapter(ModelAdapter):
     }
     
     def __init__(self):
-        # super().__init__(models.mobilenet_v2(weights=models.MobileNet_V2_QuantizedWeights, quantize=True, pretrained=True))
-        # super().__init__(qunatization_models.mobilenet_v2(weights=qunatization_models.MobileNet_V2_QuantizedWeights, quantize=True, backend = "fbgemm"))
+        """
+        Initialize the MobileNetV2Adapter with a quantized MobileNetV2 model.
+        """
         super().__init__(quantization_models.mobilenet_v2(weights=quantization_models.MobileNet_V2_QuantizedWeights.IMAGENET1K_QNNPACK_V1, quantize=True))
         self.layers = {}
         self._set_attributes()
         self.model_path = None
 
     def _new_instance(self):
+        """
+        Create a new instance of MobileNetV2Adapter.
+
+        Returns:
+            MobileNetV2Adapter: A new instance of the adapter.
+        """        
         new_instance = MobileNetV2Adapter()
         new_instance.device = self.device
         new_instance.model = quantization_models.mobilenet_v2(weights=quantization_models.MobileNet_V2_QuantizedWeights.IMAGENET1K_QNNPACK_V1, quantize=True)
         return new_instance        
 
     def clone(self):
+        """
+        Clone the current adapter instance.
+
+        Returns:
+            MobileNetV2Adapter: A cloned instance of the adapter.
+        """        
         if self.model_path is not None:
             return self.load(inline=False)
         else:
@@ -163,6 +196,13 @@ class MobileNetV2Adapter(ModelAdapter):
             new_adapter.model.state_dict(self.model.state_dict())
 
     def set_weights(self, layer: str, weights: torch.Tensor):
+        """
+        Set the weights for a specified layer.
+
+        Args:
+            layer (str): The layer to set the weights for.
+            weights (torch.Tensor): The weights to set.
+        """        
         if not isinstance(layer, str):
             raise TypeError("only string layer selector is allowed when using Mobilenet")
         
@@ -171,6 +211,15 @@ class MobileNetV2Adapter(ModelAdapter):
         self.model.load_state_dict(state_dict)
 
     def get_layer(self, selector: Union[str, Callable[[Self], nn.Conv2d]]) -> nn.Module:
+        """
+        Get a layer from the model.
+
+        Args:
+            selector (Union[str, Callable[[Self], nn.Conv2d]]): The layer selector.
+
+        Returns:
+            nn.Module: The selected layer.
+        """        
         if isinstance(selector, str):
             return self.layers[selector]
         elif isinstance(selector, nn.Module):
@@ -179,14 +228,41 @@ class MobileNetV2Adapter(ModelAdapter):
             return selector(self)
 
     def get_weights(self, selector: str):
+        """
+        Get the weights of a specified layer.
+
+        Args:
+            selector (str): The layer selector.
+
+        Returns:
+            torch.Tensor: The weights of the layer.
+        """        
         if not isinstance(selector, str):
             raise TypeError("only string layer selector is allowed when using Mobilenet")
         return self.model.state_dict()[selector + ".weight"]
 
-    def get_train_weights(self, selector: str):    
+    def get_train_weights(self, selector: str):
+        """
+        Get the training weights of a specified layer.
+
+        Args:
+            selector (str): The layer selector.
+
+        Returns:
+            torch.Tensor: The training weights of the layer.
+        """        
         return self.get_weights(selector).int_repr()
 
     def get_block(self, index: int) -> Union[Residual, ExpandedResidual, nn.Conv2d]:
+        """
+        Get a block from the model.
+
+        Args:
+            index (int): The index of the block.
+
+        Returns:
+            Union[Residual, ExpandedResidual, nn.Conv2d]: The block at the specified index.
+        """        
         if index == 0 or len(self.inverted_residual_setting) < index:
             return self.model.features[index][0]
         
@@ -197,10 +273,22 @@ class MobileNetV2Adapter(ModelAdapter):
             return Residual(self.model.features[index])
 
     def get_blocks(self):
+        """
+        Get all blocks from the model.
+
+        Yields:
+            Union[Residual, ExpandedResidual, nn.Conv2d]: The blocks in the model.
+        """        
         for i in range(1, len(self.inverted_residual_setting) + 1):
             yield self.get_block(i) 
     
     def get_convolution_layers(self):
+        """
+        Get all convolutional layers from the model.
+
+        Yields:
+            nn.Conv2d: The convolutional layers in the model.
+        """        
         for i in range(len(self.model.features)):            
             try:
                 m = self.get_block(i)
@@ -222,6 +310,15 @@ class MobileNetV2Adapter(ModelAdapter):
                 raise e
     
     def _to_implementation_name(self, layer: str) -> str:
+        """
+        Function to convert old experiment names to current names.
+
+        Args:
+            layer (str): The layer name.
+
+        Returns:
+            str: The implementation name of the layer.
+        """        
         new_name = None
         result = parse("features_{i:d}_0", layer)     
         if not new_name and result is not None:
@@ -267,6 +364,9 @@ class MobileNetV2Adapter(ModelAdapter):
         raise ValueError(f"unknown layer {layer}")     
     
     def _set_attributes(self):
+        """
+        Set the attributes for the model layers.
+        """        
         for i in range(len(self.model.features)):            
             try:
                 m = self.get_block(i)
@@ -299,6 +399,12 @@ class MobileNetV2Adapter(ModelAdapter):
                 raise e        
     
     def get_all_layers(self):
+        """
+        Get all layers from the model.
+
+        Yields:
+            Tuple[str, nn.Module]: The name and layer from the model.
+        """        
         for i in range(len(self.model.features)):            
             try:
                 m = self.get_block(i)
@@ -325,6 +431,16 @@ class MobileNetV2Adapter(ModelAdapter):
                 raise e        
     
     def load(self, path: str = None, inline: bool | None = True) -> Self:
+        """
+        Load the model from a specified path.
+
+        Args:
+            path (str, optional): The path to load the model from.
+            inline (bool | None, optional): Whether to load the model inline.
+
+        Returns:
+            MobileNetV2Adapter: The loaded adapter.
+        """        
         self.model_path = path or self.model_path
         
         if self.model_path is None:
@@ -342,6 +458,16 @@ class MobileNetV2Adapter(ModelAdapter):
             return new_adapter
 
     def _load_dataset(self, split: str = "validation", num_proc=1, **kwargs):
+        """
+        Load the dataset for MobileNet.
+
+        Args:
+            split (str, optional): The dataset split to load. Defaults to "validation".
+            num_proc (int, optional): Number of processes to use for loading. Defaults to 1.
+
+        Returns:
+            MobileNetDataset: The loaded dataset.
+        """        
         ds = datasets.load_dataset("imagenet-1k",
                                    split=split,
                                    data_dir=Datastore().derive("datasets"),
@@ -354,18 +480,54 @@ class MobileNetV2Adapter(ModelAdapter):
         return MobileNetDataset(ds)
 
     def get_train_data(self, **kwargs):
+        """
+        Get the training data.
+
+        Returns:
+            MobileNetDataset: The training dataset.
+        """        
         return self._load_dataset("train", **kwargs)
 
     def get_validation_data(self, split=None, **kwargs):
+        """
+        Get the validation data.
+
+        Args:
+            split (str, optional): The dataset split to load. Defaults to None.
+
+        Returns:
+            MobileNetDataset: The validation dataset.
+        """        
         return self._load_dataset(split="validation", **kwargs)
 
     def get_test_data(self, split=None, **kwargs):
+        """
+        Get the test data.
+
+        Args:
+            split (str, optional): The dataset split to load. Defaults to None.
+
+        Returns:
+            MobileNetDataset: The test dataset.
+        """        
         return self._load_dataset(split="validation", **kwargs)
     
     def get_criterion(self, **kwargs):
+        """
+        Get the loss criterion for the model.
+
+        Returns:
+            nn.Module: The loss criterion.
+        """        
         return nn.CrossEntropyLoss()
     
     def get_optimizer(self, **kwargs) -> optim.Optimizer:
+        """
+        Get the optimizer for the model.
+
+        Returns:
+            optim.Optimizer: The optimizer.
+        """        
         raise NotImplementedError()
 
 def init(model_path: Optional[str]) -> MobileNetV2Adapter:

@@ -13,6 +13,12 @@ from functools import partial
 from cgp.cgp_adapter import CGP
 
 def evaluate_cgp_model(args):
+    """
+    Evaluates the CGP model for all experiments.
+
+    Args:
+        args: The arguments for creating and configuring the experiments.
+    """    
     for experiment in create_all_experiment(args):
         experiment.config.set_start_run(args.start_run)
         experiment.config.set_start_generation(args.start_generation)
@@ -20,6 +26,13 @@ def evaluate_cgp_model(args):
         experiment.get_model_metrics_from_statistics()
 
 def evaluate_model(root=r"C:\Users\Majo\source\repos\TorchCompresser\data_store\mobilenet\features_18_0_features_18_0_mse_0.0_256_31_batch_1", run=2):
+    """
+    Evaluates a specific CGP model.
+
+    Args:
+        root (str): The root directory of the model data.
+        run (int): The run number to evaluate.
+    """    
     root = Path(root)
     cgp = CGP("C:\\Users\\Majo\\source\\repos\\TorchCompresser\\out\\build\\x64-release\\cgp\\CGP.exe")
     df = pd.read_csv(
@@ -40,7 +53,7 @@ def evaluate_model_metrics_pbs(
                         time_limit: str = "24:00:00",
                         job_dir: str = "/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/planners/batch_10_19",
                         dataset: str = None,
-                        template_pbs_file: str = r"C:\Users\Majo\source\repos\TorchCompresser\cmd\compress\commands\pbs\model_metrics_job.sh",
+                        template_pbs_file: str = r"./cmd/compress/commands/pbs/model_metrics_job.sh",
                         data_dir: str = "/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/mobilenet_preparation_batch_10_19",
                         results_folder: str = "/storage/$server/home/$username/cgp_workspace/mobilenet_large_experiment/results",
                         cgp_folder: str = "cgp_cpp_project",
@@ -56,6 +69,32 @@ def evaluate_model_metrics_pbs(
                         experiment_wildcard="*256_31",
                         **kwargs
                         ):
+    """
+    Evaluates model metrics using PBS.
+
+    Args:
+        experiment (str): The name of the experiment.
+        model_name (str): The name of the model.
+        model_path (str): The path to the model state dictionary.
+        time_limit (str): The time limit for the job.
+        job_dir (str): The directory for the job on remote.
+        dataset (str): The dataset to be used.
+        template_pbs_file (str): The path to the PBS template file.
+        data_dir (str): The directory for data storage on remote.
+        results_folder (str): The folder for storing results.
+        cgp_folder (str): The folder containing the CGP project on remote achine.
+        cpu (int): The number of CPUs to be used.
+        mem (str): The memory allocation for the job.
+        scratch_capacity (str): The scratch disk capacity.
+        modulo (int): The modulo value for job grouping.
+        modulo_group (Optional[int]): The specific modulo group to process.
+        batch_size (int): The batch size for processing.
+        num_proc (int): The number of processes.
+        num_workers (int): The number of workers.
+        stats_format (str): The format for statistics files.
+        experiment_wildcard (str): The wildcard pattern for experiment selection.
+        **kwargs: Additional keyword arguments.
+    """    
     modulo_groups = [modulo_group] if modulo_group is not None else range(int(modulo))
     for modulo_group in modulo_groups:
         job_name = f"{experiment}_{model_name}_{modulo_group}_{modulo}"
@@ -112,6 +151,16 @@ def evaluate_model_metrics_pbs(
 columns_names = ["run", "generation", "timestamp", "error", "quantized_energy", "energy", "area", "quantized_delay", "delay", "depth", "gate_count", "chromosome"]
 
 def sample(top: int, f: str):
+    """
+    Samples the top entries from a CSV file.
+
+    Args:
+        top (int): The number of top entries to sample.
+        f (str): The path to the CSV file.
+
+    Returns:
+        pd.DataFrame: The sampled DataFrame.
+    """    
     df = pd.read_csv(f)
     if "error" in df.columns.values:
         return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
@@ -120,6 +169,16 @@ def sample(top: int, f: str):
         return pd.concat([df[:-1].sample(n=top-1), df.tail(n=1)])
 
 def pick_top(top: int, f: str):
+    """
+    Picks the top entries from a CSV file.
+
+    Args:
+        top (int): The number of top entries to pick.
+        f (str): The path to the CSV file.
+
+    Returns:
+        pd.DataFrame: The DataFrame containing the top entries.
+    """    
     prev_chunk = pd.DataFrame()
     last_chunk = pd.DataFrame()
     
@@ -140,6 +199,12 @@ def pick_top(top: int, f: str):
     return df[-top:]
 
 def evaluate_model_metrics(args):
+    """
+    Evaluates model metrics for experiments.
+
+    Args:
+        args: The arguments for creating and configuring the experiments.
+    """    
     experiment_list = args.experiment
     only_weights = args.only_weights
     experiment = create_experiment(args, prepare=False)

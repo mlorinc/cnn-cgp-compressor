@@ -384,34 +384,6 @@ int main(int argc, const char** args) {
 	static_assert(std::numeric_limits<float>::is_iec559, "IEEE 754 required");
 	srand(time(NULL));
 	std::vector<std::string> arguments(args + 1, args + argc);
-	//std::vector<std::string> arguments
-	//{
-	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_350_100/train_cgp.config"
-	//};
-
-	//std::vector<std::string> arguments
-	//{ "train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/all_layers/mse_0_1536_31/train_cgp.config" };
-
-	//std::vector<std::string> arguments
-	//{
-	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/worst_case/mse_0_256_20/train_cgp.config"
-	//};
-
-	//std::vector<std::string> arguments
-	//{
-	//"train", "C:/Users/Majo/source/repos/TorchCompresser/local_experiments/layer_bypass/mse_0.0_256_31/train_cgp.config"
-	//};
-
-	//std::vector<std::string> arguments
-	//{ "evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\all_layers\\mse_0_50_10\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\all_layers\\mse_0_50_10\\gate_statistics\\statistics.1.{run}.txt", "--mse-threshold", "0", "--row-count", "50", "--col-count", "10", "--look-back-parameter", "10", "--input-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/train.data", "--cgp-statistics-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/chromosomes.txt", "--output-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/evaluate_statistics/statistics.1.csv", "--train-weights-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/all_weights/weights.1.{run}.txt", "--gate-parameters-file", "c:/users/majo/source/repos/torchcompresser/data_store/all_layers/mse_0_50_10/gate_parameters.txt" }
-	//;
-	//std::vector<std::string> arguments{
-	//"evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\layer_bypass\\mse_0.5_500_30\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\data_store\\layer_bypass\\mse_0.5_500_30\\gate_statistics\\statistics.1.{run}.txt", "--mse-threshold", "600", "--row-count", "500", "--col-count", "30", "--look-back-parameter", "30", "--input-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/train.data", "--cgp-statistics-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/chromosomes.txt", "--output-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/evaluate_statistics/statistics.1.csv", "--train-weights-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/all_weights/weights.1.{run}.txt", "--gate-parameters-file", "c:/users/majo/source/repos/torchcompresser/data_store/layer_bypass/mse_0.5_500_30/gate_parameters.txt"
-	//};
-
-	//std::vector<std::string> arguments{
-	//"evaluate:chromosomes", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\train_cgp.config", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\gate_statistics\\statistics.16.{run}.txt", "--mse-threshold", "0", "--row-count", "256", "--col-count", "31", "--look-back-parameter", "32", "--input-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\train.data", "--cgp-statistics-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\chromosomes.txt", "--output-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\evaluate_statistics\\statistics.16.csv", "--train-weights-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\all_weights\\weights.16.{run}.txt", "--gate-parameters-file", "C:\\Users\\Majo\\source\\repos\\TorchCompresser\\backups\\serious\\features_3_1_0_features_3_1_0_mse_0.0_256_31\\gate_parameters.txt"
-	//};
 
 	std::cout << "... INIT CONFIGURATION CHECK ..." << std::endl;
 

@@ -15,6 +15,10 @@ from parse import parse
 import os
 
 class MobilenetExperiment(MultiExperiment):
+    """
+    A class to manage MobileNet experiments, extending the MultiExperiment class.
+    Perform experiments on MobileNetV2 using different error thresholds.
+    """    
     name = "mobilenet"
     thresholds = [250, 150, 100, 50, 25, 15, 10, 0]
     def __init__(self, 
@@ -30,6 +34,23 @@ class MobilenetExperiment(MultiExperiment):
                  prepare=True,
                  generate_all=False,
                  **kwargs) -> None:
+        """
+        Initialize the MobilenetExperiment class.
+
+        Args:
+            config (CGPConfiguration): Configuration for the CGP.
+            model_adapter (ModelAdapter): Adapter for the model.
+            cgp (CGP): CGP instance.
+            dtype (torch.dtype, optional): Data type for the tensors. Defaults to torch.int8.
+            input_layer_name (str, optional): Name of the input layer. Defaults to "conv1".
+            output_layer_name (str, optional): Name of the output layer. Defaults to "conv2".
+            mse_thresholds (list, optional): List of MSE thresholds. Defaults to [250, 150, 100, 50, 25, 15, 10, 0].
+            prefix (str, optional): Prefix for experiment names. Defaults to "".
+            suffix (str, optional): Suffix for experiment names. Defaults to "".
+            prepare (bool, optional): Whether to prepare filters automatically. Defaults to True.
+            generate_all (bool, optional): Whether to generate filters for all layers. Defaults to False.
+            **kwargs: Additional arguments.
+        """        
         super().__init__(config, model_adapter, cgp, dtype, **kwargs)
         self.mse_thresholds = mse_thresholds
         self.prefix = prefix
@@ -42,6 +63,9 @@ class MobilenetExperiment(MultiExperiment):
             self._prepare_filters()
 
     def _prepare_filters(self):
+        """
+        Prepare filters for the experiments.
+        """        
         if self.generate_all:
             for name, layer in self._model_adapter.get_all_layers():
                 for mse in self.mse_thresholds:
@@ -63,6 +87,15 @@ class MobilenetExperiment(MultiExperiment):
                     experiment.config.set_look_back_parameter(self.args["cols"] + 1)
 
     def create_experiment_from_name(self, config: CGPConfiguration):
+        """
+        Create an experiment instance from the configuration name.
+
+        Args:
+            config (CGPConfiguration): Configuration for the CGP.
+
+        Returns:
+            Experiment: The created experiment instance.
+        """        
         name = config.path.parent.name
         experiment = Experiment(config, self._model_adapter, self._cgp, self.dtype, depth=self._depth, allowed_mse_error=self._allowed_mse_error, **self.args)
         
@@ -98,6 +131,12 @@ class MobilenetExperiment(MultiExperiment):
         return experiment
 
     def rename_if_needed(self, experiment: Experiment):
+        """
+        Rename the experiment folder if needed.
+
+        Args:
+            experiment (Experiment): The experiment instance.
+        """        
         dirname = "{prefix}{input_layer_name}_{output_layer_name}_mse_{mse}_{rows}_{cols}".format(
             input_layer_name=experiment._model_adapter._to_implementation_name(experiment.input_layer_name),
             output_layer_name=experiment._model_adapter._to_implementation_name(experiment.output_layer_name),
@@ -118,6 +157,16 @@ class MobilenetExperiment(MultiExperiment):
             experiment.config.path = new_name / experiment.config.path.name
 
     def _get_filters(self, input_layer_names: List[str], output_layer_names: List[str]):
+        """
+        Get filter selectors for the specified layers.
+
+        Args:
+            input_layer_names (List[str]): List of input layer names.
+            output_layer_names (List[str]): List of output layer names.
+
+        Returns:
+            FilterSelectorCombinations: The filter selector combinations.
+        """        
         combinations = FilterSelectorCombinations()
         combination = FilterSelectorCombination()
         combination.add(FilterSelector(input_layer_names, [(slice(None), slice(None), slice(None), slice(None))], []))

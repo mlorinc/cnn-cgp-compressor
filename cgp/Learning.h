@@ -1,3 +1,5 @@
+// Unused file. It did not work at all.
+
 #pragma once
 #include "Cgp.h"
 

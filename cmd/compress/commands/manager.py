@@ -25,6 +25,12 @@ required_cgp = {
 }
 
 def _register_model_commands(subparsers: argparse._SubParsersAction):
+    """
+    Registers model-related commands to the argument parser.
+
+    Args:
+        subparsers (argparse._SubParsersAction): The subparsers action object to register commands to.
+    """    
     # model:train
     train_parser = subparsers.add_parser("model:train", help="Train a model")
     train_parser.add_argument("model_name", help="Name of the model to train")
@@ -92,6 +98,13 @@ def _register_model_commands(subparsers: argparse._SubParsersAction):
     parser.add_argument("--experiment-wildcard", type=str, default="*256_31", help="Experiment wildcard")
 
 def _register_experiment_commands(subparsers: argparse._SubParsersAction, experiment_names: List[str]):
+    """
+    Registers experiment-related commands to the argument parser.
+
+    Args:
+        subparsers (argparse._SubParsersAction): The subparsers action object to register commands to.
+        experiment_names (List[str]): A list of experiment names to register.
+    """    
     help_train = "Train a new CGP model to infer mising convolution weights from CNN model. Weights are trained as they are defined by {experiment_name}."
     help_evaluate = "Evaluate CGP model perfomance such as MSE, Energy, Area, Delay, Depth, Gate count and CNN accuracy and loss. Weights are trained as they are defined by {experiment_name}."
     help_metacentrum = "Prepare file structure and a PBS file for training in Metacentrum. Dataset is generated according to {experiment_name}."
@@ -139,11 +152,29 @@ def _register_experiment_commands(subparsers: argparse._SubParsersAction, experi
             experiment_parser.set_defaults(factory=experiments.get_experiment_factory(experiment_name), experiment_name=experiment_name)
 
 def register_commands(parser: argparse._SubParsersAction):
+    """
+    Registers all commands to the argument parser.
+
+    Args:
+        parser (argparse._SubParsersAction): The argument parser to register commands to.
+    """    
     subparsers = parser.add_subparsers(dest="command")
     _register_experiment_commands(subparsers, experiments.experiments_classes.keys())
     _register_model_commands(subparsers)
 
 def dispatch(args):
+    """
+    Dispatches the command based on the parsed arguments.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        A callable function to execute the command.
+
+    Raises:
+        ValueError: If the command is invalid or unknown.
+    """    
     try:
         colon = args.command.index(":")
         experiment_name, command = args.command[:colon], args.command[colon+1:]

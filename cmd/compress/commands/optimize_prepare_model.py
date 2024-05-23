@@ -1,6 +1,19 @@
 from commands.factory.experiment import create_all_experiment
 
 def optimize_prepare_model(args):
+    """
+    Prepares the model for optimization by setting up the necessary environment and creating PBS job files for training.
+
+    Args:
+        args: Parsed command-line arguments containing the necessary parameters for the preparation process.
+
+    Workflow:
+        1. Creates all experiments based on the provided arguments.
+        2. Configures the start run and start generation if not already set.
+        3. Sets up an isolated training environment with relative paths.
+        4. Ensures that either the population_max or cpu argument is provided and sets them accordingly.
+        5. Sets up the PBS job for training with the specified parameters.
+    """    
     for experiment in create_all_experiment(args):
         if not experiment.config.has_start_run():
             experiment.config.set_start_run(args.start_run)
