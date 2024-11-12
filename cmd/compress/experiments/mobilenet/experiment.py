@@ -1,3 +1,18 @@
+# Copyright 2024 Marián Lorinc
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     LICENSE.txt file
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# experiment.py: Experiment testing inference on single layer of MobileNetV2 model. However, it can be used to test multiple layers
+# independently.
+
 import torch
 from cgp.cgp_adapter import CGP
 from cgp.cgp_configuration import CGPConfiguration
@@ -43,7 +58,7 @@ class MobilenetExperiment(MultiExperiment):
             cgp (CGP): CGP instance.
             dtype (torch.dtype, optional): Data type for the tensors. Defaults to torch.int8.
             input_layer_name (str, optional): Name of the input layer. Defaults to "conv1".
-            output_layer_name (str, optional): Name of the output layer. Defaults to "conv2".
+            output_layer_name (str, optional): Name of the output layer. Defaults to "conv2". Currently unused and should be set to input_layer_name.
             mse_thresholds (list, optional): List of MSE thresholds. Defaults to [250, 150, 100, 50, 25, 15, 10, 0].
             prefix (str, optional): Prefix for experiment names. Defaults to "".
             suffix (str, optional): Suffix for experiment names. Defaults to "".
