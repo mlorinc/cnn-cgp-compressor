@@ -17,13 +17,13 @@ even improved network accuracy using less weights. The same effect was also obse
 
 One of the mentioned techniques is known as **compression** which is based on algorithms looking for some function which with
 **decreased number of weights can infer remaining weights**. Or in other case it can be function which will find a way to
-**encode information in less bits** as it was done in other study by [»oupek](https://www.vut.cz/en/students/final-thesis/detail/148487).
+**encode information in less bits** as it was done in other study by [ƒåoupek](https://www.vut.cz/en/students/final-thesis/detail/148487).
 
 This thesis build on the first method that nicely works with hardware. Compression function is a circuit with grid
 layout of arbitrary number of rows and columns. Each element (circuit gate) represents a mathematical operator of choice. 
 Every gate can connect to previous gates or function input (network weights). The whole circuit is evaluated from inputs that
 are connected to gates until last gate forwars result to output that represent infered weights. For demonstration,
-refer to image below created by [VaöÌËek and Bidlo](https://doi.org/10.1109/CEC.2011.5949628).
+refer to image below created by [Va≈°√≠ƒçek and Bidlo](https://doi.org/10.1109/CEC.2011.5949628).
 
 ![CGP Example](Figures/cgp_example.png "CGP Example")
 
